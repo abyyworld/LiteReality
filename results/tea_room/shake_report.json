@@ -1,0 +1,103 @@
+{
+  "bodies": 23,
+  "free_bodies": 5,
+  "static_bodies": 9,
+  "geoms": 211,
+  "settle_drift_max_cm": 102.55,
+  "settle_drift_mean_cm": 21.44,
+  "settled_within_1cm": 3,
+  "shake_moved_max_cm": 5.81,
+  "shake_moved_over_1cm": 3,
+  "static_moved_max_cm": 0.01,
+  "room_shake_amplitude_cm": 1.69,
+  "initial_overlaps": 32,
+  "overlaps_after_relax": 5,
+  "lifted_out_of_walls": {
+    "Dishwasher0": 0.1131,
+    "Chair1": 0.1966,
+    "Chair3": 0.1877
+  },
+  "hangings": 0,
+  "hangings_fell": [],
+  "worst_initial_overlaps": [
+    [
+      -7.4,
+      "Table0",
+      "Chair1"
+    ],
+    [
+      -7.4,
+      "Table0",
+      "Chair1"
+    ],
+    [
+      -7.4,
+      "Table0",
+      "Chair1"
+    ],
+    [
+      -7.4,
+      "Table0",
+      "Chair1"
+    ],
+    [
+      -7.3,
+      "Table0",
+      "Chair3"
+    ]
+  ],
+  "hinge_swing_deg": {
+    "Door0_Door_leaf": 90.1,
+    "Sink_Storage0_Drawer_Right": 36.5,
+    "Sink_Storage0_Door_Right": 19.9,
+    "Sink_Storage0_Door_Left": 31.4,
+    "Storage0_door_r": 76.8,
+    "Storage0_door_l": 47.1,
+    "Storage1_Door_Front": 19.9,
+    "Window0_Sash_Sliding_Right": 56.1
+  },
+  "worst_settlers": [
+    [
+      102.5,
+      "Chair3"
+    ],
+    [
+      3.7,
+      "Chair1"
+    ],
+    [
+      0.7,
+      "Dishwasher0"
+    ],
+    [
+      0.2,
+      "Chair2"
+    ],
+    [
+      0.0,
+      "Chair0"
+    ]
+  ],
+  "most_shaken": [
+    [
+      5.8,
+      "Dishwasher0"
+    ],
+    [
+      2.3,
+      "Chair3"
+    ],
+    [
+      1.2,
+      "Chair2"
+    ],
+    [
+      0.6,
+      "Chair1"
+    ],
+    [
+      0.1,
+      "Chair0"
+    ]
+  ]
+}

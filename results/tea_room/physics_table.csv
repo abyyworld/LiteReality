@@ -1,0 +1,14 @@
+body,joint,mass_kg,friction
+Door0_Door_leaf,hinge,128.731,0.45
+Sink_Storage0_Drawer_Right,slide,0.702,0.45
+Sink_Storage0_Door_Right,hinge,0.324,0.45
+Sink_Storage0_Door_Left,hinge,0.527,0.45
+Storage0_door_r,hinge,1.418,0.45
+Storage0_door_l,hinge,1.544,0.45
+Storage1_Door_Front,hinge,2.953,0.55
+Window0_Sash_Sliding_Right,slide,4.425,0.22
+Chair0,free,5.106,0.55
+Chair1,free,5.617,0.55
+Chair2,free,5.348,0.55
+Chair3,free,5.617,0.55
+Dishwasher0,free,30.881,0.55

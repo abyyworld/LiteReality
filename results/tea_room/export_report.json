@@ -1,0 +1,74 @@
+{
+  "structure": 18,
+  "free": 5,
+  "attached": 2,
+  "articulated": 8,
+  "colliders": 151,
+  "skipped": [],
+  "synthesised_lights": 4,
+  "from_sidecar": [
+    "ChairCluster0",
+    "ChairCluster1",
+    "ChairCluster2",
+    "ChairCluster1",
+    "Dishwasher0",
+    "Wall10_Door_0",
+    "Sink_Storage0",
+    "Sofa0",
+    "Storage0",
+    "Storage1",
+    "Storage3",
+    "Table0",
+    "Wall10_Window_0"
+  ],
+  "sidecar_colliders": 151,
+  "placed_by_geometry": [
+    "ChairCluster1",
+    "ChairCluster2",
+    "ChairCluster1",
+    "Dishwasher0",
+    "Wall10_Door_0",
+    "Sofa0",
+    "Storage0",
+    "Storage1",
+    "Table0"
+  ],
+  "scenery": [
+    "Sink_Storage0",
+    "Sofa0",
+    "Storage1",
+    "Storage3",
+    "Table0"
+  ],
+  "inferred_attached": [
+    "Storage0->ceiling",
+    "Window0->ceiling"
+  ],
+  "actuated_joints": [
+    "Door0_Door_leaf",
+    "Sink_Storage0_Drawer_Right",
+    "Sink_Storage0_Door_Right",
+    "Sink_Storage0_Door_Left",
+    "Storage0_door_r",
+    "Storage0_door_l",
+    "Storage1_Door_Front",
+    "Window0_Sash_Sliding_Right"
+  ],
+  "loads_clean": false,
+  "initial_overlaps": [
+    {
+      "bodies": "Chair1 <-> Table0",
+      "mm": -74.3
+    },
+    {
+      "bodies": "Chair3 <-> Table0",
+      "mm": -72.5
+    },
+    {
+      "bodies": "Dishwasher0 <-> room",
+      "mm": -11.7
+    }
+  ],
+  "derived_colliders": 0,
+  "sidecar_coverage": 1.0
+}
