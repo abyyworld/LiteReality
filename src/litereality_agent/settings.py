@@ -95,6 +95,9 @@ class LiteRealitySettings(BaseSettings):
     # off the environment, but nothing carried it from `.env` INTO the subprocess that does the
     # generating — so the documented Gemini path failed on a missing OpenAI key and fell back.
     image_provider: str | None = Field(default=None, validation_alias="LR_IMAGE_PROVIDER")
+    # Object names to build with TRELLIS whatever the classifier routes them to. Read by the
+    # classify step, which runs in a subprocess, so it has to travel the same way as the above.
+    force_trellis: str | None = Field(default=None, validation_alias="LR_FORCE_TRELLIS")
     # Modal is the default execution runtime, so the app names carry the deployed defaults and
     # MODAL_PROFILE alone selects hosted execution. Override these only when a workspace deploys
     # the apps under different names.
@@ -263,6 +266,7 @@ class LiteRealitySettings(BaseSettings):
             "MODAL_PROFILE": self.modal_profile,
         }
         values["LR_IMAGE_PROVIDER"] = self.image_provider
+        values["LR_FORCE_TRELLIS"] = self.force_trellis
         secrets = {
             "OPENAI_API_KEY": self.openai_api_key,
             "GEMINI_API_KEY": self.gemini_api_key,

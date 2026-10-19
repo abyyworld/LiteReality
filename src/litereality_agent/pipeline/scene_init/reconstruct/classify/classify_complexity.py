@@ -133,9 +133,22 @@ def category_from_name(name: str, kind: str) -> str:
 ORGANIC_CATEGORIES = {"sofa", "couch", "armchair", "chair", "plant", "person"}
 
 
-def apply_policy(kind: str, category: str, decision: dict) -> dict:
+def forced_trellis_names() -> set[str]:
+    """Objects the user sent to TRELLIS with $LR_FORCE_TRELLIS (comma or space separated).
+
+    The escape hatch for an object the procedural agent cannot finish — out of budget, or stuck on
+    a cosmetic QC finding. Editing routing_manifest.json does not stick, because every reconstruct
+    re-classifies and rewrites it; this is read at classification time, so it does.
+    """
+    raw = os.environ.get("LR_FORCE_TRELLIS") or ""
+    return {name.lower() for name in raw.replace(",", " ").split()}
+
+
+def apply_policy(kind: str, category: str, decision: dict, name: str = "") -> dict:
+    by_user = bool(name) and name.lower() in forced_trellis_names()
     forced = (
-        kind == "chairs"
+        by_user
+        or kind == "chairs"
         or any(c in category for c in ORGANIC_CATEGORIES)
         or bool(decision.get("is_organic"))
     )
@@ -143,7 +156,8 @@ def apply_policy(kind: str, category: str, decision: dict) -> dict:
     decision["route_vlm"] = decision.get("route")
     if forced and decision.get("route") != "trellis":
         decision["route"] = "trellis"
-        decision["forced_by_policy"] = "chairs/sofas/abstract -> trellis"
+        decision["forced_by_policy"] = ("LR_FORCE_TRELLIS" if by_user
+                                        else "chairs/sofas/abstract -> trellis")
     return decision
 
 
@@ -178,7 +192,7 @@ def classify_for_scan(scan: str, *, model: str | None = None, include_chairs: bo
                 "is_organic": True,
                 "reason": f"classify error, default trellis: {exc}",
             }
-        decision = apply_policy(kind, category, decision)
+        decision = apply_policy(kind, category, decision, name=name)
         return {
             "scan": scan,
             "kind": kind,
