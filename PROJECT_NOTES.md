@@ -15,7 +15,7 @@ physics-perception project.
 |---|---|
 | `LR_IMAGE_PROVIDER=modal`: reference images from the open Qwen-Image-Edit-2509 on your own Modal workspace, so no OpenAI/Gemini key is needed | `deploy/modal/image_edit/`, `src/litereality_agent/models/image_edit/`, `.../ingest/references/image_gen.py` |
 | `litereality setup` now deploys the one `litereality` app the runtime looks up (upstream deployed `litereality-dino`/`litereality-trellis`, which nothing looks up) | `src/litereality_agent/runtimes/setup.py`, `deploy/modal/app.py` |
-| `stage simulate --from-seed` runs after `seed` instead of demanding the authored room | `pipeline/stage.py`, `pipeline/runner.py`, `pipeline/simulate/` |
+| `stage simulate --from-seed` runs after `seed` instead of demanding the authored room | `pipeline/stage.py`, `pipeline/runner.py`, `pipeline/stages.py`, `pipeline/simulate/` |
 | `--shake` runs without `ffmpeg` (skips only the video) | `pipeline/simulate/__init__.py` |
 | Per-object physics table for any exported scene | `scripts/simready/physics_table.py` |
 | `LR_FORCE_TRELLIS=<Name>,...`: build named objects with TRELLIS when the procedural agent can't finish them | `.../reconstruct/classify/classify_complexity.py`, `settings.py` |
@@ -25,13 +25,16 @@ physics-perception project.
 
 - First end-to-end run done on the `tea_room` example scan, macOS on Apple Silicon, Blender 5.2.2,
   Modal Starter (free) plan, Claude Code login. Results and the issues it hit are in
-  [`results/tea_room/README.md`](results/tea_room/README.md).
+  [`results/tea_room/README.md`](results/tea_room/README.md). The "Anthropic ~$23 + ~$10" there are
+  the SDK's list-price estimates; on a Claude Code login they count against the plan's usage
+  limits, not money.
 - Modal apps are deployed in the workspace; the first run used about $2–3 of the free monthly
   credit (one-time TRELLIS build + 58 GB image-model download included). Idle apps cost nothing.
 
 ## Setting up from scratch (Mac)
 
-1. Install `uv`, git and Blender 5.x (blender.org). Clone this repo **into a permanent folder**
+1. Install `uv`, git, Blender 5.x (blender.org) and the Claude Code `claude` CLI on PATH (the layout
+   steps shell out to it and quietly do nothing without it). Clone this repo **into a permanent folder**
    such as `~/LiteReality-Agent` — not a temp directory (macOS clears those).
 2. `uv sync --frozen --extra modal --group dev` then `cp .env.example .env`.
 3. Fill `.env` (never commit it; it is gitignored). Keys used:
@@ -60,8 +63,10 @@ uv run python scripts/simready/physics_table.py run/<scan>/mujoco_seed/scene.xml
 
 The first room took a few hours including failures; a later room skips all one-time setup. If
 `simulate` stops on "initial interpenetrations" (objects overlapping > 5 mm at t=0), the export is
-still written; run the shake directly, which relaxes small overlaps:
-`uv run python -m litereality_agent.room_ops.export.mujoco_shake --scene run/<scan>/mujoco_seed/scene.xml --cutaway`
+still written; run the shake directly (it prints its JSON report, so redirect it to keep it):
+`uv run python -m litereality_agent.room_ops.export.mujoco_shake --scene run/<scan>/mujoco_seed/scene.xml --cutaway > run/<scan>/mujoco_seed/shake_report.json`
+Its relax pass separates only some overlaps: on tea_room 5 contacts remained and Chair3 was still
+thrown about 1 m, so read the numbers with that in mind.
 
 ## What needs which account
 
@@ -69,14 +74,22 @@ still written; run the shake directly, which relaxes small overlaps:
 |---|---|---|
 | Reference images | Modal (Qwen-Image-Edit) | Modal token only |
 | Image -> 3D (TRELLIS), detection (DINO) | Modal | Modal token only |
-| Classification | Claude, or OpenAI with `LR_CLASSIFY_PROVIDER=openai` | either |
-| Doors/windows/cabinets (procedural agent), authoring | Claude, or Codex (`LR_*_PROVIDER=codex`) | Claude login, or Codex + OpenAI key |
-| Chair-type judge, layout agent, completeness check | **Claude only** (hardcoded: `chair_type_judge.py`, `layout/agent.py` + `agent_loop.py` call `claude`, `completeness_check.py`) | Claude login or `ANTHROPIC_API_KEY` |
+| Classification | Claude, or OpenAI with `LR_CLASSIFY_PROVIDER=openai` **exported in the shell** (it is not a settings field, so `.env` does not reach it) plus `OPENAI_API_KEY` | either |
+| Doors/windows/cabinets (procedural agent), authoring | Claude, or Codex (`LR_PROCEDURAL_PROVIDER=codex`, `LR_*_PROVIDER=codex`) | Claude login or `ANTHROPIC_API_KEY`; or the `codex` CLI on PATH, signed in |
+| Chair-type judge (`chair_type_judge.py`), layout repair + box-merge review (`layout/agent.py`, `layout/evidence.py`, both `claude -p --model sonnet`), completeness check (`completeness_check.py`) | **Claude only**, no switch | Claude login or `ANTHROPIC_API_KEY` |
 | Simulate, shake, physics table | local | nothing |
 
-So a full room cannot run without Claude today; making it Claude-free means changing those three
-call sites. Free hosted models (Groq etc.) are fine for the single-image calls but not for the
+Without Claude those Claude-only steps **degrade silently instead of failing**: the chair judge falls
+back to DINOv2 clustering, the layout agent and box-merge review return "no change", the
+completeness check passes everything, and a classify error routes the object to TRELLIS. So a room
+still builds on Codex alone, at lower quality. `LR_LAYOUT_AGENT=0` (exported in the shell) turns the
+layout calls off explicitly. Removing Claude *without* degradation means adding a provider switch
+at those call sites. Free hosted models (Groq etc.) could serve the single-image calls but not the
 long Blender-coding agents.
+
+**`ANTHROPIC_API_KEY` in `.env` changes billing for everything:** it reaches every Claude call (SDK
+and `claude -p`), which then uses the key instead of the login — so every call is metered and the
+procedural agent's $5 cap becomes real money.
 
 ## Known issues (from the tea_room run)
 
@@ -87,8 +100,9 @@ long Blender-coding agents.
 3. **Truncated `object.py`** for an agent-built door (`Wall10_Door_0`): its bake regeneration silently
    produced nothing; worked around by reusing the already-built GLB.
 4. **Physics-compile race**: an object built by TRELLIS in a re-run was compiled before its GLB
-   existed; re-running `seed` fixed it.
-5. **Procedural agent budget** ($5 per object, hardcoded default): Dishwasher0 ran out on a
+   existed; compiling it again (`compile_object`) and then re-running `seed` fixed it.
+5. **Procedural agent budget**: a $5 list-price cap per agent attempt plus 80 turns (the default of
+   `scene_init/flow.py --budget`, not exposed by `litereality run`). Dishwasher0 ran out on a
    cosmetic QC finding; `LR_FORCE_TRELLIS=Dishwasher0` routed it to TRELLIS.
 6. NumPy `matmul` RuntimeWarnings on Apple Silicon during placement — no effect found so far.
 
