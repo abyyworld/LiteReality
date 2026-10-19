@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from litereality_agent.pipeline.context import RunContext
+from litereality_agent.pipeline.result import StageResult, StageStatus
+from litereality_agent.pipeline.runner import PipelineRunner
+from litereality_agent.pipeline.stage import Stage
+from litereality_agent.settings import LiteRealitySettings
+
+
+def context(tmp_path: Path) -> RunContext:
+    settings = LiteRealitySettings(repo_root=tmp_path, output_root=tmp_path / "run")
+    return RunContext("scan", tmp_path / "capture", tmp_path / "run" / "scan", tmp_path / "run", settings=settings)
+
+
+def result(name: str, status: StageStatus = StageStatus.COMPLETED) -> StageResult:
+    return StageResult(name, status, artifacts={"marker": __file__})
+
+
+def test_optional_failure_does_not_stop_later_stages(tmp_path):
+    called = []
+    stages = (
+        Stage("required", lambda *_: called.append("required") or result("required")),
+        Stage(
+            "optional",
+            lambda *_: called.append("optional") or result("optional", StageStatus.FAILED),
+            ("required",),
+            required=False,
+        ),
+        Stage("publish", lambda *_: called.append("publish") or result("publish"), ("required",)),
+    )
+    results = PipelineRunner(stages).run(context(tmp_path))
+    assert called == ["required", "optional", "publish"]
+    assert results[1].details["fatal"] is False
+
+
+def test_strict_promotes_optional_failure_and_stops(tmp_path):
+    called = []
+    stages = (
+        Stage("required", lambda *_: result("required")),
+        Stage(
+            "optional",
+            lambda *_: result("optional", StageStatus.FAILED),
+            ("required",),
+            required=False,
+        ),
+        Stage("publish", lambda *_: called.append("publish") or result("publish"), ("required",)),
+    )
+    results = PipelineRunner(stages).run(context(tmp_path), strict=True)
+    assert [item.stage for item in results] == ["required", "optional"]
+    assert results[-1].details["fatal"] is True
+    assert called == []
+
+
+def test_completed_stage_is_reused_when_artifacts_remain(tmp_path):
+    calls = []
+    stage = Stage(
+        "only",
+        lambda *_: calls.append(1) or result("only"),
+        is_complete=lambda _: True,
+    )
+    runner = PipelineRunner((stage,))
+    first = runner.run(context(tmp_path))[0]
+    second = runner.run(context(tmp_path))[0]
+    assert first.status is StageStatus.COMPLETED
+    assert second.status is StageStatus.REUSED
+    assert calls == [1]
+
+
+def test_force_is_forwarded_to_stage_and_invalidates_dependents(tmp_path):
+    received = []
+    stages = (
+        Stage("first", lambda _, options: received.append(options) or result("first")),
+        Stage("second", lambda *_: result("second"), ("first",)),
+    )
+    runner = PipelineRunner(stages)
+    runner.run(context(tmp_path))
+    runner.run(context(tmp_path), force={"first"})
+    assert received == [{}, {"force": True}]
+
+
+def test_stage_receives_context_settings_without_leaking_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("LITEREALITY_OUTPUT", "callers-value")
+    observed = []
+    stage = Stage(
+        "only",
+        lambda *_: observed.append(os.environ["LITEREALITY_OUTPUT"]) or result("only"),
+    )
+    PipelineRunner((stage,)).run(context(tmp_path))
+    assert observed == [str(tmp_path / "run")]
+    assert os.environ["LITEREALITY_OUTPUT"] == "callers-value"
+
+
+def test_single_stage_discovers_existing_prerequisite_artifacts(tmp_path):
+    called = []
+    stages = (
+        Stage("seed", lambda *_: result("seed"), is_complete=lambda _: True),
+        Stage("publish", lambda *_: called.append("publish") or result("publish"), ("seed",)),
+    )
+    output = PipelineRunner(stages).run_stage(context(tmp_path), "publish")
+    assert output.status is StageStatus.COMPLETED
+    assert called == ["publish"]
+
+
+def test_enabling_dino_invalidates_cached_ingest_and_consumers(tmp_path):
+    calls = []
+    stages = (
+        Stage("ingest", lambda _, options: calls.append(("ingest", dict(options))) or result("ingest"),
+              is_complete=lambda _: True),
+        Stage("reconstruct", lambda *_: calls.append(("reconstruct", {})) or result("reconstruct"),
+              ("ingest",), is_complete=lambda _: True),
+    )
+    runner = PipelineRunner(stages)
+    runner.run(context(tmp_path))
+    runner.run(context(tmp_path), options={"ingest": {"use_dino": True}})
+    reused = runner.run(context(tmp_path), options={"ingest": {"use_dino": True}})
+    assert calls == [("ingest", {}), ("reconstruct", {}),
+                     ("ingest", {"use_dino": True}), ("reconstruct", {})]
+    assert all(r.status is StageStatus.REUSED for r in reused)
+
+
+def test_failed_prerequisite_is_not_resurrected_by_leftover_files(tmp_path):
+    import pytest
+
+    from litereality_agent.pipeline.runner import PipelineError
+    runner = PipelineRunner((
+        Stage('author', lambda *_: result('author', StageStatus.FAILED), is_complete=lambda _: True),
+        Stage('publish', lambda *_: result('publish'), ('author',)),
+    ))
+    ctx = context(tmp_path)
+    runner.run(ctx)
+    with pytest.raises(PipelineError, match='requires author'):
+        runner.run_stage(ctx, 'publish')
+
+
+def test_rebuilt_stale_input_invalidates_downstream_cache(tmp_path):
+    calls, current = [], {'first': True}
+    runner = PipelineRunner((
+        Stage('first', lambda *_: calls.append('first') or result('first'),
+              is_complete=lambda _: current['first']),
+        Stage('last', lambda *_: calls.append('last') or result('last'), ('first',),
+              is_complete=lambda _: True),
+    ))
+    ctx = context(tmp_path)
+    runner.run(ctx)
+    current['first'] = False
+    runner.run(ctx)
+    assert calls == ['first', 'last', 'first', 'last']

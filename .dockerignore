@@ -1,0 +1,17 @@
+.git
+.venv
+.uv-cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+.env
+.env.*
+data
+dist
+legacy
+output
+run
+scans_uploaded
+weights
+

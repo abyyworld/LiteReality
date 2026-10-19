@@ -1,0 +1,5 @@
+# Agent runtime (bundles the Claude Code CLI — no separate install needed)
+claude-agent-sdk>=0.2.97
+
+# Used by generated build scripts for texture baking / procedural fallbacks
+pillow>=10.0

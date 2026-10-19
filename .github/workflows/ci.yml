@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a PR makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # --locked: CI fails rather than silently resolving a different dependency set than uv.lock.
+      - run: uv sync --all-groups --locked
+
+      - run: uv run ruff check .
+
+      # The default marker filter in pyproject already excludes anything needing Blender, a real
+      # scan, or a paid model call, so this run is offline and needs no secrets.
+      - run: uv run pytest -n auto

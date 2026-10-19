@@ -1,0 +1,5 @@
+# Per-object build recipes belong in each object's OUTPUT dir, never here.
+# This folder is the committed engine only (blender_lib + example template + utils).
+build_*.py
+__pycache__/
+*.pyc

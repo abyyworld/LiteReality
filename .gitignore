@@ -1,0 +1,70 @@
+# envs / heavy / generated — ignored whether dir OR symlink
+/.venv
+/run
+# stale: superseded by run/, kept locally only
+/output
+/data
+/weights
+/scans
+/scans_uploaded
+.env
+.env.*
+!.env.example
+/keys/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.uv-cache/
+/research/
+/.cache
+run_back
+
+
+# Kept locally, deliberately out of the repo.
+/.python-version
+/NOTICE
+/SETUP.md
+/web/
+__MACOSX
+ten_scenes_final_2026-09-20
+
+# Agent scratch state. The procedural backend ships a real `.claude/skills/` tree (loaded at
+# runtime — do NOT ignore that), but per-machine session/memory dirs must never be committed.
+**/.claude/projects/
+**/.claude/settings.local.json
+**/.claude/todos/
+
+# raw scans (large, local)
+/scanned_scene/
+
+# retired code, kept locally for reference only (recoverable), not pushed
+/legacy/
+# scratch run dirs beside run/ (run-measure, run-measure2, run-e2e, ...) — pipeline output
+/run-*
+
+# macOS finder junk
+.DS_Store
+
+# example scans — cloned separately (github.com/LiteReality/example-scans)
+/example-scans/
+
+# the standalone layout prototype: its arena, viewers and benchmark artifacts
+physical_engine/out/
+
+# Local capture deliveries and extracted supplementary material at the repo root.
+# Keep new raw captures under scans/ or scans_uploaded/ when possible.
+/*.zip
+/*.tar
+/*.tar.gz
+/*.tgz
+/*.tar.bz2
+/*.tar.xz
+/lab_scan_latest_*
+/ten_scenes_final_*
+/deliverables/ten_scenes_final_*
+/supplementary_material_*/
+/supplementary_material_*.validation.json
+
+# Installed JavaScript dependencies; application sources and bundled assets stay visible.
+node_modules/
