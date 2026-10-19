@@ -91,6 +91,34 @@ long Blender-coding agents.
 and `claude -p`), which then uses the key instead of the login — so every call is metered and the
 procedural agent's $5 cap becomes real money.
 
+## Provider policy (decided)
+
+1. **Free first**: open models on Modal (like the image step) or free API tiers (Groq, Gemini,
+   OpenRouter, …) wherever the quality is good enough.
+2. **OpenAI for the quality-critical work**, with a paid key, wherever free is not good enough —
+   most likely the agent sessions that build objects (`codex` CLI); the OpenAI API for any single
+   call where a free model falls short.
+3. **No Claude dependency for the pipeline**: no extra Claude Code device login, no
+   `ANTHROPIC_API_KEY`. The Claude desktop app is for the person working on the repo, not for the
+   pipeline.
+
+The tea_room run above still used a Claude Code login; the steps below are what it takes to follow
+this policy. **Not built yet.**
+
+1. Classification: add `LR_CLASSIFY_PROVIDER` as a settings field so `.env` reaches it, and make the
+   OpenAI path take a base URL and model from settings, so any OpenAI-compatible endpoint (Groq,
+   Gemini, OpenRouter, OpenAI) works.
+2. Chair-type judge (`ingest/references/chair_type_judge.py`), layout repair and box-merge review
+   (`layout/agent.py`, `layout/evidence.py`), completeness check (`completeness_check.py`): add the same
+   OpenAI-compatible path (vision chat), selectable per role in `.env`, defaulting to the free one.
+3. Agent sessions (procedural objects, authoring): use Codex — `LR_PROCEDURAL_PROVIDER=codex` and the
+   other `LR_*_PROVIDER=codex` — with the `codex` CLI signed in with the OpenAI key, and
+   `LR_CODEX_MODEL` set to a model that key can use. Skip `--polish` (object refinement is
+   Claude-only).
+4. Test on `tea_room`: free provider for the single calls first, compare against
+   `results/tea_room`, and switch a role to OpenAI only where free falls short. Check each free
+   tier's current rate limits first; they change often.
+
 ## Known issues (from the tea_room run)
 
 1. **Door leaf at 128.7 kg** (a real one is ~20–40 kg): its compiled collider volume is inflated. A
