@@ -1,17 +1,27 @@
-"""Hosted reference-image generation, on OpenAI or Gemini.
+"""Hosted reference-image generation, on OpenAI, Gemini, or your own Modal workspace.
 
 One call per object: the evidence sheet plus the prompt go up, one clean object render comes back.
-Pick the backend with ``$LR_IMAGE_PROVIDER`` (``openai`` by default, or ``gemini``); naming a
-``gemini-*`` model is enough on its own. The retry ladder, telemetry, and black-background
+Pick the backend with ``$LR_IMAGE_PROVIDER``:
+
+    openai   the default; needs ``$OPENAI_API_KEY``
+    gemini   needs ``$GEMINI_API_KEY``
+    modal    the open, Apache-2.0 Qwen-Image-Edit-2509 on the caller's own Modal workspace; needs
+             no image API key at all, only the Modal credentials TRELLIS already uses, and spends
+             Modal credit instead (``deploy/modal/image_edit``)
+
+Naming a ``gemini-*`` or ``Qwen/...`` model is enough on its own. The telemetry and black-background
 normalisation are shared, so the rest of the pipeline cannot tell which one produced a reference.
 """
 
 from __future__ import annotations
 
 import base64
+import functools
 import io
 import json
 import os
+import secrets
+import threading
 import time
 from pathlib import Path
 
@@ -19,9 +29,13 @@ import numpy as np
 from PIL import Image
 
 from litereality_agent import telemetry
+from litereality_agent.models.image_edit import inference as image_edit
 
 DEFAULT_IMAGE_MODEL = "gpt-image-1"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image"
+# Owned by the model package (torch-free to import), so the client and the container cannot drift.
+DEFAULT_MODAL_IMAGE_MODEL = image_edit.DEFAULT_MODEL  # "Qwen/Qwen-Image-Edit-2509"
+PROVIDERS = ("openai", "gemini", "modal")
 
 
 def resolve_provider(model: str | None = None) -> str:
@@ -29,13 +43,42 @@ def resolve_provider(model: str | None = None) -> str:
 
     Inferring matters because the model is what callers actually pass around (``--image-model``),
     so naming a ``gemini-*`` model without also setting the provider should just work rather than
-    sending a Gemini model id to OpenAI and failing on an unhelpful 404.
+    sending a Gemini model id to OpenAI and failing on an unhelpful 404. Likewise a Hugging Face id
+    under ``Qwen/`` (``--image-model Qwen/Qwen-Image-Edit-2509``) can only mean the Modal backend,
+    since neither hosted API serves it. Anything else is an OpenAI model.
     """
     explicit = (os.environ.get("LR_IMAGE_PROVIDER") or "").strip().lower()
-    if explicit in ("openai", "gemini"):
+    if explicit in PROVIDERS:
         return explicit
-    name = (model or os.environ.get("LR_OPENAI_IMAGE_MODEL") or "").lower()
-    return "gemini" if name.startswith("gemini") else "openai"
+    name = (model or os.environ.get("LR_OPENAI_IMAGE_MODEL") or "").strip().lower()
+    if name.startswith("gemini"):
+        return "gemini"
+    if name.startswith("qwen/"):
+        return "modal"
+    return "openai"
+
+
+def resolve_model(model: str | None = None) -> tuple[str, str]:
+    """``(provider, model id)`` a reference call with ``model`` will use.
+
+    The one place the per-provider model precedence lives, so the label every reference records
+    (``"<provider>:<model>"``) and the scene manifest's image provider and model come from the same
+    rules instead of the manifest guessing from ``$LR_OPENAI_IMAGE_MODEL``, which is always set.
+    """
+    provider = resolve_provider(model)
+    if provider == "gemini":
+        return provider, (
+            os.environ.get("LR_GEMINI_IMAGE_MODEL")
+            or (model if (model or "").lower().startswith("gemini") else None)
+            or DEFAULT_GEMINI_IMAGE_MODEL
+        )
+    if provider == "modal":
+        return provider, (
+            os.environ.get("LR_MODAL_IMAGE_MODEL")
+            or (model if (model or "").strip().lower().startswith("qwen/") else None)
+            or DEFAULT_MODAL_IMAGE_MODEL
+        )
+    return provider, os.environ.get("LR_OPENAI_IMAGE_MODEL") or model or DEFAULT_IMAGE_MODEL
 
 # Reference generation is one hosted image call per object, ~45s each, and every caller had it in
 # a serial loop. The ceiling is OpenAI's rate limit, not local CPU, so the cap is about not opening
@@ -45,6 +88,13 @@ def resolve_provider(model: str | None = None) -> str:
 # 20 covers a normal room in one wave. It is safe to raise only because the retry path below now
 # waits out a 429 instead of burning its attempts in nine seconds: exceeding the account's budget
 # costs time, not quality. Lower it with $LR_IMAGE_WORKERS on a constrained tier.
+#
+# With LR_IMAGE_PROVIDER=modal the same 20 threads are only 20 queued inputs: the image_edit
+# function runs at most one container, so Modal serialises them on one H100 and the last reference
+# of a big room waits behind the rest. That is the intended trade (one model load, bounded spend),
+# and it is safe because nothing on the client side gives up on a queued call: Modal's map has no
+# client timeout, `_call_modal` ignores the OpenAI-sized `timeout`, and a Modal call gets exactly
+# one attempt (see `generate_reference`). Neither can turn a slow queue into duplicate GPU work.
 MAX_IMAGE_WORKERS = int(os.environ.get("LR_IMAGE_WORKERS", "20"))
 
 # A rate-limited request needs to wait out the account's per-minute image budget, so it gets its
@@ -150,6 +200,16 @@ def _gemini_cost_usd(usage: dict) -> float:
     )
 
 
+# Modal bills GPU time, not tokens. $3.95/h is Modal's H100 list price at the time of writing, so
+# the logged figure is an estimate of the GPU-seconds the call reported, not an invoice line; the
+# container's boot and any idle scaledown tail are not in it. Override if the rate changes.
+_PRICE_MODAL_GPU_HOUR = float(os.environ.get("LR_MODAL_GPU_PRICE_PER_HOUR", "3.95"))
+
+
+def _modal_cost_usd(gpu_seconds: float) -> float:
+    return round(gpu_seconds * _PRICE_MODAL_GPU_HOUR / 3600.0, 5)
+
+
 def _flatten_on_black(png_bytes: bytes) -> bytes:
     """Composite a possibly-transparent render onto solid black so normalize's black-key crop works."""
     im = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
@@ -222,6 +282,65 @@ def _call_gemini(sheet_path, full_prompt, img_model, key, timeout):
     return png, usage, _gemini_cost_usd(usage), {}
 
 
+# One service for the whole process. `generate_reference` runs in a thread pool, and building the
+# service per call would re-read settings and re-resolve the Modal function for every object. The
+# lock is there because lru_cache does not hold one around the build, so twenty threads arriving at
+# once would otherwise each build their own. A failed build (no credentials) is not cached, so the
+# next call reports the same clear error rather than a stale one.
+_MODAL_SERVICE_LOCK = threading.Lock()
+
+
+@functools.lru_cache(maxsize=1)
+def _build_modal_image_service():
+    from litereality_agent.models import registry
+
+    return registry.image_edit_from_settings()
+
+
+def _modal_image_service():
+    with _MODAL_SERVICE_LOCK:
+        return _build_modal_image_service()
+
+
+def _call_modal(sheet_path, full_prompt, img_model, timeout):
+    """One Qwen-Image-Edit call on Modal. Returns (png_bytes, usage, cost_usd, extra_fields).
+
+    ``timeout`` is accepted for symmetry and deliberately not enforced. It is sized for one OpenAI
+    request (180s); a Modal call can legitimately wait longer than that in the one-container queue
+    plus a cold start that loads ~58 GB of weights, and abandoning it would not stop the GPU work
+    the call already queued. Waiting in the queue is not billed; the function's own 60-minute
+    timeout bounds the GPU time of the call itself.
+    """
+    del timeout
+    steps = int(os.environ.get("LR_MODAL_IMAGE_STEPS") or image_edit.DEFAULT_STEPS)
+    cfg = float(os.environ.get("LR_MODAL_IMAGE_CFG") or image_edit.DEFAULT_TRUE_CFG)
+    # A fresh seed on every call. Diffusion sampling is deterministic, so the same sheet, prompt
+    # and seed render the same image, and the callers that regenerate on purpose (chair QC's repair
+    # loop, `--force-image-generation`) would pay H100 time to get back the picture they rejected.
+    # OpenAI and Gemini have no seed and re-roll for free. `LR_MODAL_IMAGE_SEED` pins one to
+    # reproduce a render, which makes every forced regeneration identical again; the seed of each
+    # render is kept in its response JSON either way. Each attempt draws its own, which is one per
+    # reference because a Modal call gets exactly one attempt.
+    pinned = (os.environ.get("LR_MODAL_IMAGE_SEED") or "").strip()
+    seed = int(pinned) if pinned else secrets.randbelow(image_edit.MAX_SEED + 1)
+    png, meta = _modal_image_service().edit(
+        Path(sheet_path).read_bytes(),
+        full_prompt,
+        model=img_model,
+        steps=steps,
+        true_cfg_scale=cfg,
+        seed=seed,
+    )
+    gpu_seconds = float(meta.get("elapsed_s") or 0.0)
+    usage = {"gpu_seconds": round(gpu_seconds, 3), "steps": int(meta.get("steps") or steps)}
+    extra = {
+        "true_cfg_scale": meta.get("true_cfg_scale", cfg),
+        "load_s": meta.get("load_s"),
+        "seed": meta.get("seed", seed),
+    }
+    return png, usage, _modal_cost_usd(gpu_seconds), extra
+
+
 def generate_reference(
     sheet_path: Path,
     prompt: str,
@@ -238,7 +357,7 @@ def generate_reference(
     sheet_path = Path(sheet_path)
     out_path = Path(out_path)
     call_t0 = time.time()
-    provider = resolve_provider(model)
+    provider, img_model = resolve_model(model)
     if out_path.exists() and not force:
         telemetry.on_image_generation(prompt, sheet_path, out_path, "skipped_exists", model=provider)
         return None
@@ -247,16 +366,24 @@ def generate_reference(
         key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not key:
             raise RuntimeError("Gemini image generation needs $GEMINI_API_KEY.")
-        img_model = (os.environ.get("LR_GEMINI_IMAGE_MODEL")
-                     or (model if (model or "").lower().startswith("gemini") else None)
-                     or DEFAULT_GEMINI_IMAGE_MODEL)
         # No transparent-background option on the image models, so take the black-background path.
         use_transparent = False
+    elif provider == "modal":
+        # No API key: the call authenticates with the same Modal credentials as TRELLIS and DINO,
+        # which `registry.image_edit_from_settings` reads (and explains when they are missing).
+        key = None
+        # Qwen-Image-Edit renders RGB, so ask for the solid black background normalize keys on.
+        use_transparent = False
+        # Exactly one attempt. Every attempt is billed H100 time, and the failures a Modal call can
+        # return are not ones a retry fixes: a remote OOM or function timeout repeats (and
+        # re-bills), a bad request or an undeployed app fails identically, and transport blips are
+        # already retried inside the Modal client. The function itself is deployed with retries=0
+        # for the same reason; the caller falls back to the raw sheet and records the error.
+        retries = min(retries, 1)
     else:
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OpenAI image generation needs $OPENAI_API_KEY.")
-        img_model = os.environ.get("LR_OPENAI_IMAGE_MODEL") or model or DEFAULT_IMAGE_MODEL
         # gpt-image-2 rejects transparent backgrounds; only the gpt-image-1 family supports them.
         # With transparent we composite the exact object onto black; otherwise we ask the model for
         # a solid black background (normalize keys on black either way).
@@ -284,6 +411,8 @@ def generate_reference(
             if provider == "gemini":
                 png, usage, cost, extra = _call_gemini(
                     sheet_path, full_prompt, img_model, key, timeout)
+            elif provider == "modal":
+                png, usage, cost, extra = _call_modal(sheet_path, full_prompt, img_model, timeout)
             else:
                 png, usage, cost, extra = _call_openai(
                     sheet_path, full_prompt, img_model, key, timeout, use_transparent)
@@ -300,8 +429,11 @@ def generate_reference(
                 prompt, sheet_path, out_path, "ok", model=label,
                 elapsed_sec=round(time.time() - call_t0, 3), attempt=attempt, usage=usage,
             )
-            print(f"    [{provider}-image] {out_path.name}  ${cost}  "
-                  f"({usage.get('output_tokens','?')} out tok)", flush=True)
+            if provider == "modal":
+                spent = f"~${cost}  ({usage.get('gpu_seconds', '?')} GPU s, estimate)"
+            else:
+                spent = f"${cost}  ({usage.get('output_tokens', '?')} out tok)"
+            print(f"    [{provider}-image] {out_path.name}  {spent}", flush=True)
             return {
                 "status": "ok",
                 "model": label,

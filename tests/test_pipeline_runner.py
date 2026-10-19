@@ -148,3 +148,20 @@ def test_rebuilt_stale_input_invalidates_downstream_cache(tmp_path):
     current['first'] = False
     runner.run(ctx)
     assert calls == ['first', 'last', 'first', 'last']
+
+
+def test_prerequisites_can_depend_on_the_stage_options(tmp_path):
+    import pytest
+
+    from litereality_agent.pipeline.runner import PipelineError
+    runner = PipelineRunner((
+        Stage('seed', lambda *_: result('seed')),
+        Stage('publish', lambda *_: result('publish'), ('seed',)),
+        Stage('simulate', lambda *_: result('simulate'), ('publish',), required=False,
+              prerequisites_for=lambda o: ('seed',) if o.get('from_seed') else ('publish',)),
+    ))
+    ctx = context(tmp_path)
+    runner.run_stage(ctx, 'seed')
+    with pytest.raises(PipelineError, match='requires publish'):
+        runner.run_stage(ctx, 'simulate')
+    assert runner.run_stage(ctx, 'simulate', options={'from_seed': True}).status is StageStatus.COMPLETED

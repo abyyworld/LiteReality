@@ -20,3 +20,10 @@ class Stage:
     prerequisites: tuple[str, ...] = ()
     required: bool = True
     is_complete: Callable[[RunContext], bool] | None = None
+    # A stage whose inputs depend on how it is asked to run. `simulate --from-seed` exports the room
+    # scene init built, so demanding `publish` (the authored room) would refuse the one mode that
+    # exists to skip authoring. When set, it replaces `prerequisites` for that run's options.
+    prerequisites_for: Callable[[dict[str, Any]], tuple[str, ...]] | None = None
+
+    def requires(self, options: dict[str, Any]) -> tuple[str, ...]:
+        return self.prerequisites_for(options) if self.prerequisites_for else self.prerequisites

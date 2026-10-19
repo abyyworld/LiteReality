@@ -22,6 +22,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -83,12 +84,19 @@ def _load_dotenv() -> bool:
     sanity cannot drift from the real run, and it already parses models.env's
     `export K="${K:-default}"   # comment` grammar (getting the trailing comment right is fiddly —
     see models/config.py._value). The inline parse below is the fallback for a half-installed tree,
-    where the package is unimportable and only .env's paths and keys still mean anything."""
+    where the package is unimportable and only .env's paths and keys still mean anything.
+
+    An EMPTY shell variable counts as unset, as it does for the settings themselves
+    (`env_ignore_empty`) and for the run's subprocesses, which get every settings value on top of
+    the shell. With `apply_environment`'s plain setdefault, `export LR_IMAGE_PROVIDER=` hid a
+    `.env` value of `modal`, so this script checked another image provider than the run used."""
     envp = ROOT / ".env"
     try:
         from litereality_agent.settings import load_settings
 
-        load_settings(ROOT).apply_environment()
+        for key, value in load_settings(ROOT).as_environment().items():
+            if not os.environ.get(key):
+                os.environ[key] = value
         return envp.is_file()
     except Exception:  # noqa: BLE001 — sanity must run even from a half-installed tree
         pass
@@ -234,7 +242,8 @@ def _check_hosted_dino(*, embed: bool) -> None:
         service = detection_from_settings()
     except Exception as e:  # noqa: BLE001
         fail(f"{what}: could not build the Modal service: {type(e).__name__}: {e}",
-             cmd=("uv run litereality setup", "deploys both model apps into your workspace"))
+             cmd=("uv run litereality setup",
+                  "deploys the litereality app (trellis, dino, image_edit) into your workspace"))
         return
     if service is None:
         fail(f"{what}: no runtime configured — neither Modal credentials nor GROUNDING_DINO_PYTHON.",
@@ -266,6 +275,120 @@ def _check_hosted_dino(*, embed: bool) -> None:
         close = getattr(service, "close", None)
         if close:
             close()
+
+
+def _image_provider() -> tuple[str, str]:
+    """`(provider, model)` the reference step will use, asked of `image_gen` itself.
+
+    So this cannot drift from the routing a run applies (an explicit `LR_IMAGE_PROVIDER` wins,
+    else the model name decides, then each provider's own model precedence). The inline copy of
+    that rule is only the fallback for a half-installed tree where `image_gen` cannot be imported.
+    """
+    configured = os.environ.get("LR_OPENAI_IMAGE_MODEL")
+    try:
+        from litereality_agent.pipeline.scene_init.ingest.references.image_gen import resolve_model
+
+        return resolve_model(configured)
+    except Exception:  # noqa: BLE001 — sanity must run even from a half-installed tree
+        pass
+    model = configured or "gpt-image-2"
+    provider = (os.environ.get("LR_IMAGE_PROVIDER") or "").strip().lower()
+    if provider not in ("openai", "gemini", "modal"):
+        name = model.strip().lower()
+        provider = ("gemini" if name.startswith("gemini")
+                    else "modal" if name.startswith("qwen/") else "openai")
+    if provider == "gemini":
+        return provider, os.environ.get("LR_GEMINI_IMAGE_MODEL") or "gemini-2.5-flash-image"
+    if provider == "modal":
+        return provider, os.environ.get("LR_MODAL_IMAGE_MODEL") or "Qwen/Qwen-Image-Edit-2509"
+    return provider, model
+
+
+# The Modal client retries an unreachable server for about a minute before it gives up, which is
+# too long to stall a fast check on; the OpenAI key probe gives up after 15s for the same reason.
+MODAL_LOOKUP_TIMEOUT_S = 20.0
+
+
+def _lookup_modal_function(function, timeout: float = MODAL_LOOKUP_TIMEOUT_S):
+    """Resolve a lazy `modal.Function.from_name` handle; returns the exception, or None if found.
+
+    `hydrate()` is one FunctionGet call: no input, no container, no GPU time and no weights. It
+    runs on a daemon thread only so a dead network costs `timeout` seconds rather than a minute;
+    an abandoned lookup does not hold up the exit.
+    """
+    outcome: list[BaseException | None] = []
+
+    def lookup() -> None:
+        try:
+            function.hydrate()
+            outcome.append(None)
+        except BaseException as exc:  # noqa: BLE001 — reported to the caller, never raised here
+            outcome.append(exc)
+
+    worker = threading.Thread(target=lookup, name="sanity-modal-lookup", daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if not outcome:
+        return TimeoutError(f"no answer from Modal in {timeout:g}s")
+    return outcome[0]
+
+
+def _check_hosted_image_edit(image_model: str) -> None:
+    """The `image_edit` function behind `LR_IMAGE_PROVIDER=modal`.
+
+    Built through `registry` from the run's own settings, so the app, function, environment and
+    credentials checked here are the ones a run will use, and then looked up on Modal. The lookup
+    runs in fast mode too, because it costs nothing and the likeliest failure is exactly an app
+    deployed before `image_edit` existed: every reference would then fall back to the raw evidence
+    sheet while a credentials-only check passed. It never runs an edit, not even under
+    SANITY_DEEP: one call loads ~58 GB of weights and bills H100 time.
+    """
+    no_credentials = ("MODAL_TOKEN_ID", "ak-<your-token-id>",
+                      "with MODAL_TOKEN_SECRET (or MODAL_PROFILE); create at "
+                      "modal.com/settings/tokens, then `uv run litereality setup`")
+    no_credentials_msg = ("LR_IMAGE_PROVIDER=modal but no Modal credentials — every reference "
+                          "image will fall back to the raw evidence sheet.")
+    try:
+        from litereality_agent.models.registry import image_edit_from_settings
+        from litereality_agent.settings import load_settings
+
+        settings = load_settings(ROOT)
+        configured = settings.modal_configured()
+    except Exception as e:  # noqa: BLE001 — a broken install, which is not "no credentials"
+        if os.environ.get("MODAL_PROFILE") or (os.environ.get("MODAL_TOKEN_ID")
+                                               and os.environ.get("MODAL_TOKEN_SECRET")):
+            fail(f"image_edit: could not load the settings: {type(e).__name__}: {e}",
+                 cmd=("uv sync --frozen --extra modal --group dev", "repairs a half-installed env"))
+        else:
+            fail(no_credentials_msg, env=no_credentials)
+        return
+    if not configured:
+        fail(no_credentials_msg, env=no_credentials)
+        return
+    try:
+        service = image_edit_from_settings(settings)
+    except Exception as e:  # noqa: BLE001
+        fail(f"image_edit: could not build the Modal service: {type(e).__name__}: {e}",
+             cmd=("uv sync --frozen --extra modal --group dev", "installs the Modal client"))
+        return
+
+    where = f"{service.app_name}/{service.function_name}"
+    error = _lookup_modal_function(service.client.function)
+    kind = type(error).__name__
+    if error is None:
+        ok(f"image_edit deployed on Modal ({where}, {image_model}) — spends Modal credit, "
+           "~1 H100-minute per reference")
+    elif kind == "NotFoundError":
+        fail(f"{where} is not deployed ({error}) — every reference image would fall back to the "
+             "raw evidence sheet.",
+             cmd=("uv run litereality setup",
+                  f"redeploys {service.app_name} with trellis, dino and image_edit"))
+    elif kind in ("AuthError", "PermissionDeniedError"):
+        fail(f"Modal rejected the credentials looking up {where}: {kind}: {error}",
+             env=no_credentials)
+    else:
+        warn(f"image_edit not verified on Modal ({where}): {kind}: {error}",
+             note="check network / proxy, then re-run to confirm image_edit is deployed")
 
 
 def main() -> int:
@@ -420,16 +543,16 @@ def main() -> int:
         # so a correctly configured Gemini setup failed sanity while the run itself would have been
         # fine — and, worse, an OpenAI key present alongside `LR_IMAGE_PROVIDER=gemini` passed here
         # and then failed on a missing Gemini key at the first object.
-        provider = (os.environ.get("LR_IMAGE_PROVIDER") or "openai").strip().lower()
-        model = os.environ.get("LR_OPENAI_IMAGE_MODEL") or "gpt-image-2"
-        if provider not in ("openai", "gemini"):
-            provider = "gemini" if model.lower().startswith("gemini") else "openai"
+        provider, model = _image_provider()
         print(f"── hosted models ({provider} images · Claude reasoning) ──")
 
+        if provider == "modal":
+            # The open-model path: no image API key, but it runs on the user's own Modal workspace,
+            # so what it needs is the Modal credentials and the deployed `image_edit` function.
+            _check_hosted_image_edit(model)
         if provider == "gemini":
             if os.environ.get("GEMINI_API_KEY", ""):
-                ok(f"GEMINI_API_KEY set (image provider is gemini, "
-                   f"{os.environ.get('LR_GEMINI_IMAGE_MODEL') or 'gemini-2.5-flash-image'})")
+                ok(f"GEMINI_API_KEY set (image provider is gemini, {model})")
             else:
                 fail("LR_IMAGE_PROVIDER=gemini but GEMINI_API_KEY is unset — every reference "
                      "image will fall back to the raw evidence sheet.",
@@ -437,7 +560,7 @@ def main() -> int:
                           "create at https://aistudio.google.com/apikey"))
         key = os.environ.get("OPENAI_API_KEY", "")
         if provider != "openai":
-            ok("OPENAI_API_KEY not required — images come from gemini")
+            ok(f"OPENAI_API_KEY not required — images come from {provider}")
         elif not key:
             fail(f"OPENAI_API_KEY unset — reference image-gen ({model}) will fail.",
                  env=("OPENAI_API_KEY", "sk-<your-openai-key>", "create at https://platform.openai.com/api-keys"))
@@ -463,12 +586,26 @@ def main() -> int:
 
     if "gen3d" in wanted:
         print("── gen3d (TRELLIS) ──")
-        if os.environ.get("MODAL_TRELLIS_APP"):
-            ok("Modal TRELLIS app set (cloud gen3d)")
+        # Asked of `registry`, which picks the runtime from Modal credentials or TRELLIS_PYTHON
+        # exactly as a run does. MODAL_TRELLIS_APP is no signal: it always carries the
+        # `litereality` default, so the old check on it passed with no credentials at all.
+        try:
+            from litereality_agent.models.registry import gen3d_from_settings
+            from litereality_agent.settings import load_settings
+
+            settings = load_settings(ROOT)
+            service = gen3d_from_settings(settings)
+        except Exception as e:  # noqa: BLE001
+            warn(f"gen3d not configured: {e}",
+                 env=("MODAL_TOKEN_ID", "ak-<your-token-id>",
+                      "with MODAL_TOKEN_SECRET (or MODAL_PROFILE), then `uv run litereality "
+                      "setup`; or TRELLIS_PYTHON for a local GPU env"))
         else:
-            warn("no MODAL_TRELLIS_APP — reconstruction has no cloud gen3d and needs a local GPU env.",
-                 env=("MODAL_TRELLIS_APP", "litereality",
-                      "deploy deploy/modal/app.py from the shared workspace; or use a local GPU"))
+            if getattr(service, "name", "") == "trellis-modal":
+                ok(f"TRELLIS hosted on Modal ({settings.modal_trellis_app}/"
+                   f"{settings.modal_trellis_function})  [config check only]")
+            else:
+                ok("TRELLIS local GPU runtime (TRELLIS_PYTHON)")
 
     if scan:
         print(f"── scan: {scan} ──")

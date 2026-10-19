@@ -12,6 +12,7 @@ HERE, where the pipeline and scene path contracts meet.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -93,6 +94,51 @@ def _objects_in(recon: Path) -> list[str]:
     return sorted(flat | nested)
 
 
+def _image_record(refroot: Path, scan: str) -> tuple[Any, Any]:
+    """`(provider, model)` of the reference images, for the manifest, from what actually ran.
+
+    The manifest used to say `openai` and `$LR_OPENAI_IMAGE_MODEL` (which settings always export)
+    whatever made the references, so a scene built on Gemini or `LR_IMAGE_PROVIDER=modal` claimed
+    gpt-image-2. Every generated reference records `"<provider>:<model>"` as `image_meta.model` in
+    its `reference_meta.json` (objects and openings), so those are read first; a run that mixed
+    backends gets sorted lists. With no label to read (every reference reused from disk, or only
+    chair clusters, which record none) it falls back to the same resolution `generate_reference`
+    applies. If nothing got an image at all (`skip_image_generation`, or every call fell back to
+    the raw sheet) it records `none` rather than credit a provider that produced nothing.
+    """
+    from litereality_agent.pipeline.scene_init.ingest.references import image_gen
+
+    labels: set[str] = set()
+    statuses: set[str] = set()
+    for meta_path in sorted(refroot.glob(f"*/{scan}/*/reference_meta.json")):
+        try:
+            record = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        statuses.add(str(record.get("status")))
+        label = (record.get("image_meta") or {}).get("model")
+        if record.get("status") == "ok" and isinstance(label, str) and ":" in label:
+            labels.add(label)
+    clusters = refroot / "chair_clusters" / scan / "chair_clusters.json"
+    try:
+        for cluster in json.loads(clusters.read_text(encoding="utf-8")).get("clusters", []):
+            if cluster.get("reference_status"):
+                statuses.add(str(cluster["reference_status"]))
+    except (OSError, ValueError, AttributeError):
+        pass
+
+    if labels:
+        providers = sorted({label.split(":", 1)[0] for label in labels})
+        models = sorted({label.split(":", 1)[1] for label in labels})
+        return (
+            providers[0] if len(providers) == 1 else providers,
+            models[0] if len(models) == 1 else models,
+        )
+    if statuses and "ok" not in statuses:
+        return "none", None
+    return image_gen.resolve_model()
+
+
 def finalize(
     scan: str,
     *,
@@ -151,6 +197,7 @@ def finalize(
     }
 
     objects = _objects_in(paths["reconstructed_objs"])
+    image_provider, image_model = _image_record(paths["refroot"], scan)
     manifest.write(
         root,
         scan=scan,
@@ -163,7 +210,7 @@ def finalize(
         },
         init={**(init or {}), "objects": objects, "n_objects": len(objects)},
         providers={
-            "image": "openai",
+            "image": image_provider,
             "classify": os.environ.get("LR_CLASSIFY_PROVIDER", "claude"),
             "vlm": os.environ.get("HARNESS_VLM", "claude"),
         },
@@ -173,7 +220,7 @@ def finalize(
                 "harness": os.environ.get("HARNESS_MODEL"),
                 "chair_judge": os.environ.get("LR_CHAIR_JUDGE_MODEL"),
                 "procedural": os.environ.get("LR_PROCEDURAL_MODEL"),
-                "image": os.environ.get("LR_OPENAI_IMAGE_MODEL"),
+                "image": image_model,
             }.items()
             if v
         },

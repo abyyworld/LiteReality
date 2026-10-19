@@ -70,7 +70,10 @@ Tested on **macOS** (Apple Silicon) and **Linux** (with a >=24 GB GPU).
 1. [`uv`](https://docs.astral.sh/uv/)
 2. **Blender 5.x** (tested on 5.1). `BLENDER_PATH` points at the install *directory*, not the binary.
 3. **An image-generation API key** for reference images — typically under $1 per scene.
-   `OPENAI_API_KEY` by default, or `GEMINI_API_KEY` with `LR_IMAGE_PROVIDER=gemini`.
+   `OPENAI_API_KEY` by default, or `GEMINI_API_KEY` with `LR_IMAGE_PROVIDER=gemini`. Or no key
+   at all: `LR_IMAGE_PROVIDER=modal` runs the open Qwen-Image-Edit-2509 on your own Modal
+   account (item 5), spending Modal credit instead — see
+   [deploy/modal/image_edit](deploy/modal/image_edit/README.md).
 4. **Logged-in agent CLIs on your `PATH`.** `codex` with GPT-6 is the default for room
    authoring, materials, object refinement and independent visual review. `claude` remains the
    default for reconstruction reasoning and procedural asset initialization. Per-role overrides
@@ -100,6 +103,7 @@ cp .env.example .env
 |---|---|
 | `OPENAI_API_KEY` | reference image generation — typically under $1 per scene |
 | `GEMINI_API_KEY` | only for `LR_IMAGE_PROVIDER=gemini` → [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| `LR_IMAGE_PROVIDER=modal` | the free alternative to both keys: Qwen-Image-Edit-2509 on your Modal account, no image API key, uses Modal credit |
 | `MODAL_TOKEN_ID` · `MODAL_TOKEN_SECRET` | a free [Modal](https://modal.com) account → [modal.com/settings/tokens](https://modal.com/settings/tokens) |
 | `BLENDER_PATH` | your Blender install **directory**, not the binary |
 | `LR_SCANS_DIR` | the folder holding your scans |

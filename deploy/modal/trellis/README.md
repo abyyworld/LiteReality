@@ -9,12 +9,17 @@ cannot be selected by app source code. Confirm which one you are about to bill, 
 its `main` environment:
 
 ```bash
-modal profile list
-modal profile activate <name>
-modal profile current
+uv run modal profile list
+uv run modal profile activate <name>
+uv run modal profile current
 
-modal deploy --env main deploy/modal/app.py  (deploys trellis and dino together)
+uv run modal deploy --env main deploy/modal/app.py  # trellis, dino and image_edit together
 ```
+
+That deploys this model as the `trellis` function of the combined `litereality` app, which is also
+what `uv run litereality setup` does. Never deploy this directory's `app.py` on its own: it would
+create a separate `litereality-trellis` app that the pipeline never looks up. See
+[Deploying by hand](../README.md#deploying-by-hand).
 
 ## No Hugging Face account is needed
 

@@ -1,12 +1,14 @@
-"""One-command Modal setup: authenticate, deploy the model apps, record the profile.
+"""One-command Modal setup: authenticate, deploy the model app, record the profile.
 
 Modal is rented compute, not a model API — a token gives you GPUs, not models, so nothing is
-callable until the apps are deployed into your own workspace. That is genuinely a one-time step,
-but it does not need to be five manual commands. This collapses `modal setup`, profile selection,
-both `modal deploy` calls, and the `.env` write into `litereality setup`.
+callable until the app is deployed into your own workspace. That is genuinely a one-time step,
+but it does not need to be several manual commands. This collapses `modal setup`, profile
+selection, the `modal deploy` of the combined `litereality` app, and the `.env` write into
+`litereality setup`.
 
-What cannot be collapsed: `modal setup` opens a browser for authentication, and the TRELLIS image
-build spends real time and money on an H100. Both are surfaced rather than hidden.
+What cannot be collapsed: `modal setup` opens a browser for authentication, the TRELLIS image
+build spends real time and money on an H100, and the first `image_edit` call downloads its
+weights. All three are surfaced rather than hidden.
 """
 
 from __future__ import annotations
@@ -21,7 +23,19 @@ from pathlib import Path
 # surprise charge.
 TRELLIS_BUILD_ESTIMATE = "~11 minutes (one-time, per workspace, it will be around 3s in future runs)"
 
-APPS = (("dino", "deploy/modal/dino/app.py"), ("trellis", "deploy/modal/trellis/app.py"))
+# Qwen-Image-Edit-2509 behind the `image_edit` function. Its image is a CPU-only pip install, so
+# it builds quickly; the cost lands on the first *call* instead, which pulls the weights into
+# a Modal Volume. Quoted alongside the TRELLIS build for the same reason.
+IMAGE_EDIT_FIRST_CALL_ESTIMATE = "~58 GB of weights into a Modal Volume (one-time, per workspace)"
+
+# Exactly one entry, and it must stay that way. The runtime looks up ONE app (`litereality`,
+# the MODAL_*_APP defaults) holding the `trellis`, `dino` and `image_edit` functions, and
+# deploy/modal/app.py builds that app by including the per-model apps. Deploying the per-model
+# files directly creates separate `litereality-dino` / `litereality-trellis` apps the runtime
+# never looks up — setup "succeeds" and every hosted call then fails with app-not-found. And a
+# Modal deploy replaces every function on the app, so the app is always deployed whole, never
+# function by function. The (label, path) shape is kept for the deploy loop and its tests.
+APPS = (("models", "deploy/modal/app.py"),)
 
 
 class SetupError(RuntimeError):
@@ -85,7 +99,7 @@ def deploy(
     profile: str | None = None,
     credentials: tuple[str, str] | None = None,
 ) -> None:
-    """Deploy both model apps into the workspace the credentials identify."""
+    """Deploy the combined model app into the workspace the credentials identify."""
     env = {**os.environ}
     if credentials:
         env["MODAL_TOKEN_ID"], env["MODAL_TOKEN_SECRET"] = credentials
@@ -141,7 +155,7 @@ def run(
     credentials: tuple[str, str] | None = None,
     skip_deploy: bool = False,
 ) -> int:
-    """Authenticate if needed, deploy the apps, record the profile. Returns an exit code."""
+    """Authenticate if needed, deploy the app, record the profile. Returns an exit code."""
     require_client()
 
     if credentials:
@@ -157,9 +171,12 @@ def run(
     else:
         # Common case first: most runs are redeploys against a warm image cache and finish in
         # seconds. Leading with the cold-build number reads as a prediction for this run.
-        print("→ Deploying model apps — seconds once the image cache is warm.")
+        print("→ Deploying the litereality Modal app (trellis, dino, image_edit) — seconds once "
+              "the image cache is warm.")
         print(f"  A cold TRELLIS build compiles CUDA extensions on an H100: "
               f"{TRELLIS_BUILD_ESTIMATE}.")
+        print("  image_edit (Qwen-Image-Edit-2509, H100) builds quickly from a CPU-only pip "
+              f"install; its first call downloads {IMAGE_EDIT_FIRST_CALL_ESTIMATE}.")
         deploy(repo_root, environment, profile, credentials)
 
     if profile and not credentials:

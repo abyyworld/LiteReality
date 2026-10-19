@@ -189,3 +189,32 @@ def test_changed_room_invalidates_simulation_acceptance(context, monkeypatch):
     assert simulate.run(context, {}).ok
     (context.authored_room / 'Room.py').write_text('SHELL = {"changed": True}')
     assert not simulate.complete(context)
+
+
+def test_from_seed_needs_seed_not_the_authored_room():
+    """The runner used to demand `publish` for every simulate, which refused `--from-seed` — the
+    one mode that exists to skip authoring — before it could run."""
+    from litereality_agent.pipeline.stages import STAGES
+
+    stage = next(s for s in STAGES if s.name == "simulate")
+    assert stage.requires({"from_seed": True}) == ("seed",)
+    assert stage.requires({}) == ("publish",)
+
+
+@pytest.mark.parametrize("ffmpeg", ["/usr/bin/ffmpeg", None])
+def test_shake_without_ffmpeg_measures_and_skips_only_the_clip(context, monkeypatch, ffmpeg):
+    _built_room(context)
+    shake_args: list[list[str]] = []
+
+    def record(_context, module, args=(), *, log_name=None):
+        if module.endswith("mujoco_shake"):
+            shake_args.append([str(a) for a in args])
+        return _exports(context, {"loads_clean": True})(_context, module, args, log_name=log_name)
+
+    monkeypatch.setattr(simulate, "run_module", record)
+    monkeypatch.setattr(simulate.shutil, "which", lambda name: ffmpeg if name == "ffmpeg" else None)
+    result = simulate.run(context, {"shake": True})
+
+    assert result.status is StageStatus.COMPLETED
+    assert ("--video" in shake_args[0]) is (ffmpeg is not None)
+    assert any("ffmpeg" in w for w in result.warnings) is (ffmpeg is None)

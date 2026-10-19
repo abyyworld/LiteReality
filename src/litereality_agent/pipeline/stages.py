@@ -16,7 +16,7 @@ STAGES = (
     # object's own compiled physics — exists by now, and a room that never reaches a simulator is
     # still a finished room. Making it required would fail a publish over an optional export.
     Stage("simulate", simulate.run, ("publish",), required=False,
-          is_complete=simulate.complete),
+          is_complete=simulate.complete, prerequisites_for=simulate.prerequisites),
 )
 
 __all__ = ["STAGES"]

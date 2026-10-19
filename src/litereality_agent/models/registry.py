@@ -57,3 +57,27 @@ def detection_from_settings(settings: LiteRealitySettings | None = None):
 
         return DinoSubprocessService(python=str(settings.dino_python), model_id=settings.dino_model)
     return None
+
+
+def image_edit_from_settings(settings: LiteRealitySettings | None = None):
+    """The hosted Qwen-Image-Edit service behind ``LR_IMAGE_PROVIDER=modal``.
+
+    Hosted only, by design: there is no local fallback, because the model needs ~58 GB of VRAM and
+    the point of this provider is to need no GPU and no paid image key on the calling machine.
+    """
+    settings = settings or load_settings()
+    if not settings.modal_configured():
+        raise RuntimeError(
+            "LR_IMAGE_PROVIDER=modal runs Qwen-Image-Edit-2509 on your own Modal workspace and "
+            "needs Modal credentials: set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET (or MODAL_PROFILE) "
+            "in .env, then deploy the image_edit function once with `uv run litereality setup`."
+        )
+    from litereality_agent.models.image_edit.modal import ModalImageEditService
+
+    return ModalImageEditService(
+        app_name=settings.modal_image_app,
+        function_name=settings.modal_image_function,
+        environment_name=settings.modal_environment,
+        profile=settings.modal_profile,
+        credentials=settings.modal_credentials(),
+    )

@@ -476,7 +476,9 @@ def _parser() -> argparse.ArgumentParser:
     live.add_argument("--bake-resolution", type=int, default=1024)
     live.set_defaults(handler=_live)
 
-    setup = commands.add_parser("setup", help="authenticate Modal and deploy the model apps")
+    setup = commands.add_parser(
+        "setup", help="authenticate Modal and deploy the litereality model app"
+    )
     setup.add_argument("--profile", help="Modal profile to use instead of the active one")
     setup.add_argument("--env", help="Modal environment (default: MODAL_ENVIRONMENT)")
     setup.add_argument(

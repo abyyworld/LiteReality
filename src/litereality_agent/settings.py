@@ -106,6 +106,33 @@ class LiteRealitySettings(BaseSettings):
     )
     modal_dino_app: str = Field(default="litereality", validation_alias="MODAL_DINO_APP")
     modal_dino_function: str = Field(default="dino", validation_alias="MODAL_DINO_FUNCTION")
+    # Qwen-Image-Edit-2509 behind LR_IMAGE_PROVIDER=modal; same combined app as the two above.
+    modal_image_app: str = Field(default="litereality", validation_alias="MODAL_IMAGE_APP")
+    modal_image_function: str = Field(
+        default="image_edit", validation_alias="MODAL_IMAGE_FUNCTION"
+    )
+    # Knobs for that provider. They are fields, not just `models.env` lines, because only fields
+    # reach the generating subprocess (`as_environment`): a `models.env` line with no field behind
+    # it is silently dead from the CLI. Typed and bounded here so a bad value fails at load, not as
+    # a raw-sheet fallback on every object; left unset, `image_gen` uses the model's defaults.
+    modal_image_model: str | None = Field(default=None, validation_alias="LR_MODAL_IMAGE_MODEL")
+    modal_image_steps: int | None = Field(
+        default=None, ge=1, le=100, validation_alias="LR_MODAL_IMAGE_STEPS"
+    )
+    modal_image_cfg: float | None = Field(
+        default=None, ge=1.0, le=20.0, validation_alias="LR_MODAL_IMAGE_CFG"
+    )
+    # Unset (the default) draws a fresh seed per reference, so a forced or chair-QC regeneration
+    # really re-rolls. Pin it only to reproduce one render: every regeneration is then identical.
+    # The bound is image_edit.inference.MAX_SEED, what torch.Generator.manual_seed accepts.
+    modal_image_seed: int | None = Field(
+        default=None, ge=0, le=2**63 - 1, validation_alias="LR_MODAL_IMAGE_SEED"
+    )
+    # Only the printed `~$` estimate uses it (Modal bills GPU time, not tokens); unset keeps
+    # image_gen's own H100 list price.
+    modal_gpu_price_per_hour: float | None = Field(
+        default=None, gt=0, validation_alias="LR_MODAL_GPU_PRICE_PER_HOUR"
+    )
     modal_environment: str = Field(default="main", validation_alias="MODAL_ENVIRONMENT")
     modal_profile: str | None = Field(default=None, validation_alias="MODAL_PROFILE")
     # Modal authenticates from either a token pair or a named profile in ~/.modal.toml. The token
@@ -225,6 +252,13 @@ class LiteRealitySettings(BaseSettings):
             "MODAL_TRELLIS_FUNCTION": self.modal_trellis_function,
             "MODAL_DINO_APP": self.modal_dino_app,
             "MODAL_DINO_FUNCTION": self.modal_dino_function,
+            "MODAL_IMAGE_APP": self.modal_image_app,
+            "MODAL_IMAGE_FUNCTION": self.modal_image_function,
+            "LR_MODAL_IMAGE_MODEL": self.modal_image_model,
+            "LR_MODAL_IMAGE_STEPS": self.modal_image_steps,
+            "LR_MODAL_IMAGE_CFG": self.modal_image_cfg,
+            "LR_MODAL_IMAGE_SEED": self.modal_image_seed,
+            "LR_MODAL_GPU_PRICE_PER_HOUR": self.modal_gpu_price_per_hour,
             "MODAL_ENVIRONMENT": self.modal_environment,
             "MODAL_PROFILE": self.modal_profile,
         }

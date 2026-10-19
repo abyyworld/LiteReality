@@ -84,7 +84,9 @@ class PipelineRunner:
             and (self.by_name[name].is_complete is None or self.by_name[name].is_complete(context))
         }
         for stage in selected:
-            for prerequisite in stage.prerequisites:
+            stage_options = dict((options or {}).get(stage.name, {}))
+            prerequisites = stage.requires(stage_options)
+            for prerequisite in prerequisites:
                 dependency = self.by_name[prerequisite]
                 if (
                     prerequisite not in completed
@@ -95,7 +97,7 @@ class PipelineRunner:
                     reused = StageResult(prerequisite, StageStatus.REUSED)
                     prior[prerequisite] = reused.to_dict()
                     completed.add(prerequisite)
-            missing = [name for name in stage.prerequisites if name not in completed]
+            missing = [name for name in prerequisites if name not in completed]
             if missing:
                 raise PipelineError(
                     f"stage {stage.name!r} requires {', '.join(missing)}; "
@@ -103,7 +105,6 @@ class PipelineRunner:
                 )
 
             old = prior.get(stage.name)
-            stage_options = dict((options or {}).get(stage.name, {}))
             cache_options = {key: value for key, value in stage_options.items() if key != "force"}
             same_options = old is not None and old.get("input_options", {}) == cache_options
             if old and not same_options:

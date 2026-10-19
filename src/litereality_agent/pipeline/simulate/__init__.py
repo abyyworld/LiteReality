@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 
 from litereality_agent.pipeline.context import RunContext
 from litereality_agent.pipeline.result import StageResult, StageStatus
@@ -55,6 +56,11 @@ def source_room(context: RunContext, *, seed: bool = False):
     if seed:
         return context.seed_room, context.seed_room.parent / "room_preview"
     return context.authored_room, context.preview_dir
+
+
+def prerequisites(options: dict) -> tuple[str, ...]:
+    """`--from-seed` reads only what scene init built, so it needs `seed`, not the authored room."""
+    return ("seed",) if options.get("from_seed") else ("publish",)
 
 
 def complete(context: RunContext) -> bool:
@@ -173,8 +179,15 @@ def run(context: RunContext, options: dict) -> StageResult:
     if options.get("shake"):
         # The report is the run's stdout, which `run_module` tees into the log. A video is asked
         # for because a number saying "Chair0 moved 0.42 m" is not reviewable and a clip is.
-        shake_argv = ["--scene", str(scene_dir(context, seed=seed) / "scene.xml"),
-                      "--video", str(scene_dir(context, seed=seed) / "shake.mp4"), "--cutaway"]
+        shake_argv = ["--scene", str(scene_dir(context, seed=seed) / "scene.xml"), "--cutaway"]
+        # The clip is encoded by `ffmpeg` from PATH, which a stock Mac does not have. Without it
+        # the measurement is still the measurement, so it runs and says the clip was skipped
+        # rather than failing the whole shake over the missing encoder.
+        if shutil.which("ffmpeg"):
+            shake_argv += ["--video", str(scene_dir(context, seed=seed) / "shake.mp4")]
+        else:
+            warnings.append("ffmpeg is not on PATH, so the shake ran without shake.mp4 — "
+                            "install it (macOS: `brew install ffmpeg`) for the clip")
         shake_rc, shake_log = run_module(context, "litereality_agent.room_ops.export.mujoco_shake",
                                          shake_argv, log_name="simulate_shake")
         if shake_rc:
