@@ -16,6 +16,7 @@ from pathlib import Path
 from litereality_agent import console
 from litereality_agent.pipeline import PipelineRunner, RunContext
 from litereality_agent.pipeline.stages import STAGES
+from litereality_agent.room_ops import roomcall
 from litereality_agent.settings import load_settings
 
 SCAN_MARKERS = ("room.usdz", "roomplan/room.usdz")
@@ -372,6 +373,20 @@ def _view(args) -> int:
     )
 
 
+def _roomcall(args) -> int:
+    """Share a simulated room with the people on a video call. Takes a scene file or folder, not a
+    run: the room call is a room operation and knows nothing about run layout."""
+    if not args.deploy:
+        return roomcall.run(args)
+    settings = load_settings()
+    return roomcall.run(
+        args,
+        credentials=None if settings.modal_profile else settings.modal_credentials(),
+        profile=settings.modal_profile,
+        environment=settings.modal_environment,
+    )
+
+
 def _inspect(args) -> int:
     from litereality_agent.room_ops import manifest
 
@@ -459,6 +474,12 @@ def _parser() -> argparse.ArgumentParser:
     view.add_argument("--output-root")
     view.add_argument("--no-open", dest="open_browser", action="store_false")
     view.set_defaults(handler=_view)
+
+    call = commands.add_parser(
+        "roomcall", help="share a simulated room with the people on a video call"
+    )
+    roomcall.add_arguments(call)
+    call.set_defaults(handler=_roomcall)
 
     live = commands.add_parser("live", help="watch a room being authored, with the agent's trace")
     live.add_argument("target", metavar="SCAN_OR_SCENE")

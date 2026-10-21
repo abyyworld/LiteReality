@@ -20,6 +20,7 @@ physics-perception project.
 | Per-object physics table for any exported scene | `scripts/simready/physics_table.py` |
 | `LR_FORCE_TRELLIS=<Name>,...`: build named objects with TRELLIS when the procedural agent can't finish them | `.../reconstruct/classify/classify_complexity.py`, `settings.py` |
 | First results: the `tea_room` example scan | [`results/tea_room/`](results/tea_room/README.md) |
+| **Room call**: people on a Zoom/Meet/Teams call open one link and share the scanned room — avatars with their webcam, grab/throw objects, open doors and drawers, one shared MuJoCo sim on the server (`litereality roomcall`; `--deploy` for a permanent link on Modal) | `room_ops/roomcall/`, `deploy/modal/roomcall/`, [`doc/roomcall.md`](doc/roomcall.md) |
 
 ## Status
 
@@ -30,6 +31,18 @@ physics-perception project.
   limits, not money.
 - Modal apps are deployed in the workspace; the first run used about $2–3 of the free monthly
   credit (one-time TRELLIS build + 58 GB image-model download included). Idle apps cost nothing.
+- Room call (supervisor's idea: video-call users interacting with the room in real time) is built and
+  tested on the demo room only: unit tests, plus headless two-browser runs with fake webcams
+  (avatars, video, grabs, reset, reconnect). `--deploy` puts it on Modal as a permanent https
+  link for the call chat (`deploy/modal/roomcall/app.py`); its image was checked in a clean env
+  with only the pinned packages, but the deploy itself has not been run yet (the cloud session
+  that built it cannot reach modal.com). **Not tried yet:** the real `tea_room` scene (its
+  `scene.xml` lives only on the Mac), a real call, and the Zoom App mode inside the Zoom client
+  (needs a Zoom developer account). Related work it builds on: AvatarPilot (Wang, Ofek
+  et al., ISMAR 2024 — keeping pointing/grabbing aimed at the same objects across rooms) and the
+  UBC "Nexus" line (VirtualNexus UIST 2024, GaussianNexus UIST 2025). A search found no open-source
+  project with one server-side physics sim shared by browsers; the platforms that exist (Hubs,
+  Hyperfy, Croquet) all simulate in each client.
 
 ## Setting up from scratch (Mac)
 
@@ -142,3 +155,14 @@ this policy. **Not built yet.**
 - Scan your own room with the LiteReality Scanner app (needs an iPhone/iPad Pro with LiDAR).
 - For VR: `Room.glb` goes into Unity for Quest 3. MuJoCo ignores restitution (bounce); Unity's
   physics does not, so bounce-related stimuli need Unity or MuJoCo contact tuning.
+- **Room call, next** (from the open-source search; reuse rather than write):
+  - a TURN relay (coturn) so webcams connect on university/office networks — STUN only today;
+  - LiveKit for video above ~5 cameras (today every peer sends to every peer);
+  - Meet and Teams in-call modes from their official samples (Zoom mode exists, untested);
+  - VRM avatars (three-vrm + CC0 models) instead of capsules;
+  - an OBS virtual-camera view for any call app.
+  Ours to build: avatars as physical bodies (push and block objects) and collision when walking.
+- **Physics-estimate study** (idea, not started): for each object compare an LLM looking at a photo,
+  LiteReality's estimate (`results/tea_room/physics_table.csv`) and measured values (kitchen scale,
+  tilted-board slide test, drop-and-bounce) to show how wrong AI-estimated physics is. The room call
+  could then show the same room with estimated vs measured physics side by side.

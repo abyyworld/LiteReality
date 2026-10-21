@@ -68,3 +68,6 @@ physical_engine/out/
 
 # Installed JavaScript dependencies; application sources and bundled assets stay visible.
 node_modules/
+
+# MuJoCo writes this into the working directory when a simulation goes unstable
+MUJOCO_LOG.TXT

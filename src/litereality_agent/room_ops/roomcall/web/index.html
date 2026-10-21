@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#eef1f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16191d" media="(prefers-color-scheme: dark)">
+<title>Room call · LiteReality</title>
+<link rel="stylesheet" href="app.css">
+<!-- The ONLY inline script on this page. The server allows it by its sha256 hash in the CSP, so
+     any edit here (even whitespace) changes the hash; the server recomputes it from this file. -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.15/build/index.module.js"
+}}</script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<canvas id="view" class="view" aria-label="Shared 3D room"></canvas>
+
+<!-- ------------------------------------------------------------ join screen -->
+<div id="join" class="overlay">
+  <form id="joinForm" class="card join-card" autocomplete="on" novalidate>
+    <header class="join-head">
+      <div class="brand">Room call</div>
+      <h1 id="sceneLabel" class="scene-label">Loading room…</h1>
+      <p class="muted">A shared room for the people on your call. Everyone who opens the same
+        link lands in the same room and moves the same objects.</p>
+      <div class="room-line">Room <code id="roomName">lobby</code><span id="zoomBadge" class="badge" hidden>Zoom meeting</span></div>
+    </header>
+
+    <div class="progress" id="loadProgress" role="progressbar" aria-label="Loading the room"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="progress-bar" id="loadBar"></div>
+    </div>
+    <div class="progress-text muted" id="loadText">Fetching the room…</div>
+
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input id="nameInput" name="name" type="text" maxlength="40" required placeholder="e.g. Alex"
+             autocomplete="nickname" enterkeyhint="go">
+    </label>
+
+    <div class="field">
+      <span class="field-label" id="colorLabel">Your colour</span>
+      <div class="swatches" id="swatches" role="radiogroup" aria-labelledby="colorLabel"></div>
+    </div>
+
+    <label class="check">
+      <input id="camInput" type="checkbox" checked>
+      <span><b>Show my webcam on my avatar</b>
+        <small class="muted">Others see your camera on your avatar's face.</small></span>
+    </label>
+
+    <label class="check" id="micRow">
+      <input id="micInput" type="checkbox">
+      <span><b>Send my microphone</b>
+        <small class="muted" id="micHint">On a Zoom, Meet or Teams call already? Keep this off — the
+          call carries your voice.</small></span>
+    </label>
+
+    <div class="notice warn" id="secureNote" hidden>
+      Camera and microphone need a secure page (https or localhost). You can still join and move
+      things around; others just won't see your video.
+    </div>
+    <div class="notice error" id="joinError" role="alert" hidden></div>
+
+    <button id="joinBtn" class="btn primary wide" type="submit">Join the room</button>
+  </form>
+</div>
+
+<!-- ------------------------------------------------------------ in-room HUD -->
+<div id="hud" class="hud" hidden>
+  <div class="hud-top">
+    <div class="chip room-chip">
+      <span class="status-dot" id="statusDot" aria-hidden="true"></span>
+      <span class="room-chip-text">
+        <b id="hudLabel">Room</b>
+        <small><span id="hudRoom">lobby</span> · <span id="statusText">connecting…</span></small>
+      </span>
+    </div>
+    <div class="toolbar" role="toolbar" aria-label="Room controls">
+      <button class="btn tool" id="camBtn" type="button" aria-pressed="false" title="Camera on your avatar">
+        <span class="tool-ico ico-cam" aria-hidden="true"></span><span class="tool-txt">Camera</span></button>
+      <button class="btn tool" id="micBtn" type="button" aria-pressed="false" title="Send your microphone">
+        <span class="tool-ico ico-mic" aria-hidden="true"></span><span class="tool-txt">Mic</span></button>
+      <button class="btn tool" id="inviteBtn" type="button" title="Copy a link to paste in the call chat">
+        <span class="tool-ico ico-link" aria-hidden="true"></span><span class="tool-txt">Invite</span></button>
+      <button class="btn tool" id="peopleBtn" type="button" aria-expanded="false" aria-controls="people" title="People in the room">
+        <span class="tool-ico ico-people" aria-hidden="true"></span><span class="tool-txt">People</span>
+        <span class="count" id="peopleCount">1</span></button>
+      <button class="btn tool" id="resetBtn" type="button" title="Put every object back, for everyone">
+        <span class="tool-ico ico-reset" aria-hidden="true"></span><span class="tool-txt">Reset</span></button>
+      <button class="btn tool" id="helpBtn" type="button" aria-expanded="false" aria-controls="help" title="Controls">
+        <span class="tool-ico ico-help" aria-hidden="true"></span><span class="tool-txt">Help</span></button>
+    </div>
+  </div>
+
+  <section id="people" class="card panel people" hidden aria-label="People in the room">
+    <h2>In the room</h2>
+    <ul id="peopleList" class="people-list"></ul>
+  </section>
+
+  <section id="help" class="card panel help" hidden aria-label="Controls">
+    <h2>Controls</h2>
+    <dl class="keys">
+      <dt>Walk</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrow keys · <kbd>Shift</kbd> to hurry · <kbd>Q</kbd><kbd>E</kbd> turn</dd>
+      <dt>Look</dt><dd>Drag on empty space</dd>
+      <dt>Grab</dt><dd>Click and drag an object (doors and drawers too)</dd>
+      <dt>Reach</dt><dd>Mouse wheel pulls or pushes what you hold</dd>
+      <dt>Throw</dt><dd>Let go while moving it</dd>
+      <dt>Phone</dt><dd>Drag to look · press and hold an object to grab · stick or two fingers to walk</dd>
+    </dl>
+    <p class="muted small">Voice comes from your Zoom, Meet or Teams call. Changes here are virtual
+      only — nothing in the real room moves.</p>
+  </section>
+
+  <div id="invitePop" class="card panel invite-pop" hidden>
+    <label class="field">
+      <span class="field-label">Copy this link into the call chat</span>
+      <input id="inviteInput" type="text" readonly>
+    </label>
+    <button class="btn" id="inviteClose" type="button">Done</button>
+  </div>
+
+  <div id="joystick" class="joystick" hidden aria-hidden="true"><div class="joystick-knob" id="joyKnob"></div></div>
+  <video id="selfView" class="self-view" muted playsinline autoplay hidden></video>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="mediaSink" class="media-sink" aria-hidden="true"></div>
+
+</body></html>

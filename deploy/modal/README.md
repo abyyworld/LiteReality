@@ -88,3 +88,10 @@ builds quickly; the cost is the first call, which downloads roughly 58 GB of wei
 
 See [`dino/README.md`](dino/README.md), [`trellis/README.md`](trellis/README.md), and
 [`image_edit/README.md`](image_edit/README.md) for model-specific details.
+
+## The room call (a separate app)
+
+`roomcall/app.py` is the room call's web server (`doc/roomcall.md`), deployed as its own app,
+`litereality-roomcall`, by `uv run litereality roomcall <scene> --deploy`. It is CPU-only and never
+included in `app.py`: it has its own lifecycle, and redeploying it must not restart the model
+functions, or the other way round. Its scene lives in the Volume `litereality-roomcall-scenes`.
