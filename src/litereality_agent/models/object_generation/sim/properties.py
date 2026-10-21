@@ -219,6 +219,47 @@ def _inertia_from_geometry(mesh, mass: float):
     return np.diag(diag), centre, "bounding_box"
 
 
+def _material_volume(mesh) -> float:
+    """How much MATERIAL a part is made of, in m^3 — not how much space its hull encloses.
+
+    A recipe builds a link out of closed pieces (boards, slabs, rails), so the honest volume is the
+    sum of the pieces' own closed volumes. Each connected piece is measured on its own after
+    welding its vertices by position (a glTF primitive splits them at every UV seam, so a box
+    arrives as six loose faces): a closed piece contributes its volume, an open one (a pane modelled
+    as a single quad) its hull, which for a flat thing is about nothing. The total is capped at the
+    whole link's hull, which bounds what overlapping pieces can double count.
+    """
+    # A flat piece makes trimesh divide by its zero volume; nothing is wrong with that here.
+    with np.errstate(invalid="ignore", divide="ignore"):
+        return _material_volume_of(mesh)
+
+
+def _material_volume_of(mesh) -> float:
+    import trimesh
+
+    try:
+        hull = float(mesh.convex_hull.volume)
+    except Exception:                                        # noqa: BLE001 — degenerate geometry
+        hull = 0.0
+    try:
+        welded = trimesh.Trimesh(np.asarray(mesh.vertices), np.asarray(mesh.faces), process=True)
+        pieces = welded.split(only_watertight=False)
+    except Exception:                                        # noqa: BLE001
+        pieces = [mesh]
+    total = 0.0
+    for piece in pieces:
+        try:
+            if piece.is_watertight and piece.is_winding_consistent:
+                total += abs(float(piece.volume))
+            else:
+                total += max(float(piece.convex_hull.volume), 0.0)
+        except Exception:                                    # noqa: BLE001 — a sliver
+            continue
+    if hull > 0:
+        total = min(total, hull)
+    return float(max(total, 1e-6))
+
+
 def _coacd_worker(vertices, faces, budget, mode, queue):
     # The IMPORT is reported separately from the run. "coacd cannot be loaded" and "coacd could not
     # split this mesh" both end in an empty result, and only the second is a fact about the mesh;
@@ -315,15 +356,57 @@ def _part_budget(mass: float) -> int:
     return 4 if mass < 3.0 else (8 if mass < 15.0 else 24)
 
 
-def _colliders(mesh, name: str, out_dir: Path, mass: float, decompose: bool):
+# How many separate pieces a link may be collided piece-by-piece — the same cap the room exporter
+# uses for the same reason (forty hulls on one body is a stack of contacts, not a better shape).
+MAX_PARTWISE_COLLIDERS = 16
+
+
+def _is_near_convex(mesh) -> bool:
+    try:
+        hull = mesh.convex_hull
+        return (hull.volume <= 0
+                or abs(hull.volume - mesh.volume) / max(hull.volume, 1e-9) < CONVEX_TOL)
+    except Exception:                                        # noqa: BLE001
+        return True
+
+
+def _pieces(mesh) -> list:
+    """The separate closed pieces a link was built from: a table's top and each of its legs.
+
+    Vertices are welded by position first, because a glTF primitive splits them at every UV seam
+    and a box would otherwise come apart into six loose faces.
+    """
+    import trimesh
+
+    try:
+        welded = trimesh.Trimesh(np.asarray(mesh.vertices), np.asarray(mesh.faces), process=True)
+        return list(welded.split(only_watertight=False))
+    except Exception:                                        # noqa: BLE001
+        return [mesh]
+
+
+def _write_hulls(parts, name: str, out_dir: Path) -> list:
+    written = []
+    for part in parts:
+        try:
+            hull = part.convex_hull
+        except Exception:                                    # noqa: BLE001 — a degenerate sliver
+            continue
+        if hull.volume <= 1e-8:                              # flat: no solid for MuJoCo to collide
+            continue
+        path = out_dir / f"{name}_col{len(written)}.obj"
+        hull.export(path)
+        written.append(Collider(path.name, float(hull.volume)))
+    return written
+
+
+def _colliders(mesh, name: str, out_dir: Path, mass: float, decompose: bool, notes=None):
     """`name` must be unique across every object that shares `out_dir` — see `build_model`."""
     import trimesh
 
     written = []
     try:
-        hull = mesh.convex_hull
-        near_convex = (hull.volume <= 0
-                       or abs(hull.volume - mesh.volume) / max(hull.volume, 1e-9) < CONVEX_TOL)
+        near_convex = _is_near_convex(mesh)
         diagonal = float(np.linalg.norm(mesh.extents))
     except Exception:                                        # noqa: BLE001
         near_convex, diagonal = True, 1.0
@@ -332,6 +415,19 @@ def _colliders(mesh, name: str, out_dir: Path, mass: float, decompose: bool):
         path = out_dir / f"{name}_col0.obj"
         mesh.convex_hull.export(path)
         return [Collider(path.name, float(max(mesh.convex_hull.volume, 0.0)))]
+
+    # COLLIDE THE PARTS, NOT THEIR UNION, when the parts are already convex. A recipe builds a table
+    # as a top and four legs and a cabinet as five boards: each is exactly its own hull, so the
+    # result is exact and needs no decomposition at all. Handing their union to CoACD instead is a
+    # guess at a shape that was known — and when CoACD dies (it segfaults on exactly these carcass
+    # meshes) the fallback below used to be ONE hull of the whole table, filling the space under its
+    # top where tucked chairs sit. A concave piece (a generated chair is one mesh) still goes to
+    # CoACD as before.
+    parts = _pieces(mesh)
+    if 1 < len(parts) <= MAX_PARTWISE_COLLIDERS and all(_is_near_convex(p) for p in parts):
+        written = _write_hulls(parts, name, out_dir)
+        if written:
+            return written
 
     for i, (verts, faces) in enumerate(_decompose(mesh, _part_budget(mass))):
         piece = trimesh.Trimesh(np.asarray(verts), np.asarray(faces))
@@ -342,6 +438,17 @@ def _colliders(mesh, name: str, out_dir: Path, mass: float, decompose: bool):
         written.append(Collider(path.name, float(piece.volume)))
     if written:
         return written
+    # CoACD returned nothing in either mode. Say so — a concave link collided as one hull is a
+    # solid block, and the report is the only place anyone would find out — and keep what structure
+    # the parts give rather than filling the whole link in.
+    partwise = 1 < len(parts) <= 4 * MAX_PARTWISE_COLLIDERS
+    if notes is not None:
+        notes.append(f"{name}: convex decomposition produced nothing; collided as "
+                     + ("its separate parts' hulls" if partwise else "ONE hull (a solid block)"))
+    if partwise:
+        written = _write_hulls(parts, name, out_dir)
+        if written:
+            return written
     path = out_dir / f"{name}_col0.obj"
     mesh.convex_hull.export(path)
     return [Collider(path.name, float(max(mesh.convex_hull.volume, 0.0)))]
@@ -405,10 +512,20 @@ def build_model(glb: Path, out_dir: Path, *, category: str = "", decompose: bool
     if not link_nodes["base_link"]:
         notes.append("no static geometry — base_link is a massless frame")
 
+    # SHARED BY MATERIAL, NOT BY HULL. This used to weigh each link by its CONVEX HULL, and the hull
+    # of a carcass is the whole cabinet — every cubic centimetre of the empty inside counted as
+    # wood. A door slab is its own hull, so it got a few percent of the total: tea_room's sink
+    # cabinet doors came out at 0.32 and 0.53 kg against the 3-5 kg of a real one, and a drawer at
+    # 0.7 kg — light enough for the contact solver to throw when a hand grabs it.
     volumes = {}
     for link, group in link_nodes.items():
-        merged = trimesh.util.concatenate([meshes[n] for n in group]) if group else None
-        volumes[link] = float(max(merged.convex_hull.volume, 1e-6)) if merged is not None else 1e-6
+        if not group:
+            volumes[link] = 1e-6
+        elif len(link_nodes) == 1:
+            volumes[link] = 1.0              # one link takes the whole total; skip the measuring
+        else:
+            volumes[link] = _material_volume(
+                trimesh.util.concatenate([meshes[n] for n in group]))
     volume_total = sum(volumes.values())
 
     links, joints = [], []
@@ -437,7 +554,10 @@ def build_model(glb: Path, out_dir: Path, *, category: str = "", decompose: bool
         mass = extras.get("mass")
         if mass is None:
             density = extras.get("density")
-            mass = (float(density) * float(max(local.volume, 1e-6)) if density is not None
+            # `local.volume` straight from trimesh is only meaningful for a closed, non-overlapping
+            # surface: an open leaf reads whatever its origin makes it, and a panel laid over a slab
+            # counts the overlap twice. `_material_volume` is bounded by the part's own hull.
+            mass = (float(density) * _material_volume(local) if density is not None
                     else total_mass * volumes[link] / volume_total)
             link_mass_source = "authored_density" if density is not None else "derived"
         else:
@@ -455,7 +575,7 @@ def build_model(glb: Path, out_dir: Path, *, category: str = "", decompose: bool
         stem = f"{name}_{link}"
         visual = out_dir / f"{stem}_vis.obj"
         local.export(visual)
-        colliders = _colliders(local, stem, out_dir, mass, decompose)
+        colliders = _colliders(local, stem, out_dir, mass, decompose, notes)
 
         links.append(Link(
             name=link, mass=round(mass, 4), com=[round(float(v), 6) for v in com],

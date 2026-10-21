@@ -221,7 +221,7 @@ def test_built_count_recognises_both_glb_layouts(tmp_path, monkeypatch):
     (recon / "Sofa0.glb").write_bytes(b"")                      # neural: complete
     (recon / "Table0").mkdir()
     (recon / "Table0" / "Table0.glb").write_bytes(b"")          # articulated: glb only …
-    (recon / "Table0" / "object.py").write_text("")             # … plus its editable source
+    (recon / "Table0" / "object.py").write_text("export_glb(OUT_GLB)\n")  # … plus its source
     (recon / "Table0" / "object.md").write_text("")
     (recon / "Wall1_Door_0").mkdir()                            # started, nothing emitted yet
     assert run._built_count("Sim", expected) == 2
@@ -795,7 +795,8 @@ def test_a_half_written_object_does_not_count_as_built(tmp_path, monkeypatch):
         d = recon / name
         d.mkdir()
         for f in files:
-            (d / f).write_text("")
+            # An object.py has to be a complete definition to count (see test_object_source).
+            (d / f).write_text("export_glb(OUT_GLB)\n" if f == "object.py" else "")
 
     assert run._built_count("Sim", ["Sofa0"]) == 1
     assert run._built_count("Sim", ["Table0"]) == 1

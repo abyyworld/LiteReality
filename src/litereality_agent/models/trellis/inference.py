@@ -24,6 +24,7 @@ o_voxel, and the other compiled TRELLIS.2 dependencies.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 from pathlib import Path
@@ -35,40 +36,70 @@ _env.configure_trellis_runtime()
 DEFAULT_MODEL = "microsoft/TRELLIS.2-4B"
 
 
-def prepare_local_model(model: str) -> str:
+def prepare_local_model(model: str, *, local_dir: Path | None = None,
+                        offline: bool = False) -> str:
     """Return a local TRELLIS model dir whose pipeline.json points DINOv3 at a local
     (ungated) copy, so loading never hits the gated ``facebook/dinov3-...`` repo.
 
     If ``model`` is already a local dir, it's used as-is. For the HF id we ensure the
-    snapshot is present, then assemble ``weights/trellis2_4b_local`` (``ckpts`` symlink
-    + a patched ``pipeline.json``) and return that — no edits to the HF cache or clone.
+    snapshot is present, then assemble ``local_dir`` (default ``weights/trellis2_4b_local``:
+    a ``ckpts`` symlink + a patched ``pipeline.json``) and return that — no edits to the HF
+    cache or clone. ``offline`` never reaches the network: the snapshot must already be in
+    the cache (``LocalEntryNotFoundError`` otherwise) — what a GPU container serving requests
+    wants, with the weights populated once beforehand (deploy/modal/trellis/app.py).
     """
-    import json
-
     p = Path(model)
     if p.is_dir() and (p / "pipeline.json").exists():
         return str(p)
 
     from huggingface_hub import snapshot_download
 
-    snap = Path(snapshot_download(model))  # cached under HF_HOME=weights; ckpts already pulled
-    dino = _env.resolve_dinov3()
-    local = _env.LOCAL_MODEL_DIR
-    local.mkdir(parents=True, exist_ok=True)
-    ckpts = local / "ckpts"
-    if not ckpts.exists():
-        ckpts.symlink_to(snap / "ckpts")
+    # cached under HF_HOME=weights; ckpts already pulled
+    snap = Path(snapshot_download(model, local_files_only=offline))
+    return str(assemble_local_model(snap, local_dir or _env.LOCAL_MODEL_DIR))
 
-    cfg = json.loads((snap / "pipeline.json").read_text())
+
+def local_pipeline_config(snapshot: Path, dino: Path | None) -> dict:
+    """The snapshot's pipeline.json with its image-condition model pointed at ``dino``."""
+    import json
+
+    cfg = json.loads((Path(snapshot) / "pipeline.json").read_text())
     icm = cfg.setdefault("args", {}).setdefault("image_cond_model", {}).setdefault("args", {})
     if dino is not None:
         icm["model_name"] = str(dino)
+    return cfg
+
+
+def assemble_local_model(snapshot: Path, local_dir: Path) -> Path:
+    """``local_dir`` as a loadable model: ``ckpts`` -> the snapshot's, and the patched
+    pipeline.json — written only when its content changes, so a shared weights folder is not
+    rewritten by every process that loads from it."""
+    import json
+
+    dino = _env.resolve_dinov3()
+    local_dir = Path(local_dir)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    ckpts = local_dir / "ckpts"
+    target = Path(snapshot) / "ckpts"
+    if ckpts.is_symlink() and Path(os.readlink(ckpts)) != target:
+        ckpts.unlink()
+    if not ckpts.exists() and not ckpts.is_symlink():
+        ckpts.symlink_to(target)
+    cfg = local_pipeline_config(Path(snapshot), dino)
+    if dino is not None:
         print(f"[TRELLIS] DINOv3 -> {dino} (local, ungated)")
     else:
         print("[TRELLIS] WARNING: no local DINOv3 found; falling back to the gated HF repo "
               "(set $LITEREALITY_DINOV3 or symlink backends/weights/dinov3, or `huggingface-cli login`).")
-    (local / "pipeline.json").write_text(json.dumps(cfg, indent=2))
-    return str(local)
+    text = json.dumps(cfg, indent=2)
+    path = local_dir / "pipeline.json"
+    try:
+        unchanged = path.read_text() == text
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        path.write_text(text)
+    return local_dir
 
 
 def load_pipeline(model_name: str, *, skip_rembg: bool = True):

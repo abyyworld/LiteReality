@@ -31,6 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from litereality_agent import object_source
+
 from .. import paths as config
 from ..compile import pack_assets
 
@@ -64,8 +66,11 @@ def build(out_glb=OUT):
     # alignment) belong here.
     bpy.ops.object.select_all(action="SELECT")
     os.makedirs(os.path.dirname(out_glb) or ".", exist_ok=True)
+    # `export_extras`: an articulated GLB packaged here (a door whose object.py was unusable) keeps
+    # its joint metadata only if the node extras the importer turned into custom properties are
+    # written back out. A plain mesh has none, so this costs nothing for the rest.
     bpy.ops.export_scene.gltf(filepath=out_glb, export_format="GLB",
-                              use_selection=True, export_apply=True)
+                              use_selection=True, export_apply=True, export_extras=True)
     print(f"[static] __NAME__ -> {out_glb}")
     return out_glb
 
@@ -126,6 +131,43 @@ def copy_sim_sidecar(src_dir: Path, dest: Path, name: str) -> int:
             shutil.copy2(source, dest / filename)
             copied += 1
     return copied
+
+
+def recover_broken_sources(manifest: dict, recon: Path) -> dict[str, list[str]]:
+    """Package a recipe object whose `object.py` cannot rebuild it from its BUILT GLB instead.
+
+    The Room package is source-only: a procedural object ships its `object.py` and the seed bake
+    runs it to get the GLB back. When that file is incomplete — tea_room's agent-built door
+    stopped at the `OBJECT DEFINITION` marker — Blender runs it, exits 0 and writes nothing, and
+    the room never assembles. Nothing said which object or why; the way out was to find the door's
+    already-built, physics-gated GLB by hand and reuse it.
+
+    That is what this does, loudly. The built GLB passed the geometry probe and the physics gate,
+    so it is the last good version of the object; packaging it as a STATIC object (the GLB is the
+    source) keeps the room buildable, and the manifest records why. A recipe with no built GLB to
+    fall back on stays procedural, and the bake then fails on it by name.
+    """
+    recovered: dict[str, list[str]] = {}
+    for asset in manifest.get("assets") or []:
+        if asset.get("source") != "procedural":
+            continue
+        name = asset["object"]
+        problems = object_source.problems(recon / name / "object.py")
+        if not problems:
+            continue
+        built = recon / name / f"{name}.glb"
+        if not built.is_file():
+            print(f"  ✗ {name}: object.py cannot rebuild it ({'; '.join(problems)}) and there is "
+                  f"no built glb to fall back on — the room build will fail on {name}")
+            continue
+        asset["source"] = "static"
+        asset["recovered_from"] = "procedural"
+        asset["source_problems"] = problems
+        recovered[name] = problems
+        print(f"  ⚠ {name}: object.py cannot rebuild it ({'; '.join(problems)}). Packaged its "
+              f"built, gated glb as a STATIC object instead — rebuild the object to get its "
+              f"editable source back.")
+    return recovered
 
 
 def reset_dir(d: Path):
@@ -341,6 +383,8 @@ def export(scan: str, out_root: Path | None = None) -> Path | None:
             f"(run the object stage to fill it).\n"
         )
 
+    recovered = recover_broken_sources(manifest, recon)
+
     roomdir = Path(out_root) if out_root else config.room_dir(scan)
     reset_dir(roomdir)
     proc_root = roomdir / "Objects" / "Procedural"
@@ -380,7 +424,7 @@ def export(scan: str, out_root: Path | None = None) -> Path | None:
     (roomdir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
     # 3. The source for each object
-    summary = {"procedural": 0, "static": 0, "missing": []}
+    summary = {"procedural": 0, "static": 0, "missing": [], "recovered": sorted(recovered)}
     for a in manifest["assets"]:
         name = a["object"]
         cat = a["category"]
@@ -419,6 +463,8 @@ def export(scan: str, out_root: Path | None = None) -> Path | None:
             d.mkdir(parents=True, exist_ok=True)
             glb_src = None
             for cand in (
+                # A recovered recipe object: its own built glb, beside the `sim/` it was gated with.
+                *((recon / name / f"{name}.glb",) if name in recovered else ()),
                 config.reconstruct_dir(scan) / f"{name}.glb",
                 config.assets_dir(scan) / "glb" / f"{name}.glb",
             ):
@@ -455,6 +501,8 @@ def export(scan: str, out_root: Path | None = None) -> Path | None:
     )
     if summary["missing"]:
         print(f"  ! source not found: {summary['missing']}")
+    if summary["recovered"]:
+        print(f"  ! packaged from the built glb (object.py unusable): {summary['recovered']}")
     return roomdir
 
 

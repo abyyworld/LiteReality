@@ -212,7 +212,10 @@ python3 scripts/make_selfcontained.py <your_build.py> <glb_dir>/object.py --name
 ```
 This inlines the helper library, drops the recipe's `from blender_lib import …`
 block, and writes a portable `__file__`-relative arg block (defaults to
-`./textures` and `./<stem>.glb`). Then run `object.py` to **export the preview
+`./textures` and `./<stem>.glb`). It exits non-zero with `REFUSED` (and leaves
+any existing `object.py` untouched) if the recipe's own code would be empty or
+never calls `export_glb()` — fix the recipe and run it again; an `object.py`
+that ends at the `OBJECT DEFINITION` marker is rejected by the pipeline. Then run `object.py` to **export the preview
 GLB into the output directory** — it must reproduce the GLB you validated, and it
 is the model people open to preview the object:
 ```bash

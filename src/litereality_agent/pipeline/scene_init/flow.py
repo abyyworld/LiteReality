@@ -27,7 +27,7 @@ import sys
 import time
 from pathlib import Path
 
-from litereality_agent import console, telemetry
+from litereality_agent import console, object_source, telemetry
 from litereality_agent.pipeline.scene_init import layout
 from litereality_agent.pipeline.scene_init import paths as config
 from litereality_agent.pipeline.scene_init.ingest import merge_boxes
@@ -424,7 +424,11 @@ def _asset_is_built(recon: Path, name: str) -> bool:
     if (recon / f"{name}.glb").is_file():
         return True
     d = recon / name
-    return any(d.glob("*.glb")) and (d / "object.py").is_file() and (d / "object.md").is_file()
+    # `object.py` has to be a COMPLETE definition, not just a file: the seed bake rebuilds the
+    # object from it, and tea_room's door shipped one that stopped at the OBJECT DEFINITION marker.
+    # Same test the builder's --skip-existing check applies, so the board and the builder agree.
+    return (any(d.glob("*.glb")) and object_source.is_complete(d / "object.py")
+            and (d / "object.md").is_file())
 
 
 def _built_count(scan: str, expected: list[str]) -> int:
@@ -503,6 +507,7 @@ def _reconstruction_phase(scan: str, args: argparse.Namespace, result: dict, ful
     # The parallel phase routes output per BRANCH (ThreadTee); per-STAGE capture swaps a
     # process-global and would cross the streams with three workers running.
     console.capture_stages(None)
+    per_branch = _expected_by_branch(scan)
 
     def trellis_branch():
         if args.reconstruct or full:
@@ -528,6 +533,12 @@ def _reconstruction_phase(scan: str, args: argparse.Namespace, result: dict, ful
             result["chair_qc"] = qc
             telemetry.stage("chair_qc", scan, "done", repaired=qc.get("repaired", 0),
                           still_failing=qc.get("still_failing", 0))
+        # Physics for TRELLIS's own objects, now that TRELLIS (and chair QC, which rewrites the
+        # chairs it repairs) has finished writing them. Only THESE: the agent branches are still
+        # running and their glbs are not this branch's to read.
+        if (args.reconstruct or full) and not args.dry_run_reconstruct:
+            result["reconstruct_physics"] = reconstruct.compile_physics(
+                scan, names=per_branch.get("trellis", []), label="trellis")
 
     def agent_branch(stage_name: str, openings: bool, enabled_flag: bool, workers: int):
         if not (enabled_flag or full):
@@ -539,10 +550,13 @@ def _reconstruction_phase(scan: str, args: argparse.Namespace, result: dict, ful
             retries=args.retries, budget=args.budget, model=args.agent_model,
             skip_existing=not args.force_reconstruct, dry_run=args.dry_run_reconstruct,
         )
+        branch = "openings" if openings else "procedural"
+        if not args.dry_run_reconstruct:
+            out["sim"] = reconstruct.compile_physics(
+                scan, names=per_branch.get(branch, []), label=branch)
         result[stage_name] = out
         telemetry.stage(stage_name, scan, "done", n_glb=out.get("generated", 0))
 
-    per_branch = _expected_by_branch(scan)
     workers = {name: branch_concurrency(len(per_branch.get(name, [])), args.concurrency)
                for name in ("procedural", "openings")}
     branches = [
@@ -556,6 +570,7 @@ def _reconstruction_phase(scan: str, args: argparse.Namespace, result: dict, ful
     if os.environ.get("LR_SEQUENTIAL", "").strip() in ("1", "true", "yes"):
         for _, fn in branches:
             fn()
+        _physics_barrier(scan, args, result)
         return
 
     logs = config.traces_dir(scan) / "build"
@@ -651,6 +666,29 @@ def _reconstruction_phase(scan: str, args: argparse.Namespace, result: dict, ful
                 f.result()
     finally:
         sys.stdout = real_stdout
+    _physics_barrier(scan, args, result)
+
+
+def _physics_barrier(scan: str, args: argparse.Namespace, result: dict) -> None:
+    """After EVERY builder has returned: compile whatever still has no current physics.
+
+    Each branch compiles its own objects as it finishes, but an object no branch claims — an
+    opening TRELLIS built because no routing existed, a glb another run left behind, a branch that
+    was skipped this time — would otherwise never be compiled. Nothing writes into `reconstruct/`
+    any more, so this is the one moment every glb is known to be whole. Cheap when nothing is
+    stale: it only compiles a sidecar that is missing or older than its glb.
+    """
+    if args.dry_run_reconstruct:
+        return
+    from litereality_agent.models.object_generation.sim.pipeline import missing_sidecars
+
+    result["physics"] = reconstruct.compile_physics(scan, only_stale=True, label="physics")
+    recon = config.reconstruct_dir(scan)
+    missing = missing_sidecars(recon, None) if recon.is_dir() else []
+    if missing:
+        result["physics"]["missing"] = missing
+        print(f"[physics] ⚠ no compiled physics for: {', '.join(missing)} — the room export will "
+              f"invent their mass and colliders (see {recon / 'sim_report.json'})", flush=True)
 
 
 

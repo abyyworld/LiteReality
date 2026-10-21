@@ -238,7 +238,9 @@ def placement_from_bbox(model: SimModel, placed_mesh, yaw: float) -> np.ndarray 
 
     with `yaw` stated in the SHELL, so rotating the placed mesh back by that yaw makes the fit
     axis-aligned and the two bounding boxes give `s` and `centre` directly. It is exact for exactly
-    the transform the room applies, which is why the caller still checks the result.
+    the transform the room applies — and ONLY for the right yaw: a wrong one still returns a fit
+    whose bounds match, with the wrong scale. Callers go through `fit_placement`, which judges the
+    candidates by geometry.
 
     Returns the Y-up matrix, so it feeds `place` identically to `placement_transform`.
     """
@@ -264,6 +266,168 @@ def placement_from_bbox(model: SimModel, placed_mesh, yaw: float) -> np.ndarray 
     transform[:3, :3] = linear
     transform[:3, 3] = centre - linear @ ((lo + hi) / 2.0)
     return _A4_INV @ transform @ _A4
+
+
+# ------------------------------------------------------------------ proving a placement
+#
+# `placement_from_bbox` is exact for the yaw it is GIVEN, and nothing else. Hand it the wrong yaw
+# and it still returns a transform, one whose bounding box matches the placed mesh perfectly,
+# because that is how it was constructed. So the old proof (do the colliders' bounds land on the
+# placed mesh's bounds?) could never reject it. tea_room's door is the case that hurt: openings
+# live in the SHELL's `openings`, not its `objects`, so the door was handed yaw 0 while it stands
+# in a wall at 31 degrees. The fit stretched the door's 15 cm depth to the 56 cm its rotated
+# bounding box spans, the leaf's mass was scaled by the same 4.7x volume ratio (27 -> 129 kg),
+# and its collider became an axis-aligned slab across the doorway. Comparing the actual GEOMETRY
+# is what tells a right placement from a wrong one, and what picks the yaw when none is known.
+
+_FIT_POINTS = 1500
+
+
+def _nearest(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Distance from each point of `a` to its nearest point of `b` (chunked, numpy only)."""
+    out = np.empty(len(a))
+    b_sq = np.einsum("ij,ij->i", b, b)
+    for start in range(0, len(a), 512):
+        chunk = a[start:start + 512]
+        d2 = (np.einsum("ij,ij->i", chunk, chunk)[:, None] + b_sq[None, :]
+              - 2.0 * chunk @ b.T)
+        out[start:start + 512] = np.sqrt(np.maximum(d2.min(axis=1), 0.0))
+    return out
+
+
+def _thin(points: np.ndarray, count: int) -> np.ndarray:
+    if len(points) <= count:
+        return points
+    return points[np.linspace(0, len(points) - 1, count).astype(int)]
+
+
+def surface_points(mesh, count: int = _FIT_POINTS, seed: int = 0) -> np.ndarray:
+    """Vertices plus an even-ish surface sample, so a two-triangle face still has an inside."""
+    import trimesh
+
+    points = [np.asarray(mesh.vertices, dtype=float)]
+    try:
+        if len(mesh.faces) and float(mesh.area) > 0:
+            points.append(np.asarray(trimesh.sample.sample_surface(mesh, count, seed=seed)[0],
+                                     dtype=float))
+    except Exception:                                        # noqa: BLE001 — vertices still count
+        pass
+    return _thin(np.vstack(points), count)
+
+
+def model_points(model: SimModel, count: int = _FIT_POINTS) -> np.ndarray | None:
+    """Points on the object's own geometry, in its own Z-up frame.
+
+    The link VISUAL is preferred: it is the mesh the room placed, so on the right transform the
+    two coincide. A sidecar written without visuals falls back to its colliders, which bulge over
+    gaps (a chair's hull spans its legs) and so read a few centimetres off even when right.
+    """
+    import trimesh
+
+    frames = model.frames()
+    meshes = []
+    for link in model.links:
+        files = ([link.visual] if link.visual and (model.directory / link.visual).is_file()
+                 else [c.file for c in link.colliders])
+        for name in files:
+            path = model.directory / name
+            if not path.is_file():
+                continue
+            try:
+                mesh = trimesh.load(str(path), process=False, force="mesh")
+            except Exception:                                # noqa: BLE001 — unreadable file
+                continue
+            if not len(mesh.vertices):
+                continue
+            mesh = mesh.copy()
+            mesh.vertices = np.asarray(mesh.vertices, float) + frames.get(link.name, np.zeros(3))
+            meshes.append(mesh)
+    if not meshes:
+        return None
+    return surface_points(trimesh.util.concatenate(meshes), count)
+
+
+def placement_residual(points: np.ndarray, transform_yup: np.ndarray,
+                       placed: np.ndarray, *, symmetric: bool = True) -> float:
+    """How far the object, carried by `transform_yup`, lands from the placed geometry (metres).
+
+    Symmetric — the object onto the placed mesh AND the placed mesh onto the object — when choosing
+    between fits, because one direction alone forgives a fit that drops the object inside a box
+    bigger than itself. The 90th percentile ignores the odd stray vertex without letting a whole
+    misplaced part through.
+    """
+    transform = _A4 @ np.asarray(transform_yup, dtype=float) @ _A4_INV
+    world = _transform_points(points, transform)
+    there = float(np.percentile(_nearest(world, placed), 90))
+    if not symmetric:
+        return there
+    back = float(np.percentile(_nearest(placed, world), 90))
+    return max(there, back)
+
+
+def _candidate_yaws(yaws, placed_mesh) -> list[float]:
+    """Each stated yaw and its quarter turns, then the placed mesh's own principal yaw.
+
+    A quarter turn is the same bounding box with width and depth exchanged, so it is a different
+    and equally self-consistent fit; only the geometry can choose between them. The principal axis
+    of the placed footprint covers the case where nothing stated a yaw at all.
+    """
+    import trimesh
+
+    base = [float(y) for y in yaws if y is not None]
+    try:
+        xy = np.asarray(placed_mesh.vertices, dtype=float)[:, :2]
+        transform, _extents = trimesh.bounds.oriented_bounds_2D(xy)
+        base.append(-math.atan2(transform[1, 0], transform[0, 0]))
+    except Exception:                                        # noqa: BLE001 — degenerate footprint
+        pass
+    out: list[float] = []
+    for yaw in base:
+        for k in range(4):
+            angle = math.atan2(math.sin(yaw + k * math.pi / 2), math.cos(yaw + k * math.pi / 2))
+            if all(abs(math.atan2(math.sin(angle - a), math.cos(angle - a))) > 1e-4 for a in out):
+                out.append(angle)
+    return out
+
+
+@dataclass
+class Fit:
+    transform: np.ndarray            # Y-up, as `place` takes it
+    residual: float                  # metres, see `placement_residual`
+    yaw: float | None                # the yaw it was fitted with; None for a node-matched one
+
+
+def fit_placement(model: SimModel, placed_mesh, yaws=()) -> Fit | None:
+    """The best bounding-box placement over every plausible yaw, judged by the geometry.
+
+    The STATED yaws are tried first and keep the win on a tie: an object symmetric under a half
+    turn fits both ways equally, and there the room's own statement is the better guess.
+    """
+    points = model_points(model)
+    if points is None:
+        transform = placement_from_bbox(model, placed_mesh, next(
+            (float(y) for y in yaws if y is not None), 0.0))
+        return None if transform is None else Fit(transform, float("nan"), None)
+    placed = surface_points(placed_mesh)
+    best: Fit | None = None
+    for yaw in _candidate_yaws(yaws, placed_mesh):
+        transform = placement_from_bbox(model, placed_mesh, yaw)
+        if transform is None:
+            continue
+        residual = placement_residual(points, transform, placed)
+        if best is None or residual < best.residual - max(1e-3, 0.05 * best.residual):
+            best = Fit(transform, residual, yaw)
+    return best
+
+
+def check_placement(model: SimModel, transform_yup: np.ndarray, placed_mesh) -> float | None:
+    """Does the object, carried by a transform found some other way (a node match), land on what
+    the room placed? One-directional: whatever else the room grouped under the same handle is not
+    this transform's to explain. None when the sidecar has no geometry to compare."""
+    points = model_points(model)
+    if points is None:
+        return None
+    return placement_residual(points, transform_yup, surface_points(placed_mesh), symmetric=False)
 
 
 @dataclass

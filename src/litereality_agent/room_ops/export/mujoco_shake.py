@@ -128,9 +128,7 @@ def _lift_out_of_walls(model, data, *, limit: float = 0.15) -> dict:
         belongs on. Lifting it clear and letting gravity bring it back down puts it where the author
         meant it to be, on top of whatever it was standing in.
         """
-        raised = 0
-        for _ in range(12):
-            mujoco.mj_forward(model, data)
+        def deepest():
             worst = {}
             for c in range(data.ncon):
                 con = data.contact[c]
@@ -144,6 +142,19 @@ def _lift_out_of_walls(model, data, *, limit: float = 0.15) -> dict:
                             continue        # walls are handled above, with a proper thin axis
                         if body not in worst or con.dist < worst[body]:
                             worst[body] = con.dist
+            return worst
+
+        raised = 0
+        # UP IS ONLY RIGHT FROM ABOVE. A chair tucked under a table is inside the table's TOP from
+        # below, and lifting it drives it further in: tea_room's Chair3 was raised 19 cm deeper into
+        # Table0 and then thrown a metre when gravity came back. A lift that leaves a body DEEPER in
+        # than before is undone and not tried again; the body stays in `overlaps_after_relax`. (An
+        # unchanged depth is allowed: a mug deep in a shelf's hull has a side face nearest until
+        # it has been raised close enough to the top.)
+        refused: set[int] = set()
+        for _ in range(12):
+            mujoco.mj_forward(model, data)
+            worst = {b: d for b, d in deepest().items() if b not in refused}
             if not worst:
                 break
             for body, dist in worst.items():
@@ -152,6 +163,11 @@ def _lift_out_of_walls(model, data, *, limit: float = 0.15) -> dict:
                     continue
                 adr = free_adr[body]
                 data.qpos[adr + 2] += -dist + 0.002
+                mujoco.mj_forward(model, data)
+                if deepest().get(body, 0.0) < dist - 0.001:
+                    data.qpos[adr + 2] -= -dist + 0.002
+                    refused.add(body)
+                    continue
                 lifted[name] = round(lifted.get(name, 0.0) + float(-dist), 4)
                 raised += 1
         return raised

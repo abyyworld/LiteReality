@@ -43,14 +43,36 @@ by revision. `resolve_dinov3()` finds the baked copy through `LITEREALITY_DINOV3
 The base CUDA image, OS packages, PyTorch, and Python dependencies build on CPU. Modal attaches an
 H100 only to the separately cached native-extension layer required by the upstream TRELLIS
 installer; the deployed inference function also uses an H100. Source-only application changes do
-not rebuild the extension layer. The function is intentionally limited to one container, performs
-zero application retries, and scales that container down after ten idle seconds to bound spend.
+not rebuild the extension layer. The function runs on up to four H100 containers at once (the
+room call's objects stage sends a whole room together), performs zero application retries, and
+scales a container down after two idle minutes — so one object's final pass, queued the moment its
+preview is back, and a re-run right after both find a warm container. The idle tail is at most
+4 x 120 s of H100 time per burst.
 
 The weights are hosted on Hugging Face, but the model is not currently served by a Hugging Face
-Inference Provider. The first invocation downloads `microsoft/TRELLIS.2-4B` into the
-`litereality-trellis-models` Volume; later containers reuse that cache. Note that this download
-runs inside the `gpu="H100"` function, so several GB transfer at H100 prices — see the known
-inefficiencies in `../README.md`.
+Inference Provider. They are downloaded into the `litereality-trellis-models` Volume ONCE, by the
+CPU function `trellis_populate` (one container at a time, idempotent): the first GPU request that
+finds them missing calls it and waits, and every later container reuses the cache. GPU containers
+never write the Volume — they load with Hugging Face offline, assemble their model folder
+(patched `pipeline.json` + a `ckpts` link) and flex_gemm's autotune cache under `/tmp`, and commit
+nothing — which is what makes more than one container safe. To populate ahead of time:
+
+```bash
+uv run python -c "import modal; print(modal.Function.from_name('litereality', 'trellis_populate').remote())"
+```
+
+Requests may carry an `"id"`, echoed in the response, so a client streaming many requests at
+once can match each GLB to its request; the response also says how many seconds it took.
+
+Keeping a container warm for a call (no cold start), and putting it back afterwards — an override
+lasts until the next deploy, and a warm H100 bills whether or not anyone uses it:
+
+```python
+import modal
+f = modal.Function.from_name("litereality", "trellis")
+f.update_autoscaler(min_containers=1)   # at call start
+f.update_autoscaler(min_containers=0)   # when the call is over
+```
 
 Configure the application by setting `MODAL_PROFILE` to your profile name; the app name, function
 name, and environment already default. Install client support with `uv sync --extra modal`.

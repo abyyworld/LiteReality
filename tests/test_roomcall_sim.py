@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import threading
 
 import mujoco
@@ -364,3 +365,182 @@ def test_public_methods_are_safe_to_call_from_another_thread(sim, model):
         stop.set()
         worker.join()
     assert np.all(np.isfinite(sim.data.qpos))
+
+
+# -- moving a live room to a new version of its scene ------------------------------------------
+# The variants are the live-swap experiments': a better scan version reshuffles ids, moves frame
+# origins, adds, removes, renames, grows things and turns free things static.
+
+@pytest.fixture(scope="module")
+def demo_xml(tmp_path_factory) -> str:
+    return write_demo_scene(tmp_path_factory.mktemp("demo_xml")).read_text()
+
+
+def _block(xml: str, name: str) -> tuple[int, int]:
+    start = xml.index(f'<body name="{name}"')
+    return start, xml.index("</body>", start)
+
+
+def _reshuffled(xml: str) -> str:
+    """A lamp inserted before everything (every later body id shifts), chair_1's frame origin
+    moved 5 cm with its geoms moved back (same world geometry, new frame — a TRELLIS mesh centred
+    differently from the box it replaces), the ball gone, the mug renamed, the drawer's slide
+    range narrowed from 0..0.35 to 0..0.25."""
+    lamp = ('<body name="lamp" pos="1.5 1.2 0.3"><freejoint name="lamp"/>'
+            '<geom type="cylinder" size="0.1 0.3" rgba="0.9 0.9 0.7 1" mass="2"/></body>\n    ')
+    xml = xml.replace('<body name="table"', lamp + '<body name="table"', 1)
+    start, end = _block(xml, "chair_1")
+    head, rest = xml[start:end].split("\n", 1)
+    head = head.replace('pos="-0.6 -0.6 0.002"', 'pos="-0.55 -0.6 0.002"')
+
+    def back(m):
+        x, y, z = (float(v) for v in m.group(1).split())
+        return f'pos="{x - 0.05:.4f} {y} {z}"'
+    xml = xml[:start] + head + "\n" + re.sub(r'pos="([-0-9. ]+)"', back, rest) + xml[end:]
+    start, end = _block(xml, "ball")
+    xml = xml[:start] + xml[end + len("</body>"):]
+    xml = xml.replace('<body name="mug"', '<body name="mug_0"').replace(
+        '<freejoint name="mug"', '<freejoint name="mug_0"')
+    return re.sub(r'(name="cabinet_drawer_slide"[^>]*range=)"0 0.35"', r'\1"0 0.25"', xml)
+
+
+def _grown(xml: str) -> str:
+    """chair_1 30 % bigger (so where it stood, it now overlaps), the cardboard box static."""
+    start, end = _block(xml, "chair_1")
+    head, rest = xml[start:end].split("\n", 1)
+
+    def scale(m):
+        return f'{m.group(1)}="{" ".join(f"{float(v) * 1.3:.4f}" for v in m.group(2).split())}"'
+    rest = re.sub(r'(size|pos)="([-0-9. ]+)"', scale, rest)
+    xml = xml[:start] + head + "\n" + rest + xml[end:]
+    return xml.replace('<freejoint name="cardboard_box"/>', "")
+
+
+def _geoms(sim: RoomSim, body: int) -> np.ndarray:
+    return sim.data.geom_xpos[[g for g in range(sim.model.ngeom)
+                               if sim.model.geom_bodyid[g] == body]]
+
+
+def _joint_q(sim: RoomSim, name: str) -> float:
+    j = mujoco.mj_name2id(sim.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+    return float(sim.data.qpos[sim.model.jnt_qposadr[j]])
+
+
+def _set_joint(sim: RoomSim, name: str, value: float) -> None:
+    j = mujoco.mj_name2id(sim.model, mujoco.mjtObj.mjOBJ_JOINT, name)
+    sim.data.qpos[sim.model.jnt_qposadr[j]] = value
+    mujoco.mj_forward(sim.model, sim.data)
+
+
+def test_a_settled_state_seeds_another_room_exactly(model):
+    first = RoomSim(model, settle_seconds=0.5)
+    seeded = RoomSim(model, settled=first.settled_state())
+    assert seeded.snapshot() == first.snapshot()
+    assert np.array_equal(seeded.settled_state(), first.settled_state())
+    seeded.step_realtime(0.5, max_steps=1000)
+    seeded.reset()                                    # reset goes to the seeded settled state
+    assert seeded.snapshot() == first.snapshot()
+    other = mujoco.MjModel.from_xml_string(ESCAPE_SCENE)
+    fallback = RoomSim(other, settle_seconds=0.1, settled=first.settled_state())  # does not fit
+    assert np.all(np.isfinite(fallback.data.qpos)) and fallback.data.time == 0.0
+    bad = first.settled_state()
+    bad[3] = np.nan
+    assert RoomSim(model, settled=bad).snapshot() == first.snapshot()  # settled again instead
+
+
+def test_adopt_carries_what_people_did_by_name_across_reshuffled_ids(model, demo_xml):
+    old = RoomSim(model, settle_seconds=0.5)
+    new_model = mujoco.MjModel.from_xml_string(_reshuffled(demo_xml))
+    new = RoomSim(new_model, settle_seconds=0.5)
+    pristine = RoomSim(new_model, settled=new.settled_state())
+    chair_old, chair_new = _body(model, "chair_1"), _body(new_model, "chair_1")
+    assert chair_old != chair_new                     # the lamp shifted every id after it
+    # Drag chair_1 a metre and keep holding it; open the drawer past the new range; open the door.
+    seat = old.data.xpos[chair_old].copy()
+    assert old.grab("ann", chair_old, seat)
+    old.move("ann", seat + [1.0, 0.3, 0.4])
+    old.step_realtime(1.5, max_steps=10_000)
+    _set_joint(old, "cabinet_drawer_slide", 0.33)
+    _set_joint(old, "room_door_hinge", 1.0)
+    assert old.grab("bob", _body(model, "ball"), old.data.xpos[_body(model, "ball")])
+    anchor = _anchor(old, "ann")
+
+    report = new.adopt(old)
+    assert report["carried"] == sorted(["cabinet_door", "cabinet_drawer", "cardboard_box",
+                                        "chair_1", "chair_2", "room_door"])
+    assert report["reset"] == ["lamp", "mug_0"] and report["gone"] == ["ball", "mug"]
+    assert report["grabs_kept"] == ["ann"] and report["grabs_dropped"] == ["bob"]
+    # Its frame origin moved 5 cm between versions, yet its geometry is exactly where it was:
+    # the displacement since settling is what carries, not the pose.
+    assert np.abs(_geoms(new, chair_new) - _geoms(old, chair_old)).max() < 1e-6
+    assert _joint_q(new, "cabinet_drawer_slide") == pytest.approx(0.25)   # clamped to the new range
+    assert _joint_q(new, "room_door_hinge") == pytest.approx(1.0)
+    chair_2 = _body(new_model, "chair_2")              # untouched: exactly its new settled pose
+    assert np.allclose(new.data.xpos[chair_2], pristine.data.xpos[chair_2], atol=1e-9)
+    lamp = _body(new_model, "lamp")                    # new in this version: where it settled
+    assert np.allclose(new.data.xpos[lamp], pristine.data.xpos[lamp], atol=1e-9)
+    grab = new.snapshot()["grabs"]
+    assert [g[:2] for g in grab] == [["ann", chair_new]]
+    assert np.allclose(grab[0][2:5], anchor, atol=1e-4)  # same world anchor, new frame
+    assert new.data.time == pytest.approx(old.data.time)  # one room, one clock
+    assert float(np.abs(new.data.qvel).max()) == 0.0
+
+    new.step_realtime(2.0, max_steps=10_000)           # it runs on, still held, nothing explodes
+    assert new.unstable_resets == 0 and new.respawns == 0
+    assert np.linalg.norm(_anchor(new, "ann") - (seat + [1.0, 0.3, 0.4])) < 0.05
+    new.reset()                                        # reset is the NEW version's room
+    assert new.snapshot()["bodies"] == pristine.snapshot()["bodies"] and not new.snapshot()["grabs"]
+
+
+def test_adopt_relaxes_a_carried_overlap_and_lets_go_of_what_became_static(model, demo_xml):
+    old = RoomSim(model, settle_seconds=0.5)
+    new_model = mujoco.MjModel.from_xml_string(_grown(demo_xml))
+    new = RoomSim(new_model, settle_seconds=0.5)
+    box = _body(model, "cardboard_box")
+    assert _body(new_model, "cardboard_box") not in new.movable
+    chair, table = _body(model, "chair_1"), _body(model, "table")
+    assert old.grab("ann", chair, old.data.xpos[chair])
+    target = old.data.xpos[chair] * 0.4 + old.data.xpos[table] * 0.6
+    target[2] = 0.5
+    old.move("ann", target)                            # push it against the table and hold it
+    assert old.grab("cy", box, old.data.xpos[box])
+    old.step_realtime(2.0, max_steps=10_000)
+
+    report = new.adopt(old)
+    assert "cardboard_box" in report["gone"] and "chair_1" in report["carried"]
+    assert report["grabs_kept"] == ["ann"] and report["grabs_dropped"] == ["cy"]
+    assert report["relaxed"]                           # the grown chair overlapped the table
+    deepest = min((new.data.contact[i].dist for i in range(new.data.ncon)), default=0.0)
+    assert deepest > -0.01
+    new.step_realtime(2.0, max_steps=10_000)
+    assert new.unstable_resets == 0 and np.all(np.isfinite(new.data.qpos))
+    assert [g[0] for g in new.snapshot()["grabs"]] == ["ann"]
+
+
+def test_a_blow_up_after_a_swap_resets_to_the_new_versions_room(model, demo_xml, tmp_path,
+                                                                monkeypatch):
+    monkeypatch.chdir(tmp_path)                        # MuJoCo logs its warning to ./MUJOCO_LOG.TXT
+    old = RoomSim(model, settle_seconds=0.3)
+    new_model = mujoco.MjModel.from_xml_string(_reshuffled(demo_xml))
+    new = RoomSim(new_model, settle_seconds=0.3)
+    settled = new.snapshot()
+    chair = _body(model, "chair_1")
+    assert old.grab("ann", chair, old.data.xpos[chair])
+    old.move("ann", old.data.xpos[chair] + [0.5, 0.0, 0.3])
+    old.step_realtime(1.0, max_steps=1000)
+    new.adopt(old)
+    new.data.qvel[0] = 1e6
+    new.step_realtime(0.02, max_steps=100)
+    assert new.unstable_resets == 1
+    assert new.snapshot()["bodies"] == settled["bodies"] and not new.snapshot()["grabs"]
+
+
+def test_adopt_skips_what_cannot_be_carried(model):
+    old = RoomSim(model, settle_seconds=0.2)
+    new = RoomSim(model, settle_seconds=0.2)
+    assert new.adopt(new)["carried"] == []             # adopting itself is a no-op
+    _set_joint(old, "room_door_hinge", float("nan"))   # a value that is not a number stays put
+    report = new.adopt(old)
+    assert "room_door" in report["carried"] or "room_door" in report["reset"]
+    assert np.all(np.isfinite(new.data.qpos))
+    assert _joint_q(new, "room_door_hinge") == pytest.approx(0.0, abs=1e-6)

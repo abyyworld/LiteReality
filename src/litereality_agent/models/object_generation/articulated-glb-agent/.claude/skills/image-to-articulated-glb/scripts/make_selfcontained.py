@@ -25,6 +25,7 @@ import argparse
 import ast
 import os
 import re
+import sys
 
 HELP_HEADER = "# ==== inlined Blender helpers (generated from blender_lib.py; do not edit) ===="
 EDIT_HEADER = "# ==== OBJECT DEFINITION — edit below to change the object ===="
@@ -83,6 +84,54 @@ def _path_vars(src):
     return set(re.findall(r"sys\.path\.insert\(\s*\d+\s*,\s*([A-Za-z_]\w*)\s*\)", src))
 
 
+class BundleError(ValueError):
+    """The bundle would not rebuild the object, so it must not replace the one on disk."""
+
+
+def _calls_export(tree):
+    """`export_glb(...)` / `bl.export_glb(...)`, or the raw `bpy.ops.export_scene.gltf(...)`."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and func.id == "export_glb":
+            return True
+        if isinstance(func, ast.Attribute) and (
+            func.attr == "export_glb"
+            or (func.attr == "gltf" and getattr(func.value, "attr", "") == "export_scene")
+        ):
+            return True
+    return False
+
+
+def check_bundle(recipe_path, recipe_body, text):
+    """Refuse a bundle whose OBJECT DEFINITION section cannot build the object.
+
+    An `object.py` that ends at the OBJECT DEFINITION marker is valid Python: Blender runs it,
+    defines the helpers, exits 0 and writes nothing. On tea_room that is exactly what shipped for a
+    door, and the seed bake later "regenerated" it into no GLB at all with no error naming the
+    file. Same test as `litereality_agent.object_source`, inlined because this script runs on its
+    own from the skill directory.
+    """
+    if not recipe_body.strip():
+        raise BundleError(
+            f"{recipe_path}: nothing is left of the recipe after its docstring, imports and arg "
+            "block were removed — the OBJECT DEFINITION section would be empty. Is this the build "
+            "recipe (the file that calls export_glb), and is it complete on disk?"
+        )
+    try:
+        ast.parse(text)
+        section = ast.parse(recipe_body)
+    except SyntaxError as exc:
+        raise BundleError(
+            f"{recipe_path}: the bundle does not parse (line {exc.lineno}: {exc.msg})") from exc
+    if not _calls_export(section):
+        raise BundleError(
+            f"{recipe_path}: the recipe never calls export_glb(), so object.py would build "
+            "nothing. Keep the export call in the recipe."
+        )
+
+
 def bundle(recipe_path, lib_path, name):
     recipe_raw = open(recipe_path).read()
     rdoc, recipe_body = strip_module_docstring(recipe_raw)
@@ -116,7 +165,7 @@ def bundle(recipe_path, lib_path, name):
         "TEXDIR = _argv[0] if _argv else os.path.join(HERE, 'textures')\n"
         f"OUT_GLB = _argv[1] if len(_argv) > 1 else os.path.join(HERE, '{name}.glb')\n"
     )
-    return "".join(
+    text = "".join(
         [
             header,
             "\n",
@@ -132,6 +181,21 @@ def bundle(recipe_path, lib_path, name):
             "\n",
         ]
     )
+    check_bundle(recipe_path, recipe_body, text)
+    return text
+
+
+def write_bundle(out, text):
+    """Replace `out` only with a complete file: write beside it, then rename over it.
+
+    A plain `open(out, "w")` truncates the last good `object.py` BEFORE the new one exists, so an
+    interrupted write (or a bundle refused above) used to leave a stub where a working definition
+    had been. The rename is atomic, so `out` is always either the old file or the whole new one.
+    """
+    tmp = f"{out}.tmp"
+    with open(tmp, "w") as fh:
+        fh.write(text)
+    os.replace(tmp, out)
 
 
 def main():
@@ -147,9 +211,16 @@ def main():
     a = ap.parse_args()
     lib = a.lib or os.path.join(os.path.dirname(os.path.abspath(__file__)), "blender_lib.py")
     name = a.name or os.path.splitext(os.path.basename(a.out))[0]
-    open(a.out, "w").write(bundle(a.recipe, lib, name))
+    try:
+        text = bundle(a.recipe, lib, name)
+    except BundleError as exc:
+        kept = " (the existing file was left as it was)" if os.path.exists(a.out) else ""
+        print(f"make_selfcontained: REFUSED to write {a.out}{kept}: {exc}", file=sys.stderr)
+        return 1
+    write_bundle(a.out, text)
     print(f"wrote {a.out}  (name={name}, lib={lib})")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

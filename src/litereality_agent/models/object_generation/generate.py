@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from litereality_agent import REPO_ROOT, telemetry
+from litereality_agent import REPO_ROOT, object_source, telemetry
 
 # claude_agent_sdk is imported lazily inside _run_claude so the `codex` backend needs no SDK.
 from .category_specs import CANONICAL_ORIENTATION, get_spec
@@ -334,6 +334,16 @@ def resume_note(job: Job) -> str:
     )
 
 
+def object_py_feedback(problems: list[str]) -> str:
+    """Tell a retry that the GLB may be fine but its editable source is not."""
+    if not problems:
+        return ""
+    return ("\n\n## object.py IS INCOMPLETE — the pipeline rebuilds the object from it:\n"
+            + "".join(f"- {p}\n" for p in problems)
+            + "Re-run scripts/make_selfcontained.py on the full build recipe (the file that builds "
+            "the parts and calls export_glb), then run object.py once and check it writes the GLB.")
+
+
 def verify_reasons(job: Job) -> list[str]:
     """Why this object is NOT considered built. Empty means it is.
 
@@ -353,6 +363,10 @@ def verify_reasons(job: Job) -> list[str]:
     for name in ("object.py", "object.md"):
         if not (d / name).is_file():
             missing.append(f"no {name}")
+    if (d / "object.py").is_file():
+        # PRESENT IS NOT COMPLETE. A bundle that ends at the OBJECT DEFINITION marker passed this
+        # check on tea_room and then rebuilt into nothing at the seed bake.
+        missing += object_source.problems(d / "object.py")
     report = probe_glb(job.glb) if job.glb.is_file() else {"pass": False}
     job.probe = report
     if not report.get("pass", True):
@@ -371,7 +385,7 @@ def verify(job: Job) -> bool:
     files_ok = (
         job.glb.is_file()
         and n_prev >= 2
-        and (d / "object.py").is_file()
+        and object_source.is_complete(d / "object.py")
         and (d / "object.md").is_file()
     )
     report = probe_glb(job.glb)
@@ -388,10 +402,11 @@ def drop_build_recipe(obj_dir: Path) -> list[str]:
     recipe is the unusable one — it imports blender_lib through an absolute path into the
     authoring machine's skill dir, so it breaks on any other checkout.
 
-    Guarded on object.py being present: if the inlining step never ran, the recipe is still
-    the ONLY definition and must survive.
+    Guarded on object.py being COMPLETE, not merely present: if the inlining step never ran, or
+    wrote a bundle that stops at its OBJECT DEFINITION marker, the recipe is still the ONLY
+    working definition and must survive.
     """
-    if not (obj_dir / "object.py").is_file():
+    if not object_source.is_complete(obj_dir / "object.py"):
         return []
     removed = []
     for p in sorted(obj_dir.glob("build_*.py")):
@@ -547,11 +562,14 @@ async def process(job: Job, sem: asyncio.Semaphore, args) -> None:
             job.status = "failed"
             # Prefer the probe's specific reason; carry it into the next attempt as feedback.
             hard = [v for v in (job.probe.get("violations") or []) if v["severity"] == "hard"]
+            source = (object_source.problems(job.glb.parent / "object.py")
+                      if (job.glb.parent / "object.py").is_file() else [])
             job.error = (
                 f"QC failed: {'; '.join(v['check'] + ':' + v['part'] for v in hard)}"
-                if hard else (job.error or "GLB/previews/deliverables missing")
+                if hard else ("; ".join(source) if source
+                              else (job.error or "GLB/previews/deliverables missing"))
             )
-            feedback = resume_note(job) + probe_feedback(job.probe)
+            feedback = resume_note(job) + probe_feedback(job.probe) + object_py_feedback(source)
             print(f"[fail] {job.scan}/{job.name}: {job.error}", file=sys.stderr)
         job.seconds = time.time() - t0
         mark = "ok  " if job.status == "ok" else "FAIL"

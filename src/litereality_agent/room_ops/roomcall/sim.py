@@ -30,6 +30,11 @@ Three things shape the design:
 The model may be shared between rooms (the server compiles it once), so nothing here ever writes
 to it: the zero-gravity relax pass cancels gravity with per-body forces on this room's own MjData
 instead of switching `opt.gravity` off on the shared model.
+
+A room can also move to a NEW VERSION of its scene while people are in it (a better scan swapped in
+live): `RoomSim(new_model, settled=...)` starts from that version's settled state without settling
+again, and `adopt(old)` carries what people did in the old version across by body name — where
+they moved things, which doors they opened, what they are holding. See `adopt`.
 """
 
 from __future__ import annotations
@@ -44,7 +49,11 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
+from litereality_agent.room_ops.roomcall.model_info import (
+    movable_body_ids,
+    rig_joints,
+    servo_held_joints,
+)
 
 # Grab spring, in units of acceleration per metre of error (1/s^2): kp = 400 pulls a 10 cm error
 # at 40 m/s^2 and settles in ~0.2 s. kd = 2*sqrt(kp) makes it critically damped for the subtree
@@ -68,6 +77,16 @@ ESCAPE_MARGIN = 1.0
 # Nothing a hand can carry weighs more (kg). A backstop for scenes whose building-sized bodies are
 # not recognised as static: pulling at one would shift every wall.
 MAX_GRAB_MASS = 1.0e4
+# After a version swap, contacts deeper than this (m) are relaxed apart before anyone sees them: a
+# chair carried to where the new version's (bigger) table now stands would otherwise be fired out.
+ADOPT_PENETRATION = 0.001
+# How long that relax runs (simulated seconds). The experiments separated a 30 %-grown chair pushed
+# into a table in 0.3 s; it is a tenth of what the initial settle gets, so a swap stays a blink.
+ADOPT_RELAX_SECONDS = 0.3
+
+_FREE = int(mujoco.mjtJoint.mjJNT_FREE)
+_BALL = int(mujoco.mjtJoint.mjJNT_BALL)
+_STATE = mujoco.mjtState.mjSTATE_INTEGRATION
 
 _WARNINGS = (mujoco.mjtWarning.mjWARN_BADQPOS, mujoco.mjtWarning.mjWARN_BADQVEL,
              mujoco.mjtWarning.mjWARN_BADQACC)
@@ -101,7 +120,12 @@ class RoomSim:
     the server may call `grab`/`move`/`release` from its event loop while `step_realtime` runs in
     a worker thread."""
 
-    def __init__(self, model: mujoco.MjModel, *, settle_seconds: float = 1.0) -> None:
+    def __init__(self, model: mujoco.MjModel, *, settle_seconds: float = 1.0,
+                 settled: np.ndarray | None = None) -> None:
+        """`settled`, from another `RoomSim(model).settled_state()` on the same model, skips the
+        settle: settling is deterministic, so every room of one scene version can start from the
+        state one settle produced instead of each spending a second of CPU on it. A state that
+        does not fit this model is ignored and the scene is settled as usual."""
         self.model = model
         self.data = mujoco.MjData(model)
         self.movable: list[int] = sorted(movable_body_ids(model))
@@ -140,10 +164,12 @@ class RoomSim:
         self._grabbable = {b for b in self.movable
                            if float(model.body_subtreemass[self._driver[b]]) <= MAX_GRAB_MASS}
 
-        self._settle(settle_seconds)
+        if settled is None or not self._seed(settled):
+            self._settle(settle_seconds)
         self._bounds = self._scene_bounds()
         self._initial = self._get_state()
         self._settled_qpos = self.data.qpos.copy()
+        self._settled_mocap = (self.data.mocap_pos.copy(), self.data.mocap_quat.copy())
         # Per free body, the box its origin must stay in (see `_respawn_escaped`).
         self._free_ids = np.array(sorted(self._free_drivers), dtype=int)
         margin = np.array([ESCAPE_MARGIN + self._reach[b] for b in self._free_ids]).reshape(-1, 1)
@@ -258,6 +284,197 @@ class RoomSim:
         """Put the room back exactly as it was after settling, and drop every grab."""
         with self._lock:
             self._restore()
+
+    def settled_state(self) -> np.ndarray:
+        """The settled starting state (what `reset` returns to), for seeding other rooms of the
+        same model with `RoomSim(model, settled=...)`."""
+        return self._initial.copy()
+
+    # ---- moving to a new version of the scene -----------------------------------------------
+
+    def adopt(self, old: RoomSim) -> dict:
+        """Carry `old`'s live room into this one, a new version of the same scene, BY NAME.
+
+        Body ids are an accident of each version's XML (insert one body and every later id shifts),
+        but the exporter names bodies after the scan's object handles — Chair0, Table1 — in every
+        stage, so a name is what stays the same object across versions:
+
+        - a free body carries its DISPLACEMENT since settling, P_new = (P_old · S_old⁻¹) · S_new
+          with S each version's own settled pose. Copying the old pose would be wrong whenever the
+          body's frame origin moved between versions (a TRELLIS mesh centred differently from the
+          RoomPlan box it replaces) — the experiment measured 50 mm off for a 50 mm origin shift,
+          0.000 mm with the displacement — and an untouched body lands exactly on the new
+          version's own settled pose;
+        - a hinge, slide or ball joint carries its value, clamped to the new range;
+        - servo-held and shake-rig joints are the building, and stay as the new version has them;
+        - a body new in this version (or whose joints no longer match) starts where it settled;
+        - a grab is kept if its body exists and is grabbable here: the same world anchor, re-
+          expressed in the new body's frame and clamped to its reach, and the same target clipped
+          to the new bounds. Anyone holding something that became static or vanished lets go.
+
+        Everything starts at rest. If the carried poses interpenetrate (a carried chair where the
+        new, bigger table now stands) the room is relaxed apart for `ADOPT_RELAX_SECONDS` with the
+        grabs suspended, as the initial settle does. A carry that produces anything non-finite
+        falls back to this version's settled state.
+
+        This version's settled state stays its own: `reset` and respawns go to the NEW version's
+        room, not to a carried copy of the old one. Returns what happened, by name:
+        {"carried", "reset", "gone", "grabs_kept", "grabs_dropped", "relaxed"}.
+        """
+        if old is self:
+            return {"carried": [], "reset": [], "gone": [], "grabs_kept": [],
+                    "grabs_dropped": [], "relaxed": False}
+        with old._lock, self._lock:
+            carried, reset, gone = self._carry_bodies(old)
+            kept, dropped = self._carry_grabs(old)
+            relaxed = False
+            if self._finite():
+                relaxed = self._separate()
+            if not self._finite():
+                # Should never happen with finite inputs; never let it reach a snapshot.
+                dropped = sorted({*dropped, *kept})
+                kept = []
+                reset = sorted({*reset, *carried})
+                carried = []
+                self._restore()
+            return {"carried": carried, "reset": reset, "gone": gone, "grabs_kept": kept,
+                    "grabs_dropped": dropped, "relaxed": relaxed}
+
+    def _carry_bodies(self, old: RoomSim) -> tuple[list[str], list[str], list[str]]:
+        """Write `old`'s joint state into this room's MjData by body name (see `adopt`). Caller
+        holds both locks."""
+        om, od, nm, nd = old.model, old.data, self.model, self.data
+        old_ids = _named_bodies(om)
+        old_held = servo_held_joints(om) | rig_joints(om)
+        new_held = servo_held_joints(nm) | rig_joints(nm)
+        old_moving = set(old.movable)
+        carried: list[str] = []
+        reset: list[str] = []
+        matched: set[int] = set()
+        for b in self.movable:
+            joints = _own_joints(nm, b, new_held)
+            mocap = int(nm.body_mocapid[b])
+            if not joints and mocap < 0:
+                continue                     # welded under a moving body: follows its parent
+            name = mujoco.mj_id2name(nm, mujoco.mjtObj.mjOBJ_BODY, b)
+            ob = old_ids.get(name) if name else None
+            if ob is None or ob not in old_moving:
+                reset.append(name or f"body{b}")
+                continue
+            matched.add(ob)
+            moved = False
+            if mocap >= 0 and int(om.body_mocapid[ob]) >= 0:
+                moved = self._carry_mocap(old, int(om.body_mocapid[ob]), mocap)
+            pairs = _match_joints(om, _own_joints(om, ob, old_held), nm, joints)
+            for oj, nj in pairs:
+                self._carry_joint(old, oj, nj)
+            if moved or pairs:
+                carried.append(name)
+            else:
+                reset.append(name)
+        gone = sorted(
+            mujoco.mj_id2name(om, mujoco.mjtObj.mjOBJ_BODY, ob) or f"body{ob}"
+            for ob in old.movable
+            if ob not in matched and (_own_joints(om, ob, old_held) or int(om.body_mocapid[ob]) >= 0))
+        m, d = nm, nd
+        d.qvel[:] = 0.0
+        d.qacc_warmstart[:] = 0.0
+        d.qfrc_applied[:] = 0.0
+        d.xfrc_applied[:] = 0.0
+        if m.na:
+            d.act[:] = 0.0
+        d.time = float(od.time)          # one room, one clock: time does not jump back at a swap
+        mujoco.mj_forward(m, d)
+        self._debt = 0.0
+        return sorted(carried), sorted(reset), gone
+
+    def _carry_joint(self, old: RoomSim, oj: int, nj: int) -> None:
+        om, nm = old.model, self.model
+        oa, na = int(om.jnt_qposadr[oj]), int(nm.jnt_qposadr[nj])
+        kind = int(nm.jnt_type[nj])
+        q_old = old.data.qpos
+        q_new = self.data.qpos
+        if kind == _FREE:
+            moved = _compose(*_compose(q_old[oa:oa + 3], q_old[oa + 3:oa + 7],
+                                       *_inverse(old._settled_qpos[oa:oa + 3],
+                                                 old._settled_qpos[oa + 3:oa + 7])),
+                             self._settled_qpos[na:na + 3], self._settled_qpos[na + 3:na + 7])
+            if np.all(np.isfinite(moved[0])) and np.all(np.isfinite(moved[1])):
+                q_new[na:na + 3] = moved[0]
+                q_new[na + 3:na + 7] = _unit(moved[1])
+        elif kind == _BALL:
+            quat = np.asarray(q_old[oa:oa + 4], dtype=float)
+            if np.all(np.isfinite(quat)) and np.linalg.norm(quat) > 0:
+                q_new[na:na + 4] = _unit(quat)
+        else:
+            value = float(q_old[oa])
+            if math.isfinite(value):
+                if int(nm.jnt_limited[nj]):
+                    lo, hi = (float(v) for v in nm.jnt_range[nj])
+                    value = min(max(value, lo), hi)
+                q_new[na] = value
+
+    def _carry_mocap(self, old: RoomSim, omid: int, nmid: int) -> bool:
+        """A mocap body has no joint; its pose carries by the same displacement rule."""
+        pos, quat = _compose(*_compose(old.data.mocap_pos[omid], old.data.mocap_quat[omid],
+                                       *_inverse(old._settled_mocap[0][omid],
+                                                 old._settled_mocap[1][omid])),
+                             self._settled_mocap[0][nmid], self._settled_mocap[1][nmid])
+        if not (np.all(np.isfinite(pos)) and np.all(np.isfinite(quat))):
+            return False
+        self.data.mocap_pos[nmid] = pos
+        self.data.mocap_quat[nmid] = _unit(quat)
+        return True
+
+    def _carry_grabs(self, old: RoomSim) -> tuple[list[str], list[str]]:
+        """Re-attach every grab whose body is still grabbable, by name (see `adopt`). Runs after
+        `_carry_bodies`, so the new bodies are already where the old ones were."""
+        om, od, nd = old.model, old.data, self.data
+        new_ids = _named_bodies(self.model)
+        kept, dropped = [], []
+        self._grabs.clear()
+        for owner, grab in old._grabs.items():
+            name = mujoco.mj_id2name(om, mujoco.mjtObj.mjOBJ_BODY, grab.body)
+            b = new_ids.get(name) if name else None
+            if b is None or b not in self._grabbable:
+                dropped.append(owner)
+                continue
+            world = od.xpos[grab.body] + od.xmat[grab.body].reshape(3, 3) @ grab.local
+            local = nd.xmat[b].reshape(3, 3).T @ (world - nd.xpos[b])
+            reach = self._reach[b]
+            norm = float(np.linalg.norm(local))
+            if not math.isfinite(norm):
+                dropped.append(owner)
+                continue
+            if norm > reach:
+                local *= reach / norm
+            target = np.clip(grab.target, self._bounds[0], self._bounds[1])
+            self._grabs[owner] = _Grab(b, local, target)
+            kept.append(owner)
+        return sorted(kept), sorted(dropped)
+
+    def _separate(self) -> bool:
+        """Relax carried interpenetrations apart (grabs suspended: `_relax` never applies them),
+        then bring everything to rest. True if anything was deep enough to need it."""
+        m, d = self.model, self.data
+        if not any(d.contact[i].dist < -ADOPT_PENETRATION for i in range(d.ncon)):
+            return False
+        clock = float(d.time)
+        before = d.qpos.copy()
+        try:
+            ok = self._relax(ADOPT_RELAX_SECONDS)
+        except Exception:  # noqa: BLE001 — a failed relax leaves the carried poses as they were
+            ok = False
+        if not ok or not self._finite():
+            d.qpos[:] = before
+        d.qvel[:] = 0.0
+        d.qacc_warmstart[:] = 0.0
+        d.qfrc_applied[:] = 0.0
+        d.xfrc_applied[:] = 0.0
+        d.time = clock
+        mujoco.mj_forward(m, d)
+        self._clear_warnings()
+        return True
 
     # ---- grab physics -------------------------------------------------------------------------
 
@@ -435,16 +652,29 @@ class RoomSim:
                 return False
         return True
 
+    def _seed(self, settled) -> bool:
+        """Start from a settled state another RoomSim of this model produced. False (nothing
+        changed) if it does not fit this model or is not finite."""
+        try:
+            state = np.array(settled, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            return False
+        if state.size != mujoco.mj_stateSize(self.model, _STATE) or not np.all(np.isfinite(state)):
+            return False
+        mujoco.mj_resetData(self.model, self.data)
+        mujoco.mj_setState(self.model, self.data, state, _STATE)
+        self._finish_settle()
+        return self._finite()
+
     def _get_state(self) -> np.ndarray:
-        spec = mujoco.mjtState.mjSTATE_INTEGRATION
-        state = np.empty(mujoco.mj_stateSize(self.model, spec))
-        mujoco.mj_getState(self.model, self.data, state, spec)
+        state = np.empty(mujoco.mj_stateSize(self.model, _STATE))
+        mujoco.mj_getState(self.model, self.data, state, _STATE)
         return state
 
     def _restore(self) -> None:
         """Back to the settled state; drops grabs. Caller holds the lock."""
         m, d = self.model, self.data
-        mujoco.mj_setState(m, d, self._initial, mujoco.mjtState.mjSTATE_INTEGRATION)
+        mujoco.mj_setState(m, d, self._initial, _STATE)
         d.qfrc_applied[:] = 0.0
         d.xfrc_applied[:] = 0.0
         mujoco.mj_forward(m, d)
@@ -495,3 +725,62 @@ class RoomSim:
 
     def _clear_warnings(self) -> None:
         self.data.warning.number[:] = 0
+
+
+# ---- helpers for carrying state between versions -----------------------------------------------
+
+def _named_bodies(model: mujoco.MjModel) -> dict[str, int]:
+    names = {}
+    for b in range(1, model.nbody):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b)
+        if name:
+            names[name] = b
+    return names
+
+
+def _own_joints(model: mujoco.MjModel, b: int, held: set[int]) -> list[int]:
+    start, count = int(model.body_jntadr[b]), int(model.body_jntnum[b])
+    return [j for j in range(start, start + count) if j not in held] if count > 0 else []
+
+
+def _match_joints(om: mujoco.MjModel, old: list[int], nm: mujoco.MjModel,
+                  new: list[int]) -> list[tuple[int, int]]:
+    """Pair one body's joints across versions: by joint name where the new one is named and the
+    old body has that name, else by position (an unnamed `<freejoint/>` is the usual case), and
+    only joints of the same type."""
+    old_names = {mujoco.mj_id2name(om, mujoco.mjtObj.mjOBJ_JOINT, j): j for j in old}
+    old_names.pop(None, None)
+    pairs, used = [], set()
+    for k, nj in enumerate(new):
+        name = mujoco.mj_id2name(nm, mujoco.mjtObj.mjOBJ_JOINT, nj)
+        oj = old_names.get(name) if name else None
+        if oj is None and k < len(old):
+            oj = old[k]
+        if oj is None or oj in used or int(om.jnt_type[oj]) != int(nm.jnt_type[nj]):
+            continue
+        used.add(oj)
+        pairs.append((oj, nj))
+    return pairs
+
+
+def _compose(pa, qa, pb, qb) -> tuple[np.ndarray, np.ndarray]:
+    """Pose product (pa, qa) · (pb, qb), MuJoCo quaternions (w, x, y, z)."""
+    quat = np.zeros(4)
+    mujoco.mju_mulQuat(quat, np.asarray(qa, dtype=float), np.asarray(qb, dtype=float))
+    rotated = np.zeros(3)
+    mujoco.mju_rotVecQuat(rotated, np.asarray(pb, dtype=float), np.asarray(qa, dtype=float))
+    return np.asarray(pa, dtype=float) + rotated, quat
+
+
+def _inverse(p, q) -> tuple[np.ndarray, np.ndarray]:
+    inv = np.zeros(4)
+    mujoco.mju_negQuat(inv, _unit(np.asarray(q, dtype=float)))
+    moved = np.zeros(3)
+    mujoco.mju_rotVecQuat(moved, -np.asarray(p, dtype=float), inv)
+    return moved, inv
+
+
+def _unit(q: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(q))
+    return np.asarray(q, dtype=float) / norm if norm > 0 and math.isfinite(norm) \
+        else np.array([1.0, 0.0, 0.0, 0.0])

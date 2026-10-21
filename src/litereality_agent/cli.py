@@ -373,9 +373,302 @@ def _view(args) -> int:
     )
 
 
+def _quick_target(value: str, output_root: str | None = None) -> tuple[Path, RunContext] | None:
+    """The scan a quick room is built from, and the run it belongs to — or None if ``value``
+    does not name a scan with a RoomPlan export. A scan folder, a room.usdz in one, a scene
+    package that records its capture, or a bare scan name under ``$LR_SCANS_DIR`` all qualify."""
+    from litereality_agent.pipeline.quickroom import find_room_usdz
+
+    raw = Path(value).expanduser()
+    if raw.is_file() and raw.suffix == ".usdz":
+        raw = raw.parent
+    # The scanner's `roomplan/` subfolder is part of the scan, not the scan: its parent is.
+    if raw.is_dir() and raw.name == "roomplan" and (raw / "room.usdz").is_file():
+        raw = raw.parent
+    try:
+        context = RunContext.resolve(raw if raw.exists() else value, output_root=output_root)
+    except ValueError:
+        return None
+    if find_room_usdz(context.capture_dir) is None:
+        return None
+    return context.capture_dir, context
+
+
+def _quickroom(args) -> int:
+    """Build the quick room — RoomPlan boxes as furniture templates with the capture's colours and
+    estimated physics — for one scan, in seconds, and say what came out."""
+    import json
+    import time
+
+    from litereality_agent.pipeline.quickroom import REPORT_NAME, write_quick_scene
+
+    found = _quick_target(args.target, args.output_root)
+    if found is None:
+        raise SystemExit(f"{args.target}: no RoomPlan room.usdz found (a scan folder holding "
+                         "room.usdz or roomplan/room.usdz, or a scan name under $LR_SCANS_DIR)")
+    scan_dir, context = found
+    out = Path(args.out).expanduser() if args.out else context.scene_dir / "quick"
+    started = time.perf_counter()
+    scene = write_quick_scene(scan_dir, out, label=args.label, colours=args.colours,
+                              textures=args.textures)
+    seconds = time.perf_counter() - started
+    report = json.loads((out / REPORT_NAME).read_text())
+    bodies = report["bodies"].values()
+    joints = [b["joint"] for b in bodies]
+    bold, dim, off = (console.colour(c) for c in ("bold", "dim", "off"))
+    colours = report["colours"]
+    layout = report["layout"]
+    print(f"{bold}quick room{off}  {report['label']}  {dim}{seconds:.1f} s{off}")
+    print(f"  scene    {console.short(scene)}")
+    print(f"  bodies   {len(joints)}: {joints.count('free')} free, {joints.count('hinge')} hinged, "
+          f"{joints.count('static')} static · {report['walls']} walls · "
+          f"{len(report['openings'])} openings")
+    print("  colours  " + (f"from {colours['frames_used']} capture frames"
+                            if colours["source"] == "frames"
+                            else f"by category ({colours['note'] or 'no frames'})"))
+    changes = [f"merged {name} <- {'+'.join(members)}"
+               for name, members in (layout.get("merged") or {}).items()]
+    if layout.get("moved"):
+        changes.append("moved " + ", ".join(layout["moved"]))
+    if layout.get("error"):
+        changes.append(f"repair failed: {layout['error']}")
+    if layout.get("skipped"):
+        changes.append(f"repair skipped ({layout['skipped']})")
+    if changes:
+        print(f"  layout   {' · '.join(changes)}")
+    for warning in report.get("warnings") or ():
+        print(f"  {console.colour('yellow')}warning{off}  {warning}")
+    if report.get("pinned"):
+        print(f"  pinned   {', '.join(report['pinned'])} {dim}(could not be separated){off}")
+    if report["initial_overlaps"]:
+        print(f"  overlaps {len(report['initial_overlaps'])} deeper than 5 mm at t=0")
+    print(f"  {dim}walk it with others:{off} uv run litereality roomcall {console.short(scene)}")
+    return 0
+
+
+def _quick_room_for_scan(args) -> None:
+    """`litereality roomcall <scan>`: when SCENE names a capture rather than a scene, build its
+    quick room first and serve that, so a room is on the call seconds after it was scanned.
+
+    A scene that already resolves is left alone, and so is a scan whose run already holds the
+    pipeline's own export — that is the better room — unless the scan is NEWER than that export:
+    a re-scan under the same name is a different room, and the old export would put everyone in
+    the room as it was. Otherwise the quick room is written into ``run/<scan>/quick/`` and the RUN
+    folder is what is served when the room call resolves it there, so `--watch` moves on to
+    ``mujoco_seed/`` by itself the moment the full export lands. Which room is served, and why, is
+    printed.
+    """
+    scene = getattr(args, "scene", None)
+    if not scene or getattr(args, "demo", False):
+        return
+    from litereality_agent.room_ops.roomcall import server
+
+    if not str(scene).endswith(".usdz"):
+        try:
+            server.resolve_scene(scene)
+            return
+        except ValueError:
+            pass
+    found = _quick_target(str(scene))
+    if found is None:
+        return                       # not a scan either: the room call says what it looked for
+    import json
+    import time
+
+    from litereality_agent.pipeline.quickroom import REPORT_NAME, find_room_usdz, write_quick_scene
+
+    scan_dir, context = found
+    run_dir = context.scene_dir
+    try:
+        existing = server.resolve_scene(run_dir)
+    except ValueError:
+        existing = None
+    usdz = find_room_usdz(scan_dir)
+    rescanned = (existing is not None and usdz is not None
+                 and usdz.stat().st_mtime > existing.stat().st_mtime)
+    if existing is not None and existing.parent.name != "quick" and not rescanned:
+        print(f"room call  {context.scan}: serving the pipeline's room {console.short(existing)} "
+              "(newer than the scan)")
+        args.scene = str(run_dir)
+    else:
+        started = time.perf_counter()
+        quick = write_quick_scene(scan_dir, run_dir / "quick", label=context.scan,
+                                  textures=getattr(args, "textures", True))
+        why = ("the scan is newer than the pipeline's room "
+               f"{console.short(existing)}, which is left unserved"
+               if rescanned and existing.parent.name != "quick" else
+               "there is no pipeline room for this scan yet")
+        print(f"room call  {context.scan}: serving the quick room {console.short(quick)}, built "
+              f"in {time.perf_counter() - started:.1f} s — {why}")
+        report = json.loads((quick.parent / REPORT_NAME).read_text())
+        for warning in report.get("warnings") or ():
+            print(f"  {console.colour('yellow')}warning{console.colour('off')}  {warning}")
+        try:
+            served = server.resolve_scene(run_dir)
+        except ValueError:
+            served = None
+        # The run folder only while it still resolves to this quick room: once it holds an older
+        # full export, it would resolve (and `--watch` would move) to that instead.
+        args.scene = str(run_dir if served == quick else quick)
+    if not getattr(args, "label", None):
+        args.label = context.scan
+
+
+def _modal_kwargs(settings) -> dict:
+    """The `.env` Modal login, the way `roomcall --deploy` passes it on."""
+    return {"credentials": None if settings.modal_profile else settings.modal_credentials(),
+            "profile": settings.modal_profile, "environment": settings.modal_environment}
+
+
+def _object_generator(args, settings=None):
+    """TRELLIS on the `.env`'s Modal workspace — or, with `--fake`, the offline stand-in."""
+    from litereality_agent.pipeline import realroom
+
+    if getattr(args, "fake", False):
+        return realroom.FakeGenerator(delay=float(getattr(args, "fake_delay", 0.0) or 0.0))
+    settings = settings or load_settings()
+    if not settings.modal_configured():
+        raise SystemExit("generating objects needs TRELLIS on Modal: set MODAL_TOKEN_ID and "
+                         "MODAL_TOKEN_SECRET (or MODAL_PROFILE) in .env and deploy it once with "
+                         "`uv run litereality setup` — or try the flow offline with --fake")
+    try:
+        import modal  # noqa: F401
+    except ImportError:
+        raise SystemExit("generating objects needs the Modal client: run "
+                         "`uv sync --extra modal`") from None
+    kwargs = _modal_kwargs(settings)
+    return realroom.ModalTrellisGenerator(
+        app_name=settings.modal_trellis_app, function_name=settings.modal_trellis_function,
+        environment_name=kwargs["environment"], profile=kwargs["profile"],
+        credentials=kwargs["credentials"])
+
+
+def _estimate_line(generator, objects: int, passes) -> str:
+    from litereality_agent.pipeline.realroom import generate
+
+    if generator.name == "fake":
+        return "stand-in boxes (--fake): no GPU, no cost"
+    price = load_settings().modal_gpu_price_per_hour
+    minutes, dollars = generate.estimate(objects, passes, price_per_hour=price)
+    return (f"TRELLIS on Modal, up to {generate.CONTAINERS} H100s: ~{minutes:.0f} min to the last "
+            f"final, ~${dollars:.2f} of GPU time (an estimate, see `realroom.generate.estimate`)")
+
+
+def _report_objects(room, progress) -> None:
+    from litereality_agent.pipeline.realroom import build
+
+    bold, dim, off = (console.colour(c) for c in ("bold", "dim", "off"))
+    have = build.counts(room)
+    print(f"{bold}objects{off}  {have['final']} final, {have['preview']} preview, "
+          f"{have['template']} still templates  {dim}{progress.seconds:.0f} s, "
+          f"{progress.versions} version(s){off}")
+    print(f"  scene    {console.short(room.scene_path)}")
+    for key, error in sorted(progress.failed.items()):
+        print(f"  {console.colour('yellow')}failed{off}   {key}: {error}")
+    for handle, donor in sorted(progress.borrowed.items()):
+        print(f"  {dim}twin     {handle} looks like {donor} (its own view was too partial){off}")
+    for handle, why in sorted(progress.skipped.items()):
+        print(f"  {dim}template {handle}: {why}{off}")
+
+
+def _realroom(args) -> int:
+    """`litereality realroom <scan>`: the objects stage, offline — every object generated (one
+    pass) and fitted into the quick room, written as one scene."""
+    from litereality_agent.pipeline import realroom
+
+    found = _quick_target(args.target, args.output_root)
+    if found is None:
+        raise SystemExit(f"{args.target}: no RoomPlan room.usdz found (a scan folder holding "
+                         "room.usdz or roomplan/room.usdz, or a scan name under $LR_SCANS_DIR)")
+    scan_dir, context = found
+    out = Path(args.out).expanduser() if args.out else context.scene_dir / realroom.DEFAULT_DIR
+    generator = _object_generator(args)
+    room = realroom.RealRoom(scan_dir, out, label=args.label or context.scan,
+                             colours=args.colours, textures=args.textures, rebuild=True)
+    room.write(check=False)
+    room.make_crops()
+    print(f"realroom  {context.scan}: {len(room.generated_handles())} objects, pass "
+          f"{args.pass_name} — {_estimate_line(generator, len(room.crops), [args.pass_name])}")
+    progress = realroom.generate_room(room, generator, passes=[args.pass_name],
+                                      min_interval=float("inf"), reuse=not args.fresh)
+    _report_objects(room, progress)
+    print(f"  {console.colour('dim')}walk it with others:{console.colour('off')} "
+          f"uv run litereality roomcall {console.short(room.scene_path)}")
+    return 0
+
+
+def _realistic_roomcall(args) -> int:
+    """`litereality roomcall <scan> --realistic`: the quick room on the call at once, then every
+    object generated (preview, then final) and swapped in live as it lands.
+
+    Served here, the run's ``objects/scene.xml`` is watched and each version written there is
+    swapped in (`--watch` is implied). With ``--publish`` / ``--deploy`` the quick room goes up
+    first, and every version after it is published to the same link (`MIN_INTERVAL` apart)."""
+    import time
+
+    from litereality_agent.pipeline import realroom
+
+    found = _quick_target(str(args.scene)) if args.scene and not args.demo else None
+    if found is None:
+        raise SystemExit("--realistic needs a scan (a folder holding room.usdz or "
+                         "roomplan/room.usdz, or a scan name under $LR_SCANS_DIR)")
+    scan_dir, context = found
+    out = context.scene_dir / realroom.DEFAULT_DIR
+    label = args.label or context.scan
+    settings = load_settings()
+    generator = _object_generator(args, settings)
+    started = time.perf_counter()
+    room = realroom.RealRoom(scan_dir, out, label=label,
+                             textures=getattr(args, "textures", True), rebuild=True)
+    scene = room.write(check=False)
+    print(f"room call  {context.scan}: the quick room in {time.perf_counter() - started:.1f} s; "
+          "each object is swapped in live as it is generated")
+    args.scene, args.label = str(scene), label
+    passes = ["preview", "final"]
+
+    def generate(on_version=None):
+        room.make_crops()
+        print(f"  objects  {len(room.crops)}: "
+              f"{_estimate_line(generator, len(room.crops), passes)}")
+        progress = realroom.generate_room(room, generator, passes=passes, on_version=on_version)
+        _report_objects(room, progress)
+        return progress
+
+    if args.deploy:
+        modal_kwargs = _modal_kwargs(settings)
+        args.stage = "quick"
+        rc = roomcall.run(args, **modal_kwargs)
+        if rc:
+            return rc
+
+        def publish(path, _info) -> None:
+            args.scene, args.deploy, args.stage = str(path), "publish", realroom.STAGE
+            roomcall.run(args, **modal_kwargs)
+
+        generate(publish)
+        return 0
+    args.watch = True
+    args.stage = args.stage or realroom.STAGE
+
+    def background() -> None:
+        try:
+            generate()
+        except Exception as exc:  # noqa: BLE001 — the room stays up on what it has
+            print(f"  objects  stopped: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    worker = threading.Thread(target=background, daemon=True, name="realroom")
+    args._realroom_worker = worker            # for tests: the thread generating the versions
+    worker.start()
+    return roomcall.run(args)
+
+
 def _roomcall(args) -> int:
     """Share a simulated room with the people on a video call. Takes a scene file or folder, not a
-    run: the room call is a room operation and knows nothing about run layout."""
+    run: the room call is a room operation and knows nothing about run layout. A scan is the one
+    exception, resolved HERE (this layer knows run layout): its quick room is built first."""
+    if getattr(args, "realistic", False):
+        return _realistic_roomcall(args)
+    _quick_room_for_scan(args)
     if not args.deploy:
         return roomcall.run(args)
     settings = load_settings()
@@ -479,7 +772,61 @@ def _parser() -> argparse.ArgumentParser:
         "roomcall", help="share a simulated room with the people on a video call"
     )
     roomcall.add_arguments(call)
+    call.add_argument(
+        "--realistic", action="store_true",
+        help="with a scan: the quick room at once, then every object generated with TRELLIS on "
+             "Modal (a fast preview, then the final) and swapped in live as it lands; with "
+             "--publish/--deploy each version goes to the hosted link",
+    )
+    call.add_argument("--no-textures", dest="textures", action="store_false",
+                      help="flat colours only; skip the wall/floor/ceiling photos")
+    call.add_argument("--fake", action="store_true",
+                      help="with --realistic: stand-in textured boxes instead of TRELLIS "
+                           "(offline, free) to try the flow")
+    call.add_argument("--fake-delay", type=float, default=1.0, metavar="S",
+                      help=argparse.SUPPRESS)
     call.set_defaults(handler=_roomcall)
+
+    real = commands.add_parser(
+        "realroom",
+        help="a scan's objects stage offline: every object's photo -> TRELLIS mesh, fitted into "
+             "the quick room",
+    )
+    real.add_argument("target", metavar="SCAN",
+                      help="a scan folder (room.usdz or roomplan/room.usdz), or a scan name "
+                           "under $LR_SCANS_DIR")
+    real.add_argument("--out", metavar="DIR",
+                      help="where to write it (default: run/<scan>/objects)")
+    real.add_argument("--output-root")
+    real.add_argument("--label", help="the room's name (default: the scan's)")
+    real.add_argument("--pass", dest="pass_name", choices=["preview", "final"], default="final",
+                      help="preview: TRELLIS at 512 (fast); final: 1024 cascade (default)")
+    real.add_argument("--fake", action="store_true",
+                      help="stand-in textured boxes instead of TRELLIS: offline, free")
+    real.add_argument("--fresh", action="store_true",
+                      help="generate again even where a mesh for the same photo is cached")
+    real.add_argument("--no-colours", dest="colours", action="store_false",
+                      help="the quick room in category colours (skip reading the frames)")
+    real.add_argument("--no-textures", dest="textures", action="store_false",
+                      help="flat colours only; skip the wall/floor/ceiling photos")
+    real.set_defaults(handler=_realroom, fake_delay=0.0)
+
+    quick = commands.add_parser(
+        "quickroom",
+        help="build a scan's quick room in seconds: RoomPlan boxes as furniture, real colours, "
+             "estimated physics",
+    )
+    quick.add_argument("target", metavar="SCAN",
+                       help="a scan folder (room.usdz or roomplan/room.usdz), or a scan name "
+                            "under $LR_SCANS_DIR")
+    quick.add_argument("--out", metavar="DIR", help="where to write it (default: run/<scan>/quick)")
+    quick.add_argument("--output-root")
+    quick.add_argument("--label", help="the room's name (default: the scan's)")
+    quick.add_argument("--no-colours", dest="colours", action="store_false",
+                       help="category colours only; skip reading the capture's frames")
+    quick.add_argument("--no-textures", dest="textures", action="store_false",
+                       help="flat colours only; skip the wall/floor/ceiling photos")
+    quick.set_defaults(handler=_quickroom)
 
     live = commands.add_parser("live", help="watch a room being authored, with the agent's trace")
     live.add_argument("target", metavar="SCAN_OR_SCENE")
@@ -529,7 +876,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         return args.handler(args)
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, FileNotFoundError) as exc:
         raise SystemExit(str(exc)) from exc
 
 

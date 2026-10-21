@@ -27,6 +27,13 @@ def run(context: RunContext, options: dict) -> StageResult:
             preview = compile_room(Path(room), bake=True)
             if preview:
                 artifacts["preview"] = str(preview)
+            else:
+                # NOT SILENT. A failed build used to leave the stage COMPLETED with no preview and
+                # no word about it — on tea_room an object.py that built nothing meant Room.glb
+                # never assembled, and the first sign was `simulate --from-seed` refusing to run.
+                warnings.append(
+                    "seed preview FAILED: Room.glb was not built (an object failed to build — see "
+                    "the `build` rows above); `stage simulate --from-seed` needs it")
         except Exception as exc:
             warnings.append(f"seed preview unavailable: {exc}")
     package = finalize(context.scan, capture_mode=options.get("capture_mode", "link"))

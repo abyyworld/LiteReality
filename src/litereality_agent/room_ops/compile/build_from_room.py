@@ -29,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 
-from litereality_agent import console
+from litereality_agent import console, object_source
 
 from .. import paths as config
 
@@ -60,6 +60,14 @@ def run_object_py(
     if not script.exists():
         print(console.row("error", name, "no object.py — nothing to build from", "cyan"))
         return False
+    # A TRUNCATED object.py is valid Python: Blender runs it, defines the inlined helpers, exits 0
+    # and writes nothing. Say what is wrong with the FILE before spending a Blender run on it, so
+    # the failure names the cause instead of "no stderr".
+    problems = object_source.problems(script)
+    if problems:
+        print(console.row("error", name, f"object.py unusable — {problems[0][:70]}", "cyan"))
+        print(f"     {console.colour('dim')}{console.short(script)}{console.colour('off')}")
+        return False
     out_glb.parent.mkdir(parents=True, exist_ok=True)
     # Blender can exit zero after a Python error. Build away from the cache so an
     # old GLB cannot impersonate the result of a failed regeneration.
@@ -82,7 +90,10 @@ def run_object_py(
         staging.cleanup()
     took = f"{console.colour('dim')}{time.time() - t0:5.1f}s{console.colour('off')}"
     if not valid:
-        tail = r.stderr.decode(errors="replace").strip().splitlines()[-1:] or ["(no stderr)"]
+        tail = r.stderr.decode(errors="replace").strip().splitlines()[-1:]
+        if not tail:
+            # Exit 0 and no output is the signature of a script that never reached its export.
+            tail = [f"Blender exited {r.returncode} and wrote no glb"]
         print(console.row("error", name, f"{'regen' if is_proc else 'wrap'} FAILED — {tail[0][:60]}",
                           "cyan"))
         return False

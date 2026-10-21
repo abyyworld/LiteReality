@@ -19,9 +19,87 @@ uv run litereality roomcall run/tea_room           # a scanned room (finds mujoc
 uv run litereality roomcall path/to/scene.xml --port 8790 --label "Tea room"
 ```
 
-`SCENE` may be a `scene.xml` or a folder holding `scene.xml`, `mujoco_seed/scene.xml` or
-`mujoco/scene.xml` — the output of `litereality stage simulate run/<scan> --from-seed`. Each
-`?room=<id>` in the URL is its own copy of the room with its own physics (default `lobby`).
+`SCENE` can be any of these:
+- a `scene.xml`;
+- a folder holding `scene.xml`, `mujoco_seed/scene.xml` or `mujoco/scene.xml` (the output of
+  `litereality stage simulate run/<scan> --from-seed`);
+- a scan itself: a scan folder, its `room.usdz`, or a scan name from `$LR_SCANS_DIR` (see below).
+
+Each `?room=<id>` in the URL is its own copy of the room with its own physics (default `lobby`).
+
+## From a fresh scan to the call in seconds
+
+The full pipeline takes an hour or more per room. That's too slow if you scan a room and then
+want to hop on a call, so the room call can also build a **quick room** straight from the scan:
+
+```bash
+uv run litereality roomcall my_room             # scan name (in $LR_SCANS_DIR) or scan folder
+uv run litereality roomcall my_room --publish   # same, onto the deployed link (seconds)
+uv run litereality quickroom my_room            # just write run/my_room/quick/scene.xml
+```
+
+The quick room is built from the scan's RoomPlan data (`room.usdz`) with no Blender and no AI.
+tea_room takes about 2 s. It has:
+- the real walls, with the door and window cut out, and the floor and ceiling;
+- a door leaf on a hinge, and glass in the windows;
+- every object at its scanned position and size, built from simple parts for its category: a table
+  is a top on four legs (so tucked chairs still fit under it), a chair is a seat, back and legs;
+- colours sampled from the scan's photos;
+- masses from the same category density table the full pipeline uses. For tea_room's chairs and
+  dishwasher they come out identical to the full pipeline's.
+
+Chairs, stools and small tables can be moved; heavy and wall-hung furniture is fixed in place.
+
+It looks like a blocky sketch of the room, not the real furniture. When the full pipeline later
+finishes for the same scan, publish its scene and the link switches to it live:
+
+```bash
+uv run litereality roomcall run/my_room --publish   # serves mujoco_seed/ once it exists
+```
+
+## Realistic objects, streaming in (needs Modal)
+
+```bash
+uv run litereality setup                                    # once: deploys TRELLIS with 4 GPUs
+uv run litereality roomcall my_room --realistic --deploy    # first time; later --publish
+uv run litereality realroom my_room                         # offline: run/my_room/objects/scene.xml
+```
+
+`--realistic` puts the quick room on the link first. It then generates each object from its own
+photos in the scan, on TRELLIS on Modal with up to 4 GPUs in parallel. Each object goes through two
+passes, a fast preview and then a full-quality final, and each new version swaps into the call live.
+
+- **Inputs:** each object's best views are cut out with its depth mask, refined with GrabCut, and
+  sent with a real alpha channel. Dark objects therefore come out solid.
+- **Fitting:** the generated mesh is turned to face the right way (a quarter-turn search scored
+  against the object's depth masks) and scaled into the scanned box.
+- **What you see vs what collides:** the mesh is what you see. The quick room's simple parts stay as
+  what you bump into, and mass and joints are unchanged, so tucked chairs still fit under the table.
+- **Shortcuts:** identical objects share one mesh. An object seen too little (e.g. a table only seen
+  from above) keeps its template.
+- **Expected time and cost (estimates, not measured yet):** first previews about 2.5 min after
+  start (including the GPU start-up), all finals about 5 min, roughly $2 of H100 time for tea_room.
+- **Offline test:** `--fake` uses a stand-in generator (textured boxes), so the whole flow can be
+  tried without Modal.
+
+## Switching rooms live, mid-call
+
+Every publish is a new **version** of the same link. People in the room are never disconnected:
+- their browser fetches the new version in the background and swaps it in;
+- objects keep the positions people moved them to (matched by name), and an object someone is
+  holding stays in their hand;
+- everyone keeps their camera position and their webcams;
+- objects that don't exist in the new version disappear, and new ones appear at their scanned
+  position.
+
+- `--publish` uploads a new version and switches the deployed link to it within about 10 s. It
+  doesn't redeploy anything, so it's safe during a call.
+- `--deploy` publishes and also redeploys the server code. Use it the first time and after updating
+  this repo, not during a call.
+- `--stage quick|objects|full|scene` labels the version. People see a "quick preview" tag for
+  quick rooms. By default it comes from the folder (`quick/` is quick, `mujoco_seed/` is full).
+- `--watch` does the same locally, without Modal. It re-reads `SCENE` whenever its files change, so
+  you can try a swap on your own machine.
 
 In the room: **WASD / arrows** walk (Shift hurries, Q/E turn), **drag empty space** to look,
 **click and drag an object** to grab it (doors and drawers too), the **mouse wheel** pulls or pushes
@@ -50,7 +128,8 @@ webcam on their avatar and the same physics. That's because the link is https.
 - **What gets uploaded:** the scene goes into the Modal Volume `litereality-roomcall-scenes`. Only
   `scene.xml` and the meshes, textures and include files it names are sent, never the rest of the
   export folder.
-- **Switching scenes:** uploading another scene, or `--demo`, and redeploying switches the link.
+- **Switching scenes:** `--publish` with another scene (or a scan) switches the link live, with
+  no redeploy (see "Switching rooms live, mid-call").
 - **The server:** it runs as its own Modal app, `litereality-roomcall`
   (`deploy/modal/roomcall/app.py`), in one CPU container that holds every room.
 - **Cost:** the container shuts down 15 minutes after the last person leaves, so an unused link

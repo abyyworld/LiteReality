@@ -6,15 +6,26 @@ or Teams call clicks it in the chat and is in the room — webcam allowed, becau
 
     uv run litereality roomcall run/tea_room --deploy     # upload the scene, deploy, print the link
 
+    uv run litereality roomcall run/tea_room --publish    # a new VERSION, live, no redeploy
+
 What runs where:
-- The scene (scene.xml plus the meshes and textures it names) is uploaded once into the Modal
-  Volume `SCENES_VOLUME`, under its own folder, and the file `CURRENT` at the Volume's root names the
-  folder to serve. Uploading another scene and redeploying switches the link to it.
+- Every upload is a new VERSION of the room: scene.xml plus the meshes and textures it names, in a
+  folder of its own on the Modal Volume `SCENES_VOLUME` named after the room and its content
+  (`tea_room-1a2b3c4d5e6f`, see `version_name`), next to the room's geometry (scene.glb + scene.json)
+  built here on the laptop, so the container never has to. The file `CURRENT` at the Volume's root
+  names the version to serve. It is written in a second batch, after the folder's batch has
+  committed, so a container can never read a CURRENT that names a half-uploaded folder. Older
+  versions of the same room are pruned, keeping the newest two.
 - `deploy/modal/roomcall/app.py` serves `build_app` from ONE CPU container (`max_containers=1`) that
   takes every connection concurrently — rooms live in that process's memory, so a second container
   would split one call's people into two rooms that cannot see each other. Each WebSocket is one
   Modal input that lasts as long as the function's timeout allows, and the container scales to
   zero once the last person has left and the idle window has passed.
+- While it runs, the container re-reads the Volume every `POLL_SECONDS` (`VolumeWatch`): a CURRENT
+  naming a new version is loaded and swapped into every room live, with what people did carried
+  across (`server.RoomHub.offer`, `sim.RoomSim.adopt`). So `--publish` changes the room during a
+  call in seconds, without a `modal deploy` and without anyone leaving; `--deploy` (publish AND
+  deploy) is for the first time and for code changes.
 
 This module is what both halves share: the upload (run on the laptop) and the app factory (run in
 the container). It imports MuJoCo, FastAPI and Modal only inside the functions that need them, so
@@ -23,7 +34,11 @@ the deploy file can read its constants without either.
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import io
+import json
+import logging
 import os
 import re
 import secrets
@@ -31,7 +46,10 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+log = logging.getLogger(__name__)
 
 APP_NAME = "litereality-roomcall"
 FUNCTION_NAME = "web"
@@ -61,6 +79,17 @@ IMAGE_PACKAGES = (
 )
 
 _NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# A version folder: the room's name (cut to leave room for the suffix inside `_NAME`'s 64) and the
+# first 12 hex of its content digest.
+NAME_CHARS = 48
+DIGEST_CHARS = 12
+_VERSION = re.compile(rf"^(?P<name>[A-Za-z0-9_-]{{1,{NAME_CHARS}}})-(?P<digest>[0-9a-f]{{{DIGEST_CHARS}}})$")
+# Versions of one room kept on the Volume: the one just published and the one before it (which a
+# running container may still be serving until its rooms have swapped).
+KEEP_VERSIONS = 2
+# How often the container looks at the Volume for a new version (seconds). Each look is one
+# `Volume.reload()`, cheap, and a published version is live within this plus the prefetch window.
+POLL_SECONDS = 10.0
 # Elements whose `file` MuJoCo resolves against the compiler's meshdir (else assetdir, else the
 # model's folder), against its texturedir, or against the including file's folder.
 _MESH_LIKE = {"mesh", "hfield", "skin"}
@@ -70,6 +99,40 @@ def scene_name(label: str) -> str:
     """A folder name for the Volume: the label with anything unsafe collapsed to '-'."""
     name = re.sub(r"[^A-Za-z0-9_-]+", "-", label).strip("-")[:64]
     return name if name and name != DEMO else "room"
+
+
+def version_name(label: str, digest: str) -> str:
+    """The folder (and wire id) of one version of a room: `tea_room-1a2b3c4d5e6f`. Content-
+    addressed, so publishing the same files twice is the same version, and any change — one mesh,
+    one joint range, or (`publish`) the label or stage it is shown with — is a new one."""
+    return f"{scene_name(label)[:NAME_CHARS]}-{digest[:DIGEST_CHARS]}"
+
+
+def files_digest(files: list[tuple[Path, PurePosixPath]], *, also: tuple[str, ...] = ()) -> str:
+    """sha256 over every scene file's relative path and bytes, in path order. The path counts, so
+    renaming a mesh is a change; each part is length-prefixed, so no two layouts hash alike.
+    `also` is hashed first: what a version is beside its files (`publish` passes its label and
+    stage, so the same files published as another stage are a new version the container picks
+    up, not the one it already serves)."""
+    digest = hashlib.sha256()
+    for text in also:
+        data = text.encode("utf-8")
+        digest.update(len(data).to_bytes(8, "little"))
+        digest.update(data)
+    for local, relative in sorted(files, key=lambda item: str(item[1])):
+        name = str(relative).encode("utf-8")
+        digest.update(len(name).to_bytes(8, "little"))
+        digest.update(name)
+        digest.update(Path(local).stat().st_size.to_bytes(8, "little"))
+        with open(local, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1 << 20), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def scene_digest(scene_xml: Path) -> str:
+    """`files_digest` of everything the scene needs (`scene_files`)."""
+    return files_digest(scene_files(Path(scene_xml)))
 
 
 def scene_files(scene_xml: Path) -> list[tuple[Path, PurePosixPath]]:
@@ -127,51 +190,229 @@ def scene_files(scene_xml: Path) -> list[tuple[Path, PurePosixPath]]:
     return [(Path(local), relative) for local, relative in found.items()]
 
 
-def publish(scene_xml: Path | None, *, name: str, volume) -> int:
-    """Upload a scene into `volume` under `name` and make it the one served. Returns bytes sent.
+@dataclass(frozen=True)
+class Published:
+    """What `publish` did: the version folder CURRENT now names, and the bytes sent."""
 
-    `scene_xml=None` switches the link back to the demo room without uploading anything. `volume` is
-    a `modal.Volume` (anything with its `batch_upload` works, which is how the tests run offline).
+    version: str
+    sent: int
+
+
+# Files a version folder holds beside the scene's own (see `server.prebuilt_files`).
+_PREBUILT = ("scene.glb", "scene.json", "roomcall.json")
+
+
+def publish(scene_xml: Path | None, *, name: str, volume, label: str | None = None,
+            stage: str = "scene", prebuild: bool = True) -> Published:
+    """Upload a scene into `volume` as a new version of the room `name` and make it the one served.
+
+    Three steps, in this order, each finished before the next starts:
+    1. one batch with the version's folder — the scene's files plus, with `prebuild`, its geometry
+       built here (`server.prebuilt_files`; it also proves the scene compiles);
+    2. a second batch with `CURRENT` naming that folder: a batch commits as a whole when it
+       returns, so a container that sees the new CURRENT always finds the whole folder;
+    3. pruning older versions of `name`, keeping `KEEP_VERSIONS` (this one and the one served
+       before it, which a running container may still have rooms on), whatever CURRENT names by
+       then, and any folder uploaded since the one served before (another publish of the room
+       may be about to name it: `_prune`). A prune that fails is reported, never fatal: the
+       version is already live.
+
+    `scene_xml=None` switches the link back to the demo room without uploading anything. `volume`
+    is a `modal.Volume`; anything with its `batch_upload`, `read_file`, `listdir` and
+    `remove_file` works, which is how the tests run offline.
     """
+    if scene_xml is None:
+        with volume.batch_upload(force=True) as batch:
+            batch.put_file(io.BytesIO(DEMO.encode()), f"/{CURRENT}")
+        return Published(DEMO, 0)
+    scene_xml = Path(scene_xml)
+    files = scene_files(scene_xml)
+    clash = sorted(str(rel) for _local, rel in files if str(rel) in _PREBUILT)
+    if clash:
+        raise ValueError(f"the scene names files the room call keeps beside it: {', '.join(clash)}")
+    shown = label.replace("_", " ") if label else name.replace("_", " ").replace("-", " ")
+    folder = version_name(name, files_digest(files, also=(shown, stage)))
+    if prebuild:
+        from litereality_agent.room_ops.roomcall.server import prebuilt_files
+
+        extra = prebuilt_files(scene_xml, version=folder, label=shown, stage=stage)
+    else:
+        meta = {"version": folder, "label": shown, "stage": stage}
+        extra = {"roomcall.json": json.dumps(meta, indent=1).encode("utf-8")}
     sent = 0
     with volume.batch_upload(force=True) as batch:
-        if scene_xml is not None:
-            for local, relative in scene_files(Path(scene_xml)):
-                batch.put_file(local, f"/{name}/{relative}")
-                sent += local.stat().st_size
-        batch.put_file(io.BytesIO((name if scene_xml is not None else DEMO).encode()),
-                       f"/{CURRENT}")
-    return sent
+        for local, relative in files:
+            batch.put_file(local, f"/{folder}/{relative}")
+            sent += local.stat().st_size
+        for file_name, data in extra.items():
+            batch.put_file(io.BytesIO(data), f"/{folder}/{file_name}")
+            sent += len(data)
+    previous = _read_current(volume)
+    with volume.batch_upload(force=True) as batch:
+        batch.put_file(io.BytesIO(folder.encode()), f"/{CURRENT}")
+    try:
+        # CURRENT read again: another publish of this room (the quick stage auto-published while
+        # the full one is published by hand) may have named its own version since ours.
+        _prune(volume, name, keep={folder, previous, _read_current(volume)},
+               since={folder, previous})
+    except Exception as exc:  # noqa: BLE001 — the new version is live either way
+        print(f"  (could not prune older versions of {name}: {exc})", file=sys.stderr)
+    return Published(folder, sent)
 
 
-def served_scene(root: Path) -> tuple[Path, str] | None:
-    """The scene `CURRENT` names under the mounted Volume, or None for the demo room."""
+def _read_current(volume) -> str | None:
+    try:
+        return b"".join(volume.read_file(f"/{CURRENT}")).decode("utf-8").strip() or None
+    except Exception:  # noqa: BLE001 — none yet, or unreadable: nothing extra to keep
+        return None
+
+
+def _prune(volume, name: str, *, keep: set[str | None], since: set[str | None] | None = None
+           ) -> list[str]:
+    """Remove all but the newest `KEEP_VERSIONS` version folders of `name`, never one in `keep`
+    and never one at least as new as the oldest folder in `since` (`publish`: its own and the
+    one CURRENT named before it). A folder uploaded since then may be another publish's that has
+    not written CURRENT yet; removing it would leave CURRENT naming nothing. Newest by the
+    listing's mtime; the folders in `keep` count first. Returns what was removed."""
+    prefix = scene_name(name)[:NAME_CHARS]
+    entries = []
+    for entry in volume.listdir("/"):
+        folder = PurePosixPath(str(entry.path)).name
+        match = _VERSION.match(folder)
+        if match and match["name"] == prefix:
+            entries.append((int(getattr(entry, "mtime", 0) or 0), folder))
+    floor = min((mtime for mtime, folder in entries if folder in (since or ())), default=None)
+    kept = {folder for mtime, folder in entries
+            if folder in keep or (floor is not None and mtime >= floor)}
+    removed = []
+    for _mtime, folder in sorted(entries, reverse=True):
+        if folder in kept:
+            continue
+        if len(kept) < KEEP_VERSIONS:
+            kept.add(folder)
+            continue
+        volume.remove_file(f"/{folder}", recursive=True)
+        removed.append(folder)
+    return removed
+
+
+def served_scene(root: Path, *, strict: bool = False) -> tuple[Path, str] | None:
+    """The scene `CURRENT` names under the mounted Volume (its scene.xml and folder name), or None
+    for the demo room. Works for version folders and for the un-versioned folders of uploads
+    made before versions existed alike.
+
+    A CURRENT that names nothing servable — a folder that is not there (pruned by an overlapping
+    publish), an unreadable file, a name that is not one — is the demo room too, unless `strict`:
+    then only a CURRENT that is absent or says demo is, and anything else raises ValueError. A
+    container starting up has nothing better to serve than the demo; a running one (`VolumeWatch`)
+    does — what its rooms are on — and must not swap every room into the demo over a bad CURRENT.
+    """
     marker = Path(root) / CURRENT
     try:
         name = marker.read_text(encoding="utf-8").strip()
-    except OSError:
+    except FileNotFoundError:
         return None
-    if not _NAME.match(name) or name == DEMO:
+    except (OSError, ValueError) as exc:
+        if strict:
+            raise ValueError(f"CURRENT on the Volume cannot be read: {exc}") from None
+        return None
+    if name == DEMO:
         return None
     scene = Path(root) / name / "scene.xml"
-    return (scene, name) if scene.is_file() else None
+    if _NAME.match(name) and scene.is_file():
+        return scene, name
+    if strict:
+        raise ValueError(f"CURRENT names {name[:80]!r}, which is not a scene on the Volume; "
+                         "still serving what the rooms are on")
+    return None
 
 
-def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None = None):
-    """The room call app the container serves: the Volume's current scene, else the demo room."""
-    import tempfile
+def served_ref(root: Path, *, strict: bool = False):
+    """`served_scene` as a `server.SceneRef`: its id is the folder name; label and stage come from
+    the folder's roomcall.json (an older upload without one: from the folder's name); and the
+    folder is offered as prebuilt geometry, used if it fits (`server.read_prebuilt`)."""
+    from litereality_agent.room_ops.roomcall import STAGES
+    from litereality_agent.room_ops.roomcall.server import SceneRef
 
-    from litereality_agent.room_ops.roomcall.demo import write_demo_scene
-    from litereality_agent.room_ops.roomcall.server import create_app
-
-    current = served_scene(root)
+    current = served_scene(root, strict=strict)
     if current is None:
-        # The container's own disk, not the Volume: the demo is rebuilt on every start, and writing
-        # it to the Volume would race a laptop uploading a real scene.
-        folder = Path(scratch) if scratch else Path(tempfile.mkdtemp(prefix="roomcall-demo-"))
-        return create_app(write_demo_scene(folder), label="demo room", web_dir=web_dir)
+        return None
     scene, name = current
-    return create_app(scene, label=name.replace("_", " ").replace("-", " "), web_dir=web_dir)
+    try:
+        meta = json.loads((scene.parent / "roomcall.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        meta = {}
+    meta = meta if isinstance(meta, dict) else {}
+    match = _VERSION.match(name)
+    fallback = (match["name"] if match else name).replace("_", " ").replace("-", " ")
+    label = meta.get("label") if isinstance(meta.get("label"), str) and meta["label"] else fallback
+    stage = meta.get("stage") if meta.get("stage") in STAGES else "scene"
+    return SceneRef(scene=scene, id=name, label=label[:80], stage=stage, prebuilt=scene.parent)
+
+
+class VolumeWatch:
+    """The hosted app's source of new versions (`server.RoomHub.ensure_watching` polls it).
+
+    Every `poll_seconds`: `reload()` the Volume on a worker thread (a mounted Volume shows only
+    what was committed when the container started, until it is reloaded), then read what CURRENT
+    names now. A reload refused because files are open — a version being read at that very
+    moment — skips the round. CURRENT naming the demo (or absent) serves the demo room again; one
+    naming a folder that is not there raises (`served_scene` strict), so the round is reported on
+    /healthz and every room keeps the version it has.
+    """
+
+    def __init__(self, root: Path, *, reload=None, poll_seconds: float = POLL_SECONDS,
+                 scratch: Path | None = None) -> None:
+        self.root = Path(root)
+        self.reload = reload
+        self.poll_seconds = poll_seconds
+        self._scratch = Path(scratch) if scratch else None
+        self._demo = None
+
+    async def check(self):
+        if self.reload is not None:
+            try:
+                await asyncio.to_thread(self.reload)
+            except RuntimeError as exc:
+                if "open files" in str(exc):
+                    log.info("roomcall: Volume busy (open files); looking again next round")
+                    return None
+                raise
+        ref = await asyncio.to_thread(served_ref, self.root, strict=True)
+        return ref if ref is not None else await asyncio.to_thread(self.demo)
+
+    def demo(self):
+        """The demo room as a version, written once on the container's own disk — never on the
+        Volume, where it would race a laptop uploading a real scene."""
+        if self._demo is None:
+            import tempfile
+
+            from litereality_agent.room_ops.roomcall.demo import write_demo_scene
+            from litereality_agent.room_ops.roomcall.server import SceneRef
+
+            folder = self._scratch or Path(tempfile.mkdtemp(prefix="roomcall-demo-"))
+            folder.mkdir(parents=True, exist_ok=True)
+            scene = write_demo_scene(folder)
+            self._demo = SceneRef(scene=scene, id=version_name("demo room", scene_digest(scene)),
+                                  label="demo room", stage="demo")
+        return self._demo
+
+
+def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None = None,
+              reload=None, poll_seconds: float = POLL_SECONDS, freeze: bool = False):
+    """The room call app the container serves: the Volume's current version, else the demo room,
+    watching the Volume (`VolumeWatch`; `reload` is the Volume's own `reload`) for the next one.
+    `freeze` (the container: the app is the process) exempts startup objects from the garbage
+    collector (`server.freeze_startup_objects`)."""
+    from litereality_agent.room_ops.roomcall.server import create_app, freeze_startup_objects
+
+    watch = VolumeWatch(root, reload=reload, poll_seconds=poll_seconds, scratch=scratch)
+    ref = served_ref(root) or watch.demo()
+    app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
+                     prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch)
+    if freeze:
+        freeze_startup_objects()
+    return app
 
 
 def room_link(url: str) -> str:
@@ -201,40 +442,59 @@ def _modal_credentials(credentials: tuple[str, str] | None, profile: str | None)
 
 
 def deploy(scene_xml: Path | None, *, label: str, repo_root: Path, environment: str = "main",
-           credentials: tuple[str, str] | None = None, profile: str | None = None) -> int:
-    """Upload the scene (or select the demo), deploy the app, print the link to share."""
+           credentials: tuple[str, str] | None = None, profile: str | None = None,
+           stage: str = "scene", redeploy: bool = True) -> int:
+    """Upload the scene as a new version (or select the demo), deploy the app, print the link.
+
+    `redeploy=False` is `--publish`: the version only, no `modal deploy` — seconds instead of
+    minutes, and the running container swaps it into every room without anyone leaving. Building
+    the version's geometry here compiles the scene first: one that does not load locally would
+    not load in the container either, and finding out there means a link that only shows an
+    error.
+    """
     import modal
 
     app_file = Path(repo_root) / DEPLOY_FILE
-    if not app_file.is_file():
+    if redeploy and not app_file.is_file():
         raise SystemExit(f"{DEPLOY_FILE} not found under {repo_root}: deploy from a source checkout")
     name = scene_name(label)
-    if scene_xml is not None:
-        # Compile it here first: a scene that does not load locally will not load in the
-        # container either, and finding out there means a link that only shows an error.
-        from litereality_agent.room_ops.roomcall.sim import load_model
-
-        load_model(Path(scene_xml))
     with _modal_credentials(credentials, profile) as env:
         volume = modal.Volume.from_name(SCENES_VOLUME, environment_name=environment,
                                         create_if_missing=True)
         if scene_xml is not None:
-            print(f"→ Uploading {name} to the Modal Volume {SCENES_VOLUME}")
-            sent = publish(Path(scene_xml), name=name, volume=volume)
-            print(f"  {sent / 1e6:.1f} MB")
+            print(f"→ Building {label} ({stage}) and uploading it to the Modal Volume "
+                  f"{SCENES_VOLUME}")
+            published = publish(Path(scene_xml), name=name, volume=volume, label=label,
+                                stage=stage)
+            print(f"  version {published.version}  {published.sent / 1e6:.1f} MB")
         else:
             print("→ Serving the demo room")
-            publish(None, name=DEMO, volume=volume)
-        print(f"→ Deploying {APP_NAME} ({DEPLOY_FILE})")
-        result = subprocess.run(
-            [sys.executable, "-m", "modal", "deploy", "--env", environment, str(app_file)],
-            env=env, check=False, text=True,
-        )
-        if result.returncode != 0:
-            print("deploying the room call failed; see the Modal output above.", file=sys.stderr)
-            return result.returncode
-        url = modal.Function.from_name(APP_NAME, FUNCTION_NAME,
-                                       environment_name=environment).get_web_url()
+            published = publish(None, name=DEMO, volume=volume)
+        if redeploy:
+            print(f"→ Deploying {APP_NAME} ({DEPLOY_FILE})")
+            result = subprocess.run(
+                [sys.executable, "-m", "modal", "deploy", "--env", environment, str(app_file)],
+                env=env, check=False, text=True,
+            )
+            if result.returncode != 0:
+                print("deploying the room call failed; see the Modal output above.",
+                      file=sys.stderr)
+                return result.returncode
+        try:
+            url = modal.Function.from_name(APP_NAME, FUNCTION_NAME,
+                                           environment_name=environment).get_web_url()
+        except Exception:  # noqa: BLE001 — published, but there is no app to serve it yet
+            if redeploy:
+                raise
+            print(f"\nuploaded {published.version}, but no room call is deployed in "
+                  f"{environment!r} yet: run once with --deploy", file=sys.stderr)
+            return 1
+    if not redeploy:
+        print(f"\nroom call updated  {url}")
+        print(f"  everyone in it switches to {published.version} within ~{POLL_SECONDS:.0f} s "
+              "plus a few to fetch it, without leaving; a link nobody is using picks it up on "
+              "its next start")
+        return 0
     print(f"\nroom call is live  {url}")
     print(f"  paste this in the call chat   {room_link(url)}")
     print("  everyone who opens it lands in the same room; the first visit after a quiet spell "

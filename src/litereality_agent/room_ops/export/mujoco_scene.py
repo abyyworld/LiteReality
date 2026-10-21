@@ -606,6 +606,27 @@ def _convex_parts(mesh, name: str, out_dir: Path, decompose: bool,
     return written or [out_dir / f"{name}_col0.obj"]
 
 
+def _shell_yaw(shell: dict, handle: str) -> float | None:
+    """The yaw (radians) `build_room` fitted this handle with, or None when the SHELL says nothing.
+
+    An object box carries its own `yaw`. An OPENING does not: it is stored as a wall plus an offset
+    along it, and `build_room` lays the door or window along that wall's start->end direction. The
+    lookup used to read `objects` only, so every door and window came back as yaw 0 — right for a
+    wall square to the world and wrong for tea_room's at 31 degrees.
+    """
+    obj = (shell.get("objects") or {}).get(handle) or {}
+    if obj.get("yaw") is not None:
+        return math.radians(float(obj["yaw"]))
+    opening = (shell.get("openings") or {}).get(handle) or {}
+    wall = (shell.get("walls") or {}).get(opening.get("wall") or "")
+    if wall and wall.get("start") and wall.get("end"):
+        dx = float(wall["end"][0]) - float(wall["start"][0])
+        dy = float(wall["end"][1]) - float(wall["start"][1])
+        if abs(dx) + abs(dy) > 1e-9:
+            return math.atan2(dy, dx)
+    return None
+
+
 def _object_physics(room: Path, rec: dict, room_scene, node_names, placed_mesh, yaw, report: dict):
     """The physics the OBJECT states about itself, placed where the room put it — or None.
 
@@ -653,17 +674,37 @@ def _object_physics(room: Path, rec: dict, room_scene, node_names, placed_mesh, 
     except Exception as exc:                            # noqa: BLE001
         report.setdefault("unplaceable", []).append(f"{name}: {exc}")
         return None
+    reference = np.asarray(placed_mesh.bounds, dtype=float)
+    span = float(np.max(reference[1] - reference[0])) or 1.0
+    tolerance = max(0.05, 0.08 * span)
+    residual = None
+    if transform is not None:
+        # A node match pins the transform exactly — unless the room moved that node relative to
+        # the rest of the object. The geometry says which; a bad match falls through to the fit.
+        residual = sim_assets.check_placement(model, transform, placed_mesh)
+        if residual is not None and residual > tolerance:
+            report.setdefault("node_match_rejected", []).append(
+                f"{name}: node-matched placement lands {residual:.3f} m from the placed mesh")
+            transform = None
     if transform is None:
         # NO NODE NAME SURVIVED. An object placed more than once — four chairs from one cluster —
         # has every node renamed for every instance after the first, and a cluster whose own parts
         # already repeat has nothing unique inside its own file either. The placement still has a
-        # known shape, so it is recovered from the geometry and the SHELL's yaw instead. Rejecting
-        # here would have left exactly the objects a room has several of collided by guesswork.
-        transform = sim_assets.placement_from_bbox(model, placed_mesh, yaw)
-        if transform is None:
+        # known shape, so it is recovered from the geometry: the SHELL's yaw and its quarter turns,
+        # plus the placed footprint's own axis, each judged by how well the object then overlays
+        # what the room placed. Rejecting here would have left exactly the objects a room has
+        # several of collided by guesswork; trusting the stated yaw blindly is what made
+        # tea_room's door weigh 129 kg (see `sim_assets.fit_placement`).
+        fit = sim_assets.fit_placement(model, placed_mesh, [yaw])
+        if fit is None:
             report.setdefault("unplaceable", []).append(f"{name}: no node matched the room glb")
             return None
+        transform, residual = fit.transform, fit.residual
         report.setdefault("placed_by_geometry", []).append(name)
+        if yaw is not None and fit.yaw is not None and abs(math.atan2(
+                math.sin(fit.yaw - yaw), math.cos(fit.yaw - yaw))) > 1e-3:
+            report.setdefault("yaw_corrected", []).append(
+                f"{name}: {math.degrees(yaw):.1f} -> {math.degrees(fit.yaw):.1f} deg")
 
     placed = sim_assets.place(model, transform)
     if not placed.links:
@@ -675,12 +716,16 @@ def _object_physics(room: Path, rec: dict, room_scene, node_names, placed_mesh, 
     # holding, so their union has to land on THE PLACED MESH — not on `room_layout.json`'s bbox for
     # the handle, which covers everything grouped under it and is 20 cm larger on a table the
     # author hung nothing on. Comparing against the wrong box rejected a correct placement.
+    # The bounds test alone cannot fail a bounding-box fit (it is built to match them), which is
+    # why the geometric residual above is checked as well.
     world = trimesh.util.concatenate([piece for link in placed.links.values()
                                       for piece in link.colliders])
-    reference = np.asarray(placed_mesh.bounds, dtype=float)
-    span = float(np.max(reference[1] - reference[0])) or 1.0
     error = float(np.abs(np.asarray(world.bounds, dtype=float) - reference).max())
-    if error > max(0.05, 0.08 * span):
+    if residual is not None and np.isfinite(residual) and residual > tolerance:
+        report.setdefault("placement_rejected", []).append(
+            f"{name}: the object lands {residual:.3f} m from the placed mesh")
+        return None
+    if error > tolerance:
         report.setdefault("placement_rejected", []).append(
             f"{name}: colliders land {error:.3f} m from the placed mesh")
         return None
@@ -764,8 +809,12 @@ def _quat_z(yaw: float) -> str:
 
 
 def export(room: Path, out: Path | None = None, *, decompose: bool = True,
-           reuse_meshes: bool = False) -> Path:
-    """Write `<out>/scene.xml` + `meshes/` from an authored room. Returns the xml path."""
+           reuse_meshes: bool = False, separate: bool = True) -> Path:
+    """Write `<out>/scene.xml` + `meshes/` from an authored room. Returns the xml path.
+
+    `separate` slides floor-standing free bodies that start inside something (tucked chairs) out
+    along the floor first; off, the scene keeps the layout's positions exactly.
+    """
     import trimesh
 
     room = Path(room).resolve()
@@ -1108,9 +1157,9 @@ def export(room: Path, out: Path | None = None, *, decompose: bool = True,
 
     # ── objects ──────────────────────────────────────────────────────────────
     obj_dir = preview / "Object"
-    # The yaw `build_room` fitted each asset with. `room_layout.json` records a pose but not this,
-    # and without it an object whose node names did not survive the room build cannot be placed.
-    shell_objects = shell.get("objects") or {}
+    # The yaw `build_room` fitted each asset with (`_shell_yaw`). `room_layout.json` records a pose
+    # but not this, and without it an object whose node names did not survive the room build cannot
+    # be placed.
     for handle, rec in sorted(records.items()):
         category = rec.get("category", "")
         if category in STRUCTURE:
@@ -1123,8 +1172,7 @@ def export(room: Path, out: Path | None = None, *, decompose: bool = True,
         source = rec.get("source_glb")
         placed_mesh = trimesh.util.concatenate([_glb_to_shell(m) for _n, m, _t in pieces])
         physics = _object_physics(room, rec, room_scene, [n for n, _m, _t in pieces], placed_mesh,
-                                  math.radians(float(shell_objects.get(handle, {}).get("yaw", 0.0))),
-                                  stats)
+                                  _shell_yaw(shell, handle), stats)
         joints = {}
         if physics is None and source:
             # No sidecar to read, so fall back to the raw articulation extras: the four numbers a
@@ -1669,6 +1717,23 @@ def export(room: Path, out: Path | None = None, *, decompose: bool = True,
     ET.indent(mujoco, space="  ")
     xml.write_text(ET.tostring(mujoco, encoding="unicode"), encoding="utf-8")
 
+    # START CLEAR (see `_separate_initial_overlaps`): a tucked chair is slid out from under its
+    # table along the floor before the first step, instead of being thrown out of it by the solver.
+    if separate:
+        standing = {h for h, c, s, hanging in placed
+                    if not hanging and float(c[2] - s[2] / 2.0) - floor_z < FLOOR_STANDING_BAND}
+        try:
+            moved = _separate_initial_overlaps(xml, standing)   # needs mujoco, like the check below
+        except Exception as exc:                          # noqa: BLE001 — never fail the export
+            moved = {}
+            stats["separation_error"] = f"{type(exc).__name__}: {exc}"
+        if moved:
+            _apply_moves(world, moved)
+            xml.write_text(ET.tostring(mujoco, encoding="unicode"), encoding="utf-8")
+            stats["separated"] = {name: {"moved_cm": round(float(np.linalg.norm(v)) * 100, 1),
+                                         "by": [round(float(x), 4) for x in v]}
+                                  for name, v in sorted(moved.items())}
+
     # WHAT FRACTION OF THIS SCENE'S PHYSICS THE ASSETS ACTUALLY STATED. Every other number in the
     # report counts what was emitted; this one is the only one that says how much of it was
     # invented here. It has to be computed rather than inferred by a reader subtracting two fields,
@@ -1708,6 +1773,139 @@ def export(room: Path, out: Path | None = None, *, decompose: bool = True,
 
     (out / "export_report.json").write_text(json.dumps(stats, indent=2), encoding="utf-8")
     return xml
+
+
+# ── starting clear ───────────────────────────────────────────────────────────
+#
+# A RoomPlan capture records a tucked chair as a box that overlaps its table's box, and the room
+# fits each asset into its own box, so the two meshes START interlocked. tea_room's Chair1 and
+# Chair3 began 7.4 cm inside Table0. A solver reads that overlap as a compressed spring: the shake's
+# relax lifted the chairs ~19 cm (up is the right way out of a shelf, not out from under a table
+# top) and the settle then threw Chair3 a metre. In a room people grab things in, that is a chair
+# that leaps the moment anyone touches it. So a floor-standing free body that starts inside
+# something is slid out ALONG THE FLOOR, by the least distance that clears it, before anything is
+# simulated — the chair ends up pulled out a few centimetres, standing where it stood.
+
+SEPARATION_TOL = 0.002        # m of penetration that is contact slack, not an overlap
+SEPARATION_MAX = 0.45         # m — further than this is a wrong layout, not a tucked chair
+SEPARATION_STEP = 0.01        # m per line-search step (then bisected)
+SEPARATION_MARGIN = 0.002     # m of clearance left after the move
+FLOOR_STANDING_BAND = 0.06    # m — a bottom this close to the floor stands on it
+
+
+def _separate_initial_overlaps(xml: Path, movable: set[str]) -> dict[str, np.ndarray]:
+    """For each free body in `movable` that starts penetrating anything: the shift that frees it.
+
+    Candidate directions are the contacts' own push (depth-weighted), its horizontal part, the
+    horizontal line from what it is stuck in to its own centre, and turns of that; each is line-
+    searched for the shortest move after which the body touches NOTHING deeper than the tolerance
+    — not the table, not a wall, not another chair. A body no direction can free within
+    `SEPARATION_MAX` is left where it is (and stays in the report's `initial_overlaps`).
+    """
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_path(str(xml))
+    data = mujoco.MjData(model)
+    free: dict[int, int] = {}
+    for b in range(model.nbody):
+        if (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, b) or "") not in movable:
+            continue
+        for j in range(int(model.body_jntadr[b]), int(model.body_jntadr[b] + model.body_jntnum[b])):
+            if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_FREE):
+                free[b] = int(model.jnt_qposadr[j])
+
+    def collide() -> None:
+        mujoco.mj_kinematics(model, data)
+        mujoco.mj_collision(model, data)
+
+    def penetrations(body: int) -> list[tuple[int, float, np.ndarray]]:
+        found = []
+        for i in range(data.ncon):
+            con = data.contact[i]
+            if con.dist >= -SEPARATION_TOL:
+                continue
+            b1, b2 = int(model.geom_bodyid[con.geom1]), int(model.geom_bodyid[con.geom2])
+            if body not in (b1, b2):
+                continue
+            normal = np.asarray(con.frame[:3], dtype=float)        # from geom1 towards geom2
+            found.append((b2 if b1 == body else b1, float(con.dist),
+                          normal if b2 == body else -normal))
+        return found
+
+    def centre_of(body: int) -> np.ndarray:
+        geoms = [g for g in range(int(model.body_geomadr[body]),
+                                  int(model.body_geomadr[body] + model.body_geomnum[body]))
+                 if model.geom_contype[g] or model.geom_conaffinity[g]]
+        if not geoms:
+            return np.asarray(data.xpos[body], dtype=float)
+        return np.mean([data.geom_xpos[g] for g in geoms], axis=0)
+
+    def turned(v: np.ndarray, degrees: float) -> np.ndarray:
+        c, s = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
+        return np.array([c * v[0] - s * v[1], s * v[0] + c * v[1], 0.0])
+
+    moved: dict[str, np.ndarray] = {}
+    collide()
+    for body, adr in sorted(free.items()):
+        stuck = penetrations(body)
+        if not stuck:
+            continue
+        here = np.asarray(data.qpos[adr:adr + 3], dtype=float).copy()
+        push = sum((-dist) * vec for _other, dist, vec in stuck)
+        flat = np.array([push[0], push[1], 0.0])
+        away = [np.array([v[0], v[1], 0.0]) for v in
+                (here - centre_of(other) for other in sorted({o for o, _d, _v in stuck}))]
+        candidates = [push, flat, *away]
+        base = next((v for v in (flat, *away) if np.linalg.norm(v) > 1e-6), None)
+        if base is not None:
+            candidates += [turned(base, a) for a in (45, -45, 90, -90, 180)]
+        directions: list[np.ndarray] = []
+        for vec in candidates:
+            norm = float(np.linalg.norm(vec))
+            if norm < 1e-6:
+                continue
+            unit = vec / norm
+            if all(float(np.dot(unit, seen)) < 0.999 for seen in directions):
+                directions.append(unit)
+
+        def clear_at(direction: np.ndarray, distance: float, _body=body, _adr=adr,
+                     _here=here) -> bool:
+            data.qpos[_adr:_adr + 3] = _here + direction * distance
+            collide()
+            return not penetrations(_body)
+
+        best: tuple[float, np.ndarray] | None = None
+        for direction in directions:
+            distance = SEPARATION_STEP
+            limit = SEPARATION_MAX if best is None else min(SEPARATION_MAX, best[0])
+            while distance <= limit + 1e-9 and not clear_at(direction, distance):
+                distance += SEPARATION_STEP
+            if distance > limit + 1e-9:
+                continue
+            lo, hi = distance - SEPARATION_STEP, distance
+            for _ in range(6):
+                mid = (lo + hi) / 2.0
+                lo, hi = (lo, mid) if clear_at(direction, mid) else (mid, hi)
+            final = hi + SEPARATION_MARGIN
+            if clear_at(direction, final) and (best is None or final < best[0]):
+                best = (final, direction)
+        if best is None:
+            data.qpos[adr:adr + 3] = here
+        else:
+            data.qpos[adr:adr + 3] = here + best[1] * best[0]
+            moved[mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body)] = best[1] * best[0]
+        collide()
+    return moved
+
+
+def _apply_moves(world, moved: dict[str, np.ndarray]) -> None:
+    """Shift the named top-level bodies of `worldbody` — a free body starts where its `pos` says."""
+    for body in world.findall("body"):
+        shift = moved.get(body.get("name") or "")
+        if shift is None:
+            continue
+        pos = np.asarray([float(v) for v in body.get("pos", "0 0 0").split()]) + shift
+        body.set("pos", " ".join(f"{v:.4f}" for v in pos))
 
 
 def _hinge_point(leaf, frame_meshes, spec, local_axis=None, transform=None) -> np.ndarray:
@@ -1804,8 +2002,11 @@ def main(argv=None) -> int:
                     help="keep the meshes already in <out>/meshes and only rebuild scene.xml")
     ap.add_argument("--no-decompose", action="store_true",
                     help="skip convex decomposition (faster, but concave bodies collide as hulls)")
+    ap.add_argument("--no-separate", action="store_true",
+                    help="keep the layout's positions even where a free body starts inside another")
     a = ap.parse_args(argv)
-    xml = export(a.room, a.out, decompose=not a.no_decompose, reuse_meshes=a.reuse_meshes)
+    xml = export(a.room, a.out, decompose=not a.no_decompose, reuse_meshes=a.reuse_meshes,
+                 separate=not a.no_separate)
     print(f"MJCF -> {xml}")
     return 0
 

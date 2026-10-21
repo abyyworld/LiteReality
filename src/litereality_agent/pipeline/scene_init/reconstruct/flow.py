@@ -171,21 +171,39 @@ def run_procedural_for_scan(
     plan["status"] = "ok" if proc.returncode == 0 else f"exit_{proc.returncode}"
     glbs = sorted(p.name for p in config.reconstruct_dir(scan).glob("*/*.glb"))
     plan["generated"] = len(glbs)
-
-    # Physics, while the recipe is still the thing to fix. An object that leaves this stage with
-    # no mass, no inertia and no collider is one the room export has to invent all three for.
-    if not dry_run and glbs:
-        from litereality_agent.models.object_generation.sim.pipeline import compile_directory
-
-        sim = compile_directory(config.reconstruct_dir(scan))
-        plan["sim"] = {k: v for k, v in sim.items() if k != "rows"}
-        print(f"[{label}] physics: {sim['ok']}/{sim['objects']} compiled, "
-              f"{sim['passed']} passed the gate, {sim['failed']} failed, {sim['errors']} errored",
-              flush=True)
-        telemetry.event(f"{label}_physics", scan=scan, **plan["sim"])
-
+    # NO PHYSICS HERE. This used to compile every glb in `reconstruct/` the moment the agent
+    # finished — while the TRELLIS branch was still writing into the same folder, so an object it
+    # delivered late shipped with no physics at all. The reconstruction phase now compiles each
+    # branch's own objects once that branch is done (`compile_physics`), and sweeps up after all.
     telemetry.event(f"{label}_done", scan=scan, status=plan["status"], generated=len(glbs))
     return plan
+
+
+def compile_physics(scan: str, *, names=None, only_stale: bool = False, label: str = "physics"
+                    ) -> dict:
+    """Compile the physics sidecar of `names` (or every object) once their glbs are FINISHED.
+
+    Physics, while the recipe is still the thing to fix: an object that leaves this stage with no
+    mass, no inertia and no collider is one the room export has to invent all three for. Call it
+    only when every builder that writes `names` has returned — that ordering is the whole fix for
+    the race that left tea_room's dishwasher without a sidecar.
+    """
+    from litereality_agent.models.object_generation.sim.pipeline import compile_directory
+
+    recon = config.reconstruct_dir(scan)
+    if not recon.is_dir() or (names is not None and not names):
+        return {"objects": 0, "current": 0, "ok": 0, "passed": 0, "failed": 0, "errors": 0}
+    sim = compile_directory(recon, names=names, only_stale=only_stale)
+    summary = {k: v for k, v in sim.items() if k != "rows"}
+    if sim["objects"] or not only_stale:
+        print(f"[{label}] physics: {sim['ok']}/{sim['objects']} compiled, "
+              f"{sim['passed']} passed the gate, {sim['failed']} failed, {sim['errors']} errored"
+              + (f", {sim['current']} already current" if sim["current"] else ""), flush=True)
+        for row in sim["rows"]:
+            if row["status"] == "error":
+                print(f"[{label}]   ✗ {row['object']}: {row['error']}", flush=True)
+    telemetry.event(f"{label}_physics", scan=scan, **summary)
+    return summary
 
 
 def _trellis_route(scan: str) -> set[str] | None:

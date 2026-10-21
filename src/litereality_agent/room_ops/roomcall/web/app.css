@@ -99,6 +99,10 @@ input[type=text]{font:inherit;font-size:16px;color:var(--text);background:var(--
 .room-chip-text{display:flex;flex-direction:column;line-height:1.2;min-width:0}
 .room-chip-text b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:38vw}
 .room-chip-text small{font-size:12px;color:var(--muted);white-space:nowrap}
+.room-chip-title{display:flex;align-items:center;gap:6px;min-width:0}
+/* "quick preview": this version of the room is a first draft and a better one is on its way */
+.stage-tag{flex:none;font-size:11px;font-weight:600;line-height:1.5;padding:0 7px;border-radius:99px;
+  background:color-mix(in srgb,var(--warn) 18%,transparent);color:color-mix(in srgb,var(--warn) 55%,var(--text))}
 .status-dot{width:10px;height:10px;border-radius:50%;background:var(--warn);flex:none;
   box-shadow:0 0 0 3px color-mix(in srgb,var(--warn) 25%,transparent)}
 .status-dot.ok{background:var(--ok);box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 25%,transparent)}

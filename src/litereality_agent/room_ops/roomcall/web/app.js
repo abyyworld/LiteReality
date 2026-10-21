@@ -148,11 +148,43 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight, false);
 });
 
-/* ------------------------------------------------------------------ the room (scene.json + scene.glb) */
-let manifest = null, manifestText = null, sceneRoot = null, sceneReady = false, loadFrac = 0;
-const bodies = new Map();                          // id -> {node, tp, tq, has, mats}
+/* ------------------------------------------------------------------ the room, one version at a time */
+// The server publishes a room in VERSIONS — a quick box room seconds after a scan, better ones as
+// they are ready — and swaps each room's physics to a new one without anyone leaving. Body ids
+// only mean something within one version, so every "state" frame says which version it is for
+// ("v"), and the page follows in two steps:
+//   loadVersion(job)       fetch scene.json?v= and its glb, parse and prepare it (BVH, per-body
+//                          materials, textures uploaded, shaders compiled) off to the side,
+//                          touching nothing on screen;
+//   installVersion(next)   the swap itself, synchronous, between two frames.
+// A prepared version is installed at the first state frame the server sends for it, so the room
+// changes for everyone at the moment its physics does; a frame for a version not on screen yet
+// is kept (the latest one) and applied, snapping, when that version goes in. Only one load runs
+// at a time, for where the server said the room is going ("scene") or else where it is (the
+// frames): a newer target abandons an older load, so a burst of versions costs one download.
+let sceneRoot = null, sceneReady = false, loadFrac = 0;
+let bodies = new Map();                            // id -> {id, name, node, tp, tq, has, mats}, on screen
+let shown = null;                                  // the version on screen: {v, manifest, root, bodies, byName}
 const bounds = { minX: -5, maxX: 5, minZ: -5, maxZ: 5 };   // three-space walk limits
 let eyeY = EYE;
+
+const ver = {
+  room: undefined,      // the version the room's physics is on: welcome.v, then each frame's v
+  next: undefined,      // where a "scene" message said it is going, until it gets there
+  nextAt: 0,
+  job: null,            // the one load in flight: {v, ctrl, stage, progress, fetched, prep}
+  frame: null,          // the latest state frame for a version not on screen
+  gone: new Set(),      // versions the server answered 404 for (until it names them again)
+  fails: 0, failedV: undefined, retryAt: 0,
+};
+// A version the server announced but the room has not reached by then failed there (the server
+// keeps the old one): stop waiting for it and follow the frames.
+const NEXT_TIMEOUT_MS = 20000;
+const MAX_LOAD_FAILS = 3;
+// Phones: hold the new room's bytes only, and free the old room's GPU memory before parsing it.
+const LOW_MEMORY = matchMedia('(pointer: coarse)').matches || (navigator.deviceMemory || 8) <= 4;
+const STAGE_TAGS = { quick: 'quick preview', objects: 'preview' };
+const versionOf = (m) => (typeof m?.v === 'string' && m.v ? m.v : undefined);
 
 function setLoad(frac, text) {
   loadFrac = clamp(frac, 0, 1);
@@ -162,37 +194,85 @@ function setLoad(frac, text) {
   if (text) $('loadText').textContent = text;
 }
 
-async function loadRoom() {
-  setLoad(0.02, 'Fetching the room…');
-  const res = await fetch('scene.json', { cache: 'no-store' });
-  if (!res.ok) throw new Error('scene.json: HTTP ' + res.status);
-  manifestText = await res.text();
-  manifest = JSON.parse(manifestText);
-  const label = String(manifest.label || 'Room');
-  $('sceneLabel').textContent = label;
-  $('hudLabel').textContent = label;
-  document.title = label + ' · Room call';
-  placeSpawn();
+/** A task boundary, so a long preparation lets frames through. A hidden tab renders nothing and
+ *  has its timers throttled to ~1 Hz, so there it just keeps going. */
+const breathe = () => (document.hidden ? Promise.resolve() : new Promise((r) => setTimeout(r, 0)));
 
-  const gltf = await new GLTFLoader().loadAsync(manifest.glb || 'scene.glb', (ev) => {
-    if (ev.total) setLoad(0.05 + 0.9 * ev.loaded / ev.total, `Loading the room… ${(ev.loaded / 1e6).toFixed(1)} MB`);
-    else setLoad(Math.min(0.9, loadFrac + 0.01), `Loading the room… ${(ev.loaded / 1e6).toFixed(1)} MB`);
+function httpError(what, status) {
+  const err = new Error(`${what}: HTTP ${status}`);
+  err.gone = status === 404;
+  return err;
+}
+
+/** The whole body, with progress; aborted by `signal`. */
+async function fetchBytes(url, signal, onProgress) {
+  const res = await fetch(url, { signal });        // ?h= glbs are immutable: a repeat comes from cache
+  if (!res.ok) throw httpError('scene.glb', res.status);
+  const total = Number(res.headers.get('Content-Length')) || 0;
+  if (!res.body?.getReader) return res.arrayBuffer();
+  const reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    onProgress(got, total);
+  }
+  const out = new Uint8Array(got);
+  let at = 0;
+  for (const p of parts) { out.set(p, at); at += p.length; }
+  return out.buffer;
+}
+
+/** Everything a load must check after each await: is it still the load we want? */
+const current = (job) => ver.job === job;
+
+function jobProgress(job, frac, text) {
+  job.progress = clamp(frac, 0, 1);
+  if (!shown) setLoad(frac, text);                // the first room: the join card shows it
+}
+
+/** Step 1 of a load: the manifest and the glb bytes. `job.v` null means "whatever is live" —
+ *  the page's first load, before any welcome says which version the room is on. */
+async function fetchVersion(job) {
+  jobProgress(job, 0.02, 'Fetching the room…');
+  const url = job.v == null ? 'scene.json' : 'scene.json?v=' + encodeURIComponent(job.v);
+  const res = await fetch(url, { cache: 'no-cache', signal: job.ctrl.signal });
+  if (!res.ok) throw httpError('scene.json', res.status);
+  const man = await res.json();
+  if (!man || typeof man !== 'object') throw new Error('scene.json: not a manifest');
+  if (job.v === null && versionOf(man)) {
+    job.v = versionOf(man);                       // now it is a load of that version, and is
+    reconsider();                                 // abandoned here if the room wants another
+    if (!current(job)) return null;
+  }
+  const buf = await fetchBytes(man.glb || 'scene.glb', job.ctrl.signal, (got, total) => {
+    const mb = `Loading the room… ${(got / 1e6).toFixed(1)} MB`;
+    jobProgress(job, total ? 0.05 + 0.85 * got / total : Math.min(0.85, job.progress + 0.01), mb);
   });
-  sceneRoot = gltf.scene;
-  sceneRoot.traverse((o) => {
-    if (!o.isMesh) return;
+  return { v: versionOf(man) ?? job.v ?? undefined, manifest: man, buf };
+}
+
+/** Step 2: parse and prepare, all off screen. Returns null (having freed what it built) if the
+ *  load was abandoned meanwhile. */
+async function loadVersion(job, f) {
+  jobProgress(job, 0.9, 'Preparing the room…');
+  const gltf = await new GLTFLoader().parseAsync(f.buf, '');
+  const root = gltf.scene;
+  if (!current(job)) { disposeTree(root); return null; }
+  const meshes = [];
+  root.traverse((o) => { if (o.isMesh) meshes.push(o); });
+  for (const o of meshes) {
     for (const m of [].concat(o.material)) {
       // MuJoCo has no PBR metal workflow worth trusting; a stray metalness of 1 renders black.
       if (m && 'metalness' in m && !m.metalnessMap) m.metalness = Math.min(m.metalness, 0.2);
     }
-    // Built once, in the mesh's own frame, so it stays valid while bodies move. A geometry the
-    // BVH cannot take keeps the plain (slow but correct) raycast.
-    try { if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); } catch (err) { console.warn('bvh', o.name, err); }
-  });
-  for (const b of manifest.bodies || []) {
-    const node = sceneRoot.getObjectByName(b.node || `body_${b.id}`);
-    if (!node) continue;
-    const rec = { id: b.id, name: b.name, node, tp: node.position.clone(), tq: node.quaternion.clone(), has: false, mats: [] };
+  }
+  const recs = new Map(), byName = new Map();
+  for (const b of f.manifest.bodies || []) {
+    const node = root.getObjectByName(b.node || `body_${b.id}`);
+    if (!node || !Number.isInteger(b.id)) continue;
+    const rec = { id: b.id, name: String(b.name ?? ''), node, tp: node.position.clone(), tq: node.quaternion.clone(), has: false, mats: [] };
     node.traverse((o) => {
       if (!o.isMesh) return;
       // Per-body material copies so a hover highlight never bleeds onto another object.
@@ -200,17 +280,203 @@ async function loadRoom() {
       for (const m of [].concat(o.material)) if (m.emissive) { m.userData.emissive0 = m.emissive.clone(); rec.mats.push(m); }
       o.userData.bodyId = b.id;
     });
-    bodies.set(b.id, rec);
+    recs.set(b.id, rec);
+    if (rec.name) byName.set(rec.name, b.id);
   }
-  world.add(sceneRoot);
-  sceneReady = true;
-  setLoad(1, `${bodies.size} object${bodies.size === 1 ? '' : 's'} you can move`);
-  $('loadProgress').classList.add('done');
+  // Bounds trees, a few meshes per task: a scanned room's static shell alone can be a million
+  // triangles. Built in each mesh's own frame, so they stay valid while bodies move; a geometry
+  // the BVH cannot take keeps the plain (slow but correct) raycast.
+  let t0 = performance.now();
+  for (const o of meshes) {
+    try { if (!o.geometry.boundsTree) o.geometry.computeBoundsTree(); } catch (err) { console.warn('bvh', o.name, err); }
+    if (performance.now() - t0 > 12) {
+      await breathe();
+      if (!current(job)) { disposeTree(root); return null; }
+      t0 = performance.now();
+    }
+  }
+  // Textures uploaded and shaders compiled now, so the swap's first frame has nothing to do.
+  for (const t of texturesOf(root)) {
+    try { renderer.initTexture(t); } catch (err) { console.warn('texture upload', err); }
+    await breathe();
+    if (!current(job)) { disposeTree(root); return null; }
+  }
+  try {
+    // Without the parallel-compile extension compileAsync gains nothing (and its probe warns).
+    if (renderer.extensions.has('KHR_parallel_shader_compile')) await renderer.compileAsync(root, camera, scene);
+    else renderer.compile(root, camera, scene);
+  } catch (err) { console.warn('compile', err); }
+  if (!current(job)) { disposeTree(root); return null; }
+  return { v: f.v, manifest: f.manifest, root, bodies: recs, byName };
 }
 
-/** Walk limits and the spawn point, both from the manifest (MuJoCo frame) into three space. */
-function placeSpawn() {
-  const bmin = manifest.bounds?.min, bmax = manifest.bounds?.max;
+function texturesOf(root) {
+  const out = new Set();
+  root.traverse((o) => {
+    for (const m of [].concat(o.material || [])) for (const v of Object.values(m)) if (v?.isTexture) out.add(v);
+  });
+  return out;
+}
+
+/** Free a room's GPU and CPU copies: geometry (and its bounds tree), materials, textures. */
+function disposeTree(root) {
+  const textures = texturesOf(root), materials = new Set();
+  root.traverse((o) => {
+    if (o.geometry) { o.geometry.disposeBoundsTree?.(); o.geometry.dispose(); }
+    for (const m of [].concat(o.material || [])) materials.add(m);
+  });
+  for (const m of materials) m.dispose();
+  for (const t of textures) { t.dispose(); t.source?.data?.close?.(); }   // ImageBitmaps hold memory until closed
+}
+
+/** Where the loads should be heading, and start / abandon one to match. Cheap and idempotent:
+ *  called on every welcome, scene message and state frame, and when a load ends. */
+function reconsider() {
+  const now = performance.now();
+  if (ver.next !== undefined && (ver.next === ver.room || ver.gone.has(ver.next) || now - ver.nextAt > NEXT_TIMEOUT_MS)) ver.next = undefined;
+  let target = ver.next !== undefined ? ver.next : ver.room;
+  if (target !== undefined && ver.gone.has(target)) target = undefined;
+  if (!shown?.root && target === undefined) target = null;   // nothing on screen: take what is live
+  if (shown?.root && target === shown.v) target = undefined;
+  if (target === undefined) {                    // what we show is where the room is (or is going)
+    if (ver.job && ver.job.stage !== 'swapping') abandonJob();
+    return;
+  }
+  // On its way. A first load (v null: "whatever is live") is most likely the very version the
+  // welcome then names, so it counts as on its way to any target until its manifest says which
+  // version it is (`fetchVersion`) — a welcome mid-download must not restart the download; and
+  // with nothing on screen and nothing known yet (target null), any load will do.
+  if (ver.job && (ver.job.v === target || ver.job.v === null || target === null)) return;
+  abandonJob();
+  if (target === ver.failedV && now < ver.retryAt) return;   // backing off; a timer comes back
+  startJob(target);
+}
+
+function abandonJob() {
+  const job = ver.job;
+  if (!job) return;
+  ver.job = null;
+  job.ctrl.abort();
+  if (job.prep) disposeTree(job.prep.root);
+}
+
+function startJob(v) {
+  const job = { v, ctrl: new AbortController(), stage: 'fetch', progress: 0, fetched: null, prep: null };
+  ver.job = job;
+  runJob(job);
+}
+
+async function runJob(job) {
+  try {
+    job.fetched = await fetchVersion(job);
+    if (!current(job)) return;
+    if (!(LOW_MEMORY && shown?.root)) {
+      job.prep = await loadVersion(job, job.fetched);
+      if (!job.prep || !current(job)) return;
+      job.fetched = null;
+    }
+    job.stage = 'ready';
+    ver.fails = 0; ver.failedV = undefined;
+    maybeInstall();
+  } catch (err) {
+    if (!current(job)) return;                     // abandoned: the abort is expected
+    ver.job = null;
+    if (job.prep) disposeTree(job.prep.root);
+    loadFailed(job, err);
+  }
+}
+
+function loadFailed(job, err) {
+  if (err?.gone && job.v != null) {
+    // The server does not have that version (pruned, or it restarted with another scene): wait
+    // for it to name the next one rather than retrying this one.
+    console.warn('room version not on the server:', job.v);
+    ver.gone.add(job.v);
+    reconsider();
+    return;
+  }
+  console.warn('room load failed', err);
+  ver.fails++; ver.failedV = job.v;
+  const wait = Math.min(30000, 1000 * 2 ** (ver.fails - 1));
+  ver.retryAt = performance.now() + wait;
+  if (!shown?.root) {
+    setLoad(0, 'Could not load the room: ' + (err?.message || err));
+    if (ver.fails === 1) toast('Could not load the room. Is the server still running?', 'error');
+  }
+  // In the room and still failing: a fresh page is the last resort, never a loop — a page that
+  // cannot load at all stops at its join screen, not in a room.
+  if (ver.fails >= MAX_LOAD_FAILS && welcomed) { location.reload(); return; }
+  setTimeout(reconsider, wait + 20);
+}
+
+/** A prepared (or, on a phone, fetched) version goes in when nothing is on screen yet, or at the
+ *  first frame the room sends for it. */
+function maybeInstall() {
+  const job = ver.job;
+  if (!job || job.stage !== 'ready') return;
+  const v = (job.prep || job.fetched).v;
+  if (shown?.root && v !== ver.room) return;
+  if (job.prep) { ver.job = null; installVersion(job.prep); reconsider(); return; }
+  swapLowMemory(job);
+}
+
+/** Phones: free the old room first, then parse the new one. The room is empty for the parse
+ *  (people and grab lines stay); the old version's names stay for remapping the grab. */
+async function swapLowMemory(job) {
+  job.stage = 'swapping';
+  setHover(null);
+  if (shown?.root) { world.remove(shown.root); disposeTree(shown.root); shown.root = null; }
+  sceneRoot = null; sceneReady = false;
+  try {
+    const prep = await loadVersion(job, job.fetched);
+    if (!prep || !current(job)) return;
+    ver.job = null;
+    installVersion(prep);
+    reconsider();
+  } catch (err) {
+    if (!current(job)) return;
+    ver.job = null;
+    loadFailed(job, err);
+  }
+}
+
+/** The swap: synchronous, so no frame ever sees half of it. The person stays where they stand
+ *  (only clamped into the new walls); what they hold stays held if the new version has a movable
+ *  body of that name; the newest frame for this version is applied at once, snapping. */
+function installVersion(next) {
+  const old = shown, first = !old;
+  setHover(null);
+  if (grab) {
+    const name = old?.bodies.get(grab.body)?.name;
+    const id = name ? next.byName.get(name) : undefined;
+    if (id === undefined) endGrab(true);          // gone, or no longer movable: let go
+    else grab.body = id;                          // the server carries the grab by name too
+  }
+  if (old?.root) { world.remove(old.root); disposeTree(old.root); }
+  world.add(next.root);
+  shown = next; bodies = next.bodies; sceneRoot = next.root;
+  sceneReady = true;
+  applyManifest(next.manifest, first);
+  if (grab) setHighlight(grab.body, true);
+  const f = ver.frame;
+  ver.frame = null;
+  if (f && versionOf(f) === next.v) applyBodies(f);
+  setLoad(1, `${bodies.size} object${bodies.size === 1 ? '' : 's'} you can move`);
+  $('loadProgress').classList.add('done');
+  if (!first) toast('The room was updated');
+}
+
+/** Label, stage, walk limits and eye height from a version's manifest. The spawn point only for
+ *  the first room: later versions of the same room keep everyone where they are. */
+function applyManifest(man, first) {
+  const label = String(man.label || 'Room');
+  $('sceneLabel').textContent = label;
+  $('hudLabel').textContent = label;
+  document.title = label + ' · Room call';
+  const tag = STAGE_TAGS[man.stage] || '';
+  $('hudStage').textContent = tag;
+  $('hudStage').hidden = !tag;
+  const bmin = man.bounds?.min, bmax = man.bounds?.max;
   if (finite(bmin) && finite(bmax)) {
     const m = 0.25;
     const cx = (bmin[0] + bmax[0]) / 2, cy = (bmin[1] + bmax[1]) / 2;
@@ -218,9 +484,14 @@ function placeSpawn() {
     bounds.minX = cx - hx; bounds.maxX = cx + hx;
     bounds.minZ = -(cy + hy); bounds.maxZ = -(cy - hy);   // three z = -mj y
   }
-  const floor = Number.isFinite(manifest.floor_z) ? manifest.floor_z : 0;
-  eyeY = floor + EYE;
-  const sp = finite(manifest.spawn) ? manifest.spawn : [0, 0, eyeY];
+  eyeY = (Number.isFinite(man.floor_z) ? man.floor_z : 0) + EYE;
+  if (first) placeSpawn(man); else clampWalker();
+}
+
+/** The spawn point from the manifest (MuJoCo frame) into three space. */
+function placeSpawn(man) {
+  const bmin = man.bounds?.min, bmax = man.bounds?.max;
+  const sp = finite(man.spawn) ? man.spawn : [0, 0, eyeY];
   // A small random offset so people who join together do not stand inside one another.
   const a = Math.random() * Math.PI * 2, r = Math.random() * 0.45;
   mjToThree(sp[0] + Math.cos(a) * r, sp[1] + Math.sin(a) * r, eyeY, walker.pos);
@@ -303,11 +574,16 @@ function setNdc(x, y) {
   raycaster.setFromCamera(ndc, camera);
 }
 
+/** Whether the frames coming in are for the version on screen. While they are not (the room has
+ *  moved on and its new version is still loading here), body ids on screen mean nothing to the
+ *  server, so nothing new can be grabbed. */
+const inStep = () => ver.room === shown?.v;
+
 /** The movable body under the screen point, or null. Static geometry in front blocks it, so you
  *  cannot grab (or see the grab cursor on) something through a wall. Cheap enough for hover too
  *  thanks to the BVH. */
 function pick(x, y) {
-  if (!sceneReady) return null;
+  if (!sceneReady || !inStep()) return null;
   setNdc(x, y);
   const h = raycaster.intersectObject(sceneRoot, true).find((i) => i.object.isMesh && i.object.visible);
   if (!h || h.object.userData.bodyId === undefined) return null;
@@ -325,7 +601,7 @@ function setHover(id) {
 function startGrab(hit, pointerId, x, y) {
   grab = { body: hit.body, dist: clamp(hit.distance, HOLD_MIN, HOLD_MAX), pointerId, x, y, since: performance.now() };
   setHighlight(hit.body, true);
-  send({ t: 'grab', body: hit.body, point: threeToMj(hit.point) });
+  send({ t: 'grab', v: shown?.v, body: hit.body, point: threeToMj(hit.point) });   // the server ignores another version's ids
   lastMoveTarget = null;
   canvas.classList.add('grabbing');
   canvas.classList.remove('can-grab');
@@ -599,22 +875,16 @@ function stepAvatars(dt) {
 /* ------------------------------------------------------------------ state stream */
 let lastStateAt = 0;
 
+/** People and grab lines are in world coordinates and always drawn; body poses only from frames
+ *  for the version on screen (anything else is kept for when that version goes in). */
 function onState(m) {
   lastStateAt = performance.now();
-  for (const row of m.bodies || []) {
-    if (!finite(row) || row.length < 8) continue;
-    const b = bodies.get(row[0]);
-    if (!b) continue;
-    b.tp.set(row[1], row[2], row[3]);
-    b.tq.set(row[5], row[6], row[7], row[4]).normalize();   // MuJoCo w,x,y,z -> three x,y,z,w
-    if (!b.has) { b.node.position.copy(b.tp); b.node.quaternion.copy(b.tq); b.has = true; }
-  }
+  const fv = versionOf(m);
+  if (fv !== ver.room) { ver.room = fv; if (fv === ver.next) ver.next = undefined; }
+  if (shown?.root && fv === shown.v) { ver.frame = null; applyBodies(m); }
+  else { ver.frame = m; reconsider(); maybeInstall(); }
+  if (ver.next !== undefined) reconsider();       // times out a version the room never reaches
   drawGrabs(m.grabs);
-  if (grab && Array.isArray(m.grabs) && !m.grabs.some((g) => g[0] === me.id) && performance.now() - grab.since > 2000) {
-    // The server dropped it (reset, bad body…) or never got it. Still send the release: if the
-    // grab is only late, it must not be applied after we stopped steering it and float forever.
-    endGrab(true);
-  }
   for (const [pid, v] of Object.entries(m.avatars || {})) {
     if (pid === me.id || !finite(v) || v.length < 5) continue;
     const peer = peers.get(pid);
@@ -623,6 +893,23 @@ function onState(m) {
     mjToThree(v[0], v[1], v[2], av.tp);
     av.tyaw = v[3]; av.tpitch = v[4];
     if (!av.has) { av.root.position.copy(av.tp); av.yaw = av.tyaw; av.pitch = av.tpitch; av.has = true; av.root.visible = true; }
+  }
+}
+
+function applyBodies(m) {
+  for (const row of m.bodies || []) {
+    if (!finite(row) || row.length < 8) continue;
+    const b = bodies.get(row[0]);
+    if (!b) continue;
+    b.tp.set(row[1], row[2], row[3]);
+    b.tq.set(row[5], row[6], row[7], row[4]).normalize();   // MuJoCo w,x,y,z -> three x,y,z,w
+    if (!b.has) { b.node.position.copy(b.tp); b.node.quaternion.copy(b.tq); b.has = true; }
+  }
+  if (grab && Array.isArray(m.grabs) && !m.grabs.some((g) => g[0] === me.id) && performance.now() - grab.since > 2000) {
+    // The server dropped it (reset, bad body, a swap to a version where it is not movable…) or
+    // never got it (a grab for the version it had just left). Still send the release: if the
+    // grab is only late, it must not be applied after we stopped steering it and float forever.
+    endGrab(true);
   }
 }
 
@@ -893,8 +1180,11 @@ function setStatus(kind, text) {
  *  that has gone quiet (the server is up but its physics loop is not answering). */
 function liveStatus(now) {
   if (!me.id) return;
-  if (!sceneReady) setStatus('wait', `connected · loading room ${Math.round(loadFrac * 100)}%`);
+  const pct = Math.round((ver.job && shown ? ver.job.progress : loadFrac) * 100);
+  if (!sceneReady) setStatus('wait', `connected · loading room ${pct}%`);
   else if (lastStateAt && now - lastStateAt > 3000) setStatus('wait', 'waiting for the room…');
+  else if (!inStep()) setStatus('wait', 'switching to the new room…');
+  else if (ver.job) setStatus('ok', ver.job.stage === 'fetch' ? `connected · new room ${pct}%` : 'connected · new room ready');
   else setStatus('ok', 'connected');
 }
 
@@ -939,16 +1229,6 @@ function socketLost(sock) {
   retryTimer = setTimeout(connect, delay);
 }
 
-/** After a reconnect the server may be a new process serving another scene: if its manifest is
- *  not the one we drew, start over rather than apply its state to the wrong room. */
-async function reloadIfSceneChanged() {
-  if (manifestText === null) return;
-  try {
-    const res = await fetch('scene.json', { cache: 'no-store' });
-    if (res.ok && (await res.text()) !== manifestText) location.reload();
-  } catch { /* unreachable again: the next welcome checks once more */ }
-}
-
 addEventListener('online', () => { if (wantOnline && !ws) { attempts = 0; connect(); } });
 
 function handle(m) {
@@ -961,7 +1241,11 @@ function handle(m) {
       $('hudRoom').textContent = roomId;
       attempts = 0;
       lastStateAt = performance.now();             // the dead-socket watchdog counts from here
-      if (welcomed) reloadIfSceneChanged();
+      // The version the room is on right now. After a reconnect that may be another one (the
+      // server restarted with a new scene, or swapped while we were away): it is loaded and
+      // swapped in like any other, no page reload.
+      const v = versionOf(m);
+      if (v !== undefined) { ver.gone.delete(v); ver.room = v; ver.frame = null; reconsider(); }
       clearPeers();
       for (const p of m.peers || []) {
         const peer = addPeer(p);
@@ -983,6 +1267,18 @@ function handle(m) {
       break;
     }
     case 'state': onState(m); break;
+    case 'scene': {
+      // A new version of the room: fetch it now; the room switches to it a few seconds later, at
+      // the first state frame that carries it (or already has, if the server did not wait). The
+      // version the room is already on means the opposite: whatever was pending is withdrawn.
+      const v = versionOf(m);
+      if (!v) break;
+      ver.gone.delete(v);
+      ver.next = v === ver.room ? undefined : v;
+      ver.nextAt = performance.now();
+      reconsider();
+      break;
+    }
     case 'media': {
       const peer = peers.get(m.id);
       if (!peer) break;
@@ -1206,11 +1502,7 @@ function frame() {
   // Join waits for the room id: inside Zoom it comes from the meeting, which takes a moment. The
   // room download does not wait for Zoom.
   $('joinBtn').disabled = true; $('joinBtn').textContent = 'Starting…';
-  const room = loadRoom().catch((err) => {
-    console.error(err);
-    setLoad(0, 'Could not load the room: ' + (err?.message || err));
-    toast('Could not load the room. Is the server still running?', 'error');
-  });
+  reconsider();                                    // nothing on screen: load whatever is live
   syncMediaButtons();
   stepWalker(0);
   renderer.setAnimationLoop(frame);
@@ -1223,5 +1515,4 @@ function frame() {
   syncMediaButtons();
   booted = true;
   $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join the room';
-  await room;
 })();
