@@ -82,6 +82,54 @@ passes, a fast preview and then a full-quality final, and each new version swaps
 - **Offline test:** `--fake` uses a stand-in generator (textured boxes), so the whole flow can be
   tried without Modal.
 
+### Opening cabinets, doors and drawers (Infinigen)
+
+```bash
+uv run litereality roomcall my_room --realistic --articulated      # add --drawers Storage3 for a chest
+```
+
+With `--articulated`, every door, window, cabinet, dishwasher, fridge and oven becomes an
+[Infinigen](https://github.com/princeton-vl/infinigen) asset (BSD-3) sized to its scanned box, with
+working hinges and slides. It runs on the CPU:
+- **Time:** about 8–45 s per asset; tea_room's 7 assets take 83 s with 3 workers, and a cached
+  rebuild about 10 s.
+- **Physics:** masses come from our density table and joint settings from our defaults, so a hand
+  can open them. Colours are tinted from the scan photos.
+- **Where it runs:** locally with `LR_INFINIGEN_PYTHON` exported to an Infinigen env's python (setup
+  in `deploy/modal/infinigen/README.md`), or on Modal after
+  `uv run modal deploy --env main deploy/modal/infinigen/app.py`. The Modal path has not been run yet.
+- **Gaps:** no counter, sink or corner units; no mixed door-and-drawer unit; at most 2 cabinet doors;
+  fridges have one door.
+
+An asset Infinigen fails on is handed back to TRELLIS.
+
+## You as a hologram
+
+With the camera on, everyone else sees you as a life-size cut-out of your real webcam video, standing
+at your place in the room and turned to face them, instead of a video square.
+
+- **On your own device:** your browser cuts you out of your background with MediaPipe's selfie
+  segmenter (0.10.35, Apache-2.0). The model is served by the room call itself; nothing goes to
+  Google. Newer MediaPipe versions send usage statistics, which is why 0.10.35 is pinned.
+- **What's sent:** the colour image and the cut-out mask, side by side in one 640×240 video. The
+  mask survives video compression, and the stream costs about as much bandwidth as the plain webcam
+  (~0.8 Mbit/s per person).
+- **Toggle:** the **Hologram** button turns it off and on; the corner shows your own cut-out.
+- **When it falls back to the plain webcam on the face plane:**
+  - while the model loads;
+  - when it can't load (blocked CDN, no WebAssembly or WebGL);
+  - on a device too slow for it (after 8 s; click Hologram to retry);
+  - when nobody is in frame;
+  - while the tab is in the background.
+
+Limits:
+- It's flat video. Room lights don't affect it, it casts no shadow, and you never see someone's side
+  or back.
+- Arms at the frame edge are cut off.
+- The first cut-out freezes the page for about half a second while the segmenter starts.
+- Full 3D photoreal people would need something like LAM (a one-shot animatable 3D head, SIGGRAPH
+  2025, Apache-2.0). That isn't built.
+
 ## Switching rooms live, mid-call
 
 Every publish is a new **version** of the same link. People in the room are never disconnected:
@@ -177,7 +225,10 @@ The server already sends the headers Zoom Apps require:
 - `Strict-Transport-Security`
 - `X-Content-Type-Options`
 - `Referrer-Policy`
-- a `Content-Security-Policy` that allows only the page's own import map, three.js and the Zoom SDK
+- a `Content-Security-Policy` that allows only these: the page's own import map, three.js, the Zoom SDK,
+  and the pinned MediaPipe runtime. All three come from jsDelivr or Zoom, which are already on the
+  domain allow list. It also allows WebAssembly (`'wasm-unsafe-eval'`) for the hologram's segmenter;
+  JavaScript `eval` stays blocked.
 
 Inside Zoom the microphone option is off, because Zoom carries the audio. The webcam on your avatar
 may be unavailable while Zoom itself is using the camera.

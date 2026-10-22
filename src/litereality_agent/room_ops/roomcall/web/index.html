@@ -53,7 +53,8 @@
     <label class="check">
       <input id="camInput" type="checkbox" checked>
       <span><b>Show my webcam on my avatar</b>
-        <small class="muted">Others see your camera on your avatar's face.</small></span>
+        <small class="muted">Others see you life-size, cut out of your background on this device
+          (Hologram in the toolbar switches back to plain video).</small></span>
     </label>
 
     <label class="check" id="micRow">
@@ -86,6 +87,8 @@
     <div class="toolbar" role="toolbar" aria-label="Room controls">
       <button class="btn tool" id="camBtn" type="button" aria-pressed="false" title="Camera on your avatar">
         <span class="tool-ico ico-cam" aria-hidden="true"></span><span class="tool-txt">Camera</span></button>
+      <button class="btn tool" id="holoBtn" type="button" aria-pressed="true" title="Hologram: you, cut out of your background">
+        <span class="tool-ico ico-holo" aria-hidden="true"></span><span class="tool-txt">Hologram</span></button>
       <button class="btn tool" id="micBtn" type="button" aria-pressed="false" title="Send your microphone">
         <span class="tool-ico ico-mic" aria-hidden="true"></span><span class="tool-txt">Mic</span></button>
       <button class="btn tool" id="inviteBtn" type="button" title="Copy a link to paste in the call chat">
@@ -114,6 +117,8 @@
       <dt>Reach</dt><dd>Mouse wheel pulls or pushes what you hold</dd>
       <dt>Throw</dt><dd>Let go while moving it</dd>
       <dt>Phone</dt><dd>Drag to look · press and hold an object to grab · stick or two fingers to walk</dd>
+      <dt>Hologram</dt><dd>With your camera on, others see you life-size, cut out of your background on
+        your own device · <b>Hologram</b> switches to plain video</dd>
     </dl>
     <p class="muted small">Voice comes from your Zoom, Meet or Teams call. Changes here are virtual
       only — nothing in the real room moves.</p>
@@ -129,6 +134,7 @@
 
   <div id="joystick" class="joystick" hidden aria-hidden="true"><div class="joystick-knob" id="joyKnob"></div></div>
   <video id="selfView" class="self-view" muted playsinline autoplay hidden></video>
+  <canvas id="selfHolo" class="self-view self-holo" hidden aria-label="You, as the others see you"></canvas>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>

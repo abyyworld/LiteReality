@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>litereality evaluate — render</title>
+<!-- The room call's own import map (room_ops/roomcall/web/index.html): the same three.js release,
+     so this page draws a room exactly as the call does. Tests and offline runs route these URLs
+     to local copies; see fidelity.PlaywrightRenderer. -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+}}</script>
+<style>html, body { margin: 0; background: transparent; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<script type="module">
+// One job: load the room's glb, then draw it from each camera it is given and hand back PNGs.
+// Everything that decides how the room LOOKS is copied from the room call's client (app.js):
+// sRGB output, neutral tone mapping, the RoomEnvironment light probe at 0.04 blur, a hemisphere
+// light and a sun, metalness clamped to 0.2, and the room under a group turned -90 deg about X
+// (MuJoCo's Z up onto three's Y up). Cameras arrive as matrices already in three's frame, so this
+// page does no pose maths of its own — fidelity.three_camera is the one place that does it.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true,
+                                           preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.setClearColor(0x000000, 0);   // transparent: Python composites the call's background
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8d8a84, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+sun.position.set(3, 8, 2);
+scene.add(sun);
+const world = new THREE.Group();
+world.rotation.x = -Math.PI / 2;
+scene.add(world);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+camera.matrixAutoUpdate = false;
+scene.add(camera);
+
+let loaded = null;
+
+async function load(url) {
+  if (loaded && loaded.url === url) return;
+  const gltf = await new GLTFLoader().loadAsync(url);
+  gltf.scene.traverse((o) => {
+    if (!o.isMesh) return;
+    for (const m of [].concat(o.material)) {
+      if (m && 'metalness' in m && !m.metalnessMap) m.metalness = Math.min(m.metalness, 0.2);
+    }
+  });
+  if (loaded) world.remove(loaded.root);
+  world.add(gltf.scene);
+  loaded = { url, root: gltf.scene };
+}
+
+function place(view) {
+  // matrixWorld: camera -> three world, column-major; projection: from the intrinsics.
+  camera.matrix.fromArray(view.matrixWorld);
+  camera.matrixWorld.copy(camera.matrix);
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  camera.projectionMatrix.fromArray(view.projection);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+window.renderViews = async (job) => {
+  await load(job.glb);
+  renderer.setSize(job.width, job.height, false);
+  const out = [];
+  for (const view of job.views) {
+    place(view);
+    renderer.render(scene, camera);
+    out.push(canvas.toDataURL('image/png'));
+  }
+  return out;
+};
+window.renderReady = true;
+</script>
+</body></html>

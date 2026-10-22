@@ -20,6 +20,14 @@ name and nobody feels a thing, except that the room now looks like their room.
 
 Only what ``scene.xml`` names is part of a version (`room_ops.roomcall.hosted.scene_files`), so
 the cache and the crops never travel with a publish.
+
+Other sources can take an object over entirely (`Source`, `Arrival`): Infinigen's openable
+furniture (`articulated`) replaces a cabinet's template — colliders, links, joints and all —
+rather than dressing it, so such a handle is ``taken`` (TRELLIS never generates it) and its
+arrival is a scene EDIT applied to every version after it lands. If that source fails an object
+(or stops altogether), the object is given back and TRELLIS generates its look after all, so
+asking for more never leaves a room worse than `--realistic` alone. Producers fail on their
+own: a generator call that raises as a whole stops only its own objects.
 """
 
 from __future__ import annotations
@@ -33,10 +41,10 @@ import queue
 import threading
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 
@@ -101,9 +109,11 @@ def _unique(taken: set[str], name: str) -> str:
     return out
 
 
-def compose(base: ET.Element, installed: dict[str, Installed]) -> tuple[ET.Element, list[str]]:
+def compose(base: ET.Element, installed: dict[str, Installed],
+            edits: Sequence[Callable[[ET.Element], Any]] = ()) -> tuple[ET.Element, list[str]]:
     """The base quick room with each installed object's template parts made colliders and its
-    generated mesh added as the body's look. Returns (scene root, handles not found)."""
+    generated mesh added as the body's look, then each of ``edits`` (another source's objects,
+    `Arrival`) applied. Returns (scene root, handles not found)."""
     root = copy.deepcopy(base)
     asset = root.find("asset")
     if asset is None:
@@ -144,8 +154,60 @@ def compose(base: ET.Element, installed: dict[str, Installed]) -> tuple[ET.Eleme
                           shininess="0.25")
         attrs["material"] = material
         ET.SubElement(body, "geom", attrs)
+    for edit in edits:
+        edit(root)
     ET.indent(root, space="  ")
     return root, missing
+
+
+@dataclass(frozen=True)
+class _Done:
+    """A producer of `generate_room` has finished (``source``: an extra `Source`'s name)."""
+
+    source: str | None = None
+
+
+@dataclass(frozen=True)
+class _Stopped:
+    """A generator call raised as a whole: its ``handles`` get nothing more from it."""
+
+    handles: tuple[str, ...]
+    passes: tuple[str, ...]
+    error: str
+
+
+@dataclass
+class Arrival:
+    """An object from a `Source` other than the generator, ready (``edit``) or failed
+    (``error``). ``edit`` changes a scene root in place — every version from now on is composed
+    with it — and must only name files it has already written."""
+
+    handle: str
+    source: str
+    edit: Callable[[ET.Element], Any] | None
+    seconds: float = 0.0
+    error: str = ""
+    summary: dict = field(default_factory=dict)
+
+    @property
+    def ok(self) -> bool:
+        return self.edit is not None and not self.error
+
+
+class Source(Protocol):
+    """Objects from somewhere else than TRELLIS (`articulated.ArticulatedSource`)."""
+
+    name: str
+
+    def plan(self, room: RealRoom) -> Sequence[str]:
+        """Decide what it will build, add the handles TRELLIS must leave alone to
+        ``room.taken`` and return every handle it will build. Called again, the same answer."""
+        ...
+
+    def stream(self, room: RealRoom) -> Iterator[Arrival]:
+        """Each planned object as it is ready, a failed one as an `Arrival` with its ``error``
+        (it then goes back to the generator). Never raises for one object."""
+        ...
 
 
 # ── the room ─────────────────────────────────────────────────────────────────────────────────────
@@ -185,6 +247,10 @@ class RealRoom:
         self.versions = 0
         self.errors: dict[str, str] = {}
         self.borrowed: dict[str, str] = {}
+        # Handles another `Source` builds (TRELLIS leaves them alone), and its scene edits.
+        self.taken: set[str] = set()
+        self.edits: dict[str, Callable[[ET.Element], Any]] = {}
+        self.replaced: dict[str, dict] = {}
 
     # -- the base -----------------------------------------------------------------------------
 
@@ -208,7 +274,7 @@ class RealRoom:
     # -- the objects --------------------------------------------------------------------------
 
     def generated_handles(self) -> list[str]:
-        return [h for h, box in self.boxes.items() if box.generated()]
+        return [h for h, box in self.boxes.items() if box.generated() and h not in self.taken]
 
     def make_crops(self, *, grabcut: bool = True) -> dict[str, crop_views.ObjectCrop]:
         """Every generated object's photo and views (saved under crops/)."""
@@ -226,6 +292,27 @@ class RealRoom:
                                              handles=self.generated_handles())
         crop_views.save_crops(self.crops, self.out_dir / CROP_DIR)
         return self.crops
+
+    def add_crops(self, handles: Sequence[str], *, grabcut: bool = True
+                  ) -> dict[str, crop_views.ObjectCrop]:
+        """Photos and views for ``handles`` too, kept with the others: an object another
+        `Source` claimed and then could not build goes back to the generator mid-run, and it was
+        left out of `make_crops` while it was taken."""
+        walls = []
+        try:
+            from litereality_agent.pipeline.quickroom import parse_room
+
+            usdz = find_room_usdz(self.scan_dir)
+            if usdz is not None:
+                walls = [(w.start, w.end) for w in parse_room(usdz).walls.values()]
+        except Exception:  # noqa: BLE001 — walls only sharpen the masks
+            walls = []
+        more = crop_views.object_crops(self.scan_dir, self.boxes, self.floor_z, walls=walls,
+                                       grabcut=grabcut,
+                                       handles=[h for h in handles if h in self.boxes])
+        self.crops.update(more)
+        crop_views.save_crops(self.crops, self.out_dir / CROP_DIR)
+        return more
 
     def placement(self, handle: str) -> fitting.Placement:
         box = self.boxes[handle]
@@ -286,7 +373,7 @@ class RealRoom:
 
     def write(self, *, check: bool = True) -> Path:
         """Write the scene as it stands now and return its path."""
-        root, missing = compose(self.base, self.installed)
+        root, missing = compose(self.base, self.installed, list(self.edits.values()))
         xml = ET.tostring(root, encoding="unicode") + "\n"
         tmp = self.scene_path.with_name(self.scene_path.name + ".tmp")
         tmp.write_text(xml, encoding="utf-8")
@@ -328,6 +415,7 @@ class RealRoom:
             "objects": {h: i.summary for h, i in sorted(self.installed.items())},
             "template": sorted(h for h in handles if h not in self.installed),
             "borrowed": dict(self.borrowed),
+            "replaced": dict(self.replaced),
             "errors": self.errors,
             "missing": list(missing),
             "crops": {h: c.summary() for h, c in self.crops.items()},
@@ -408,17 +496,27 @@ def generate_room(room: RealRoom, generator: Generator, *, passes: Sequence[str]
                                                                                      "final"),
                   on_version: Callable[[Path, dict], Any] | None = None,
                   min_interval: float | None = None, log: Callable[[str], Any] = print,
-                  reuse: bool = True) -> Progress:
+                  reuse: bool = True, extras: Sequence[Source] = ()) -> Progress:
     """Generate every object of ``room`` and write a new version as they arrive.
 
     Crops first (cached GLBs for the same photo are installed without asking again), then the
     generator streams results; a version is written whenever something new is installed and the
     last one is ``min_interval`` seconds old, and once more at the end. ``on_version(scene,
-    info)`` is called after each (`--publish` uploads it there). Never raises for one object."""
+    info)`` is called after each (`--publish` uploads it there). ``extras`` are other sources
+    (`Source`): what they plan is theirs, and their arrivals stream into the same versions.
+    Never raises for one object."""
     started = time.monotonic()
     passes = check_passes(passes)
     min_interval = MIN_INTERVAL if min_interval is None else float(min_interval)
     progress = Progress(room.scene_path)
+    # What each other source took from the generator: handed back if that source fails it.
+    claimed: dict[str, set[str]] = {}
+    for extra in extras:
+        try:
+            claimed[extra.name] = set(extra.plan(room) or ()) & room.taken
+        except Exception as exc:  # noqa: BLE001 — that source builds nothing; TRELLIS does
+            log(f"  {extra.name}: could not plan ({type(exc).__name__}: {exc})")
+            claimed[extra.name] = set()
     crops = room.crops or room.make_crops()
     images: dict[str, bytes] = {}
     poor: list[str] = []
@@ -450,10 +548,9 @@ def generate_room(room: RealRoom, generator: Generator, *, passes: Sequence[str]
             except Exception as exc:  # noqa: BLE001 — the twin keeps its template
                 room.errors[twin] = f"{pass_name} (from {handle}): {exc}"
 
-    todo: dict[str, list[str]] = {}
-    for handle, png in images.items():
-        # The best pass already generated for this very photo is installed as it is; only the
-        # passes after it are asked for (a cached final makes its preview moot).
+    def from_cache(handle: str, png: bytes) -> list[str]:
+        """The best pass already generated for this very photo, installed as it is; returns the
+        passes after it, which are still to ask for (a cached final makes its preview moot)."""
         best = None
         for p in sorted(passes, key=lambda name: -PASSES[name].rank):
             cached = _glb_cache(room, handle, p, png)
@@ -468,7 +565,11 @@ def generate_room(room: RealRoom, generator: Generator, *, passes: Sequence[str]
             progress.installed[handle] = p
             progress.cached.append(f"{handle}:{p}")
             break
-        need = [p for p in passes if best is None or PASSES[p].rank > PASSES[best].rank]
+        return [p for p in passes if best is None or PASSES[p].rank > PASSES[best].rank]
+
+    todo: dict[str, list[str]] = {}
+    for handle, png in images.items():
+        need = from_cache(handle, png)
         if need:
             todo[handle] = need
 
@@ -499,33 +600,84 @@ def generate_room(room: RealRoom, generator: Generator, *, passes: Sequence[str]
     if dirty:
         publish("cached objects")
 
-    if todo:
-        log(f"  generating {len(todo)} object(s) with {generator.name}: "
-            + ", ".join(f"{h} ({'+'.join(p)})" for h, p in sorted(todo.items())))
+    if todo or extras:
+        if todo:
+            log(f"  generating {len(todo)} object(s) with {generator.name}: "
+                + ", ".join(f"{h} ({'+'.join(p)})" for h, p in sorted(todo.items())))
         # Group by pass list so the generator sees each object's passes in order.
         results: queue.Queue = queue.Queue()
         groups: dict[tuple[str, ...], dict[str, bytes]] = {}
         for handle, need in todo.items():
             groups.setdefault(tuple(need), {})[handle] = images[handle]
+        running = 0
+        arrived: dict[str, set[str]] = {name: set() for name in claimed}
 
         def one_group(need: tuple[str, ...], group: dict[str, bytes]) -> None:
             try:
                 for result in generator.stream(group, list(need)):
                     results.put(result)
             except BaseException as exc:  # noqa: BLE001 — handed to the loop below
-                results.put(exc)
+                results.put(_Stopped(tuple(group), need, f"{type(exc).__name__}: {exc}"))
+            finally:
+                results.put(_Done())
 
-        def produce() -> None:
-            threads = [threading.Thread(target=one_group, args=item, daemon=True)
-                       for item in groups.items()]
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-            results.put(None)
+        def one_extra(extra: Source) -> None:
+            try:
+                for arrival in extra.stream(room):
+                    results.put(arrival)
+            except BaseException as exc:  # noqa: BLE001 — that source stops; the rest go on
+                results.put(Arrival("", extra.name, None, 0.0, f"{type(exc).__name__}: {exc}"))
+            finally:
+                results.put(_Done(extra.name))
 
-        threading.Thread(target=produce, daemon=True, name="realroom-generate").start()
-        while True:
+        def start(target: Callable[..., None], *args: Any) -> None:
+            nonlocal running
+            running += 1                    # counted here, so a producer started late is waited for
+            threading.Thread(target=target, args=args, daemon=True,
+                             name="realroom-generate").start()
+
+        def give_back(source: str, handles: Sequence[str]) -> None:
+            """Objects ``source`` claimed but did not build go to the generator after all, so
+            they end up as `--realistic` alone would make them rather than as bare templates."""
+            nonlocal dirty
+            mine = claimed.get(source, set())
+            back = [h for h in handles if h in mine and h not in arrived.get(source, ())]
+            if not back:
+                return
+            for handle in back:
+                mine.discard(handle)
+                room.taken.discard(handle)
+            back = [h for h in back if h in room.boxes and room.boxes[h].generated()]
+            if not back:
+                return
+            try:
+                more = room.add_crops(back)
+            except Exception as exc:  # noqa: BLE001 — they keep their templates
+                for handle in back:
+                    progress.skipped[handle] = f"given back by {source}; no crop ({exc})"
+                return
+            asked: dict[tuple[str, ...], dict[str, bytes]] = {}
+            for handle in back:
+                crop = more.get(handle)
+                if crop is None or not crop.ok or not crop.good:
+                    why = (crop.note if crop is not None else "") or "the capture saw too little"
+                    progress.skipped[handle] = f"given back by {source}; {why}"
+                    continue
+                images[handle] = crop.png()
+                need = from_cache(handle, images[handle])
+                dirty = dirty or handle in progress.installed
+                if need:
+                    asked.setdefault(tuple(need), {})[handle] = images[handle]
+            for need, group in asked.items():
+                log(f"  {source} gave back {', '.join(sorted(group))}: generating with "
+                    f"{generator.name} ({'+'.join(need)})")
+                start(one_group, need, group)
+
+        for item in groups.items():
+            start(one_group, *item)
+        for extra in extras:
+            start(one_extra, extra)
+        while running:
             wait = None
             if dirty and math.isfinite(min_interval):
                 wait = max(0.0, last + min_interval - time.monotonic())
@@ -534,11 +686,40 @@ def generate_room(room: RealRoom, generator: Generator, *, passes: Sequence[str]
             except queue.Empty:
                 publish("objects arrived")
                 continue
-            if item is None:
-                break
-            if isinstance(item, BaseException):
-                log(f"  the generator stopped: {type(item).__name__}: {item}")
-                break
+            if isinstance(item, _Done):
+                running -= 1
+                if item.source is not None:          # what it never answered for goes back
+                    give_back(item.source, sorted(claimed.get(item.source, ())))
+                continue
+            if isinstance(item, _Stopped):
+                # One generator call failed as a whole (the app is not deployed, credentials
+                # expired): its objects keep what they have; every other producer goes on.
+                log(f"  {generator.name} stopped for {', '.join(item.handles)}: {item.error}")
+                for handle in item.handles:
+                    if progress.installed.get(handle) != item.passes[-1]:
+                        progress.failed[f"{handle}:{item.passes[-1]}"] = item.error
+                        room.errors.setdefault(handle, f"{generator.name}: {item.error}")
+                continue
+            if isinstance(item, Arrival):
+                if not item.ok:
+                    key = f"{item.handle or item.source}:{item.source}"
+                    progress.failed[key] = item.error
+                    if item.handle:
+                        room.errors[item.handle] = f"{item.source}: {item.error}"
+                    log(f"  {item.handle or item.source} ({item.source}) failed: {item.error}")
+                    give_back(item.source, [item.handle] if item.handle else
+                              sorted(claimed.get(item.source, ())))
+                else:
+                    arrived.setdefault(item.source, set()).add(item.handle)
+                    room.edits[item.handle] = item.edit
+                    room.replaced[item.handle] = {"source": item.source, **item.summary}
+                    room.errors.pop(item.handle, None)
+                    progress.installed[item.handle] = item.source
+                    dirty = True
+                    log(f"  {item.handle} {item.source} in {item.seconds:.1f} s")
+                if dirty and time.monotonic() - last >= min_interval:
+                    publish("objects arrived")
+                continue
             if not item.ok:
                 progress.failed[f"{item.handle}:{item.pass_name}"] = item.error
                 room.errors[item.handle] = f"{item.pass_name}: {item.error}"

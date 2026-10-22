@@ -116,6 +116,13 @@ def _isolate_data_roots(tmp_path_factory, monkeypatch: pytest.MonkeyPatch):
     for var in ("LITEREALITY_OUTPUT", "LITEREALITY_FINAL", "OBJECT_INIT_OUTPUT"):
         monkeypatch.setenv(var, str(root / var.lower()))
     monkeypatch.delenv("LR_SCENE", raising=False)
+    # Infinigen's openable furniture is switched on from the shell ($LR_ARTICULATED) and runs in
+    # the env $LR_INFINIGEN_PYTHON names: exported for real work, they would make every CLI test
+    # of the objects stage build assets (minutes of CPU) into the user's ~/.cache. Tests that
+    # want them set them; the one real build (`-m infinigen`) reads its env at import.
+    for var in ("LR_ARTICULATED", "LR_INFINIGEN_PYTHON", "LR_INFINIGEN_WORKERS"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("LR_INFINIGEN_CACHE", str(root / "infinigen_cache"))
 
 
 @dataclass(frozen=True)

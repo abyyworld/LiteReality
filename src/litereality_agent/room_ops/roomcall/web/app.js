@@ -7,6 +7,9 @@
    two places — the `world` group's rotation for the room itself, and mjToThree / threeToMj for
    the camera, avatars and pointer rays.
 
+   With the camera on, each person is sent as a hologram: cut out of their background on their own
+   device and stood life-size in the room (see "hologram", sender, and `holoMaterial`, receiver).
+
    CSP: the page's only inline script is the import map; there are no inline handlers or style
    attributes, so every listener is attached here and styling goes through classes or CSSOM. */
 
@@ -33,6 +36,24 @@ const HOLD_MIN = 0.3, HOLD_MAX = 6;
 const BODY_SMOOTH = 20, AVATAR_SMOOTH = 12;        // 1/s for the exponential smoothing
 const HOLD_MS = 350, TAP_SLOP = 10;                // touch press-and-hold to grab
 const FACE_H = 0.4, LABEL_Y = 0.36;                // webcam plane height at <= 1.5 m, name tag over the eye
+// The hologram. MediaPipe's runtime comes from jsDelivr at an exact version (like three.js), its
+// model from our own server. 0.10.35, not 1.x: from 1.0 the runtime also posts usage metrics to
+// Google (odml.pa.googleapis.com; see its README's privacy notice), which this page neither wants
+// nor asks people's consent for, and which the CSP would block anyway. Every frame sent is
+// colour | mask, HOLO_W x HOLO_H per half: 8:3, which no webcam is (they are 9:16 to 16:9), so
+// anything HOLO_PACKED wide or wider is a cut-out.
+const MP_BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35';
+const SEG_MODEL = 'selfie_segmenter.tflite';
+const HOLO_W = 320, HOLO_H = 240, HOLO_PACKED = 2.3;
+const HOLO_KBPS = 800;                             // per peer; half the frame is flat grey
+const HOLO_STALE_MS = 140;                         // a mask older than ~2 camera frames no longer fits
+const HOLO_IDLE_MS = 400;                          // how often to look for someone while nobody is in frame
+const HEAD_M = 0.23, EYES_IN_HEAD = 0.45;          // crown to chin, and the eyes' depth into that
+const HAND_SIDE = 0.2, HAND_DROP = 0.45;           // where a grab line starts: their right hand
+// A laptop webcam's usual framing (fractions of the image), until the sender measures its own:
+// head top 15 % down, head 35 % of the height, centred. Life-size, that puts the image top
+// ~0.2 m above the eyes.
+const HOLO_FRAMING = { top: 0.15, head: 0.35, cx: 0.5 };
 const STATE_DEAD_MS = 5000, MAX_ICE_RESTARTS = 3;
 const STUN = [{ urls: 'stun:stun.l.google.com:19302' }];
 const ZOOM_SDK = 'https://appssdk.zoom.us/sdk.min.js';
@@ -742,8 +763,12 @@ canvas.addEventListener('wheel', (e) => {
 })();
 
 /* ------------------------------------------------------------------ grabs drawn as lines */
+// Each grab is a line from the grabber's right hand (another person's; not your own) to where
+// they are pulling, then on to the point they hold, with a dot there. The hand end follows their
+// avatar every frame (`stepGrabLines`); the rest comes with each state frame.
 const grabLines = new Map();                       // peer id -> {line, dot}
 const dotGeo = new THREE.SphereGeometry(0.025, 12, 8);
+const handAt = new THREE.Vector3();
 
 function drawGrabs(rows) {
   const seen = new Set();
@@ -755,7 +780,7 @@ function drawGrabs(rows) {
     const color = pid === me.id ? me.color : (peers.get(pid)?.color || '#888888');
     if (!rec) {
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3));
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.9 }));
       const dot = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color, depthTest: false }));
       line.renderOrder = dot.renderOrder = 10;
@@ -765,8 +790,9 @@ function drawGrabs(rows) {
       grabLines.set(pid, rec);
     }
     const pos = rec.line.geometry.attributes.position;
-    pos.setXYZ(0, ax, ay, az); pos.setXYZ(1, tx, ty, tz); pos.needsUpdate = true;
+    pos.setXYZ(1, tx, ty, tz); pos.setXYZ(2, ax, ay, az);
     rec.dot.position.set(ax, ay, az);
+    placeHand(pid, pos);
   }
   for (const [pid, rec] of grabLines) {
     if (seen.has(pid)) continue;
@@ -774,6 +800,32 @@ function drawGrabs(rows) {
     rec.line.geometry.dispose(); rec.line.material.dispose(); rec.dot.material.dispose();
     grabLines.delete(pid);
   }
+}
+
+/** The line's first point: that person's right hand, or (yours, or no avatar yet) the target. */
+function placeHand(pid, pos) {
+  const h = pid !== me.id && handOf(pid, handAt);
+  if (h) pos.setXYZ(0, h.x, -h.z, h.y);            // three -> MuJoCo, as the `world` group expects
+  else pos.setXYZ(0, pos.getX(1), pos.getY(1), pos.getZ(1));
+  pos.needsUpdate = true;
+}
+
+function stepGrabLines() {
+  for (const [pid, rec] of grabLines) placeHand(pid, rec.line.geometry.attributes.position);
+}
+
+/** Roughly where someone's right hand is, in three space. A cut-out always faces you, so their
+ *  right is your left of it; a capsule's right follows its own yaw. */
+function handOf(pid, out) {
+  const av = peers.get(pid)?.avatar;
+  if (!av?.has || !av.root.visible) return null;
+  const p = av.root.position;
+  let rx, rz;
+  if (av.cut.visible) {
+    const dx = camera.position.x - p.x, dz = camera.position.z - p.z, l = Math.hypot(dx, dz) || 1;
+    rx = -dz / l; rz = dx / l;
+  } else { rx = Math.sin(av.yaw); rz = Math.cos(av.yaw); }   // MuJoCo right (sin, -cos, 0) in three
+  return out.set(p.x + rx * HAND_SIDE, p.y - HAND_DROP, p.z + rz * HAND_SIDE);
 }
 
 /* ------------------------------------------------------------------ avatars */
@@ -818,13 +870,59 @@ function makeAvatar(peer) {
   screen.position.set(0, 0, 0.2);                 // +Z: the side lookAt turns toward the viewer
   screen.visible = false;
   face.add(screen);
+  // Their hologram: a life-size cut-out on a pivot of its own that, like the face, turns about the
+  // vertical toward whoever looks. Shown instead of the capsule while they send one.
+  const cut = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), holoMaterial());
+  cut.visible = false;
+  const stand = new THREE.Group();
+  stand.add(cut);
   const label = labelSprite(peer.name, peer.color);
   label.position.y = LABEL_Y;
-  root.add(torso, head, face, label);
+  root.add(torso, head, face, stand, label);
   root.visible = false;                           // until their first pose arrives
   scene.add(root);
-  return { root, head, face, screen, label, skin, sw: FACE_H * 4 / 3, sh: FACE_H,
+  return { root, torso, head, face, screen, cut, stand, label, skin, sw: FACE_H * 4 / 3, sh: FACE_H,
+           aspect: 4 / 3, fr: { ...HOLO_FRAMING },
            tp: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0, has: false };
+}
+
+// The receiving end of the hologram. One video carries both halves of each frame: colour on the
+// left, the person mask as grey on the right (see "hologram"). The mask went through a video
+// codec, so it is read as luma (what codecs keep best) and passed through a ramp that drops the
+// blocky noise near 0 and 1 while keeping a soft edge. Both lookups stay a texel and a half clear
+// of the seam, so filtering never mixes the halves. The bottom of the frame cuts the body, so it
+// fades out, and a hair of fade at the other edges hides a hard frame line. The texture is
+// sampled raw (video textures are uploaded without sRGB decoding), so colour comes out exactly as
+// the face plane shows it. Output is premultiplied; near-transparent fragments are discarded so
+// the depth written is the person's outline and later transparent things sort against it.
+const HOLO_VERT = /* glsl */ `
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+const HOLO_FRAG = /* glsl */ `
+uniform sampler2D map;
+uniform float inset;
+uniform float fade;
+varying vec2 vUv;
+void main() {
+  float x = clamp(vUv.x, inset, 1.0 - inset) * 0.5;
+  vec3 color = texture2D(map, vec2(x, vUv.y)).rgb;
+  float m = dot(texture2D(map, vec2(x + 0.5, vUv.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float a = smoothstep(0.3, 0.7, m);
+  a *= smoothstep(0.0, fade, vUv.y) * smoothstep(0.0, 0.02, 1.0 - vUv.y)
+     * smoothstep(0.0, 0.03, vUv.x) * smoothstep(0.0, 0.03, 1.0 - vUv.x);
+  if (a < 0.05) discard;
+  gl_FragColor = vec4(color * a, a);
+}`;
+
+function holoMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: { map: { value: null }, inset: { value: 3 / (2 * HOLO_W) }, fade: { value: 0.22 } },
+    vertexShader: HOLO_VERT, fragmentShader: HOLO_FRAG,
+    transparent: true, premultipliedAlpha: true, depthWrite: true,
+  });
 }
 
 function disposeAvatar(av) {
@@ -835,21 +933,46 @@ function disposeAvatar(av) {
   });
 }
 
+/** What their video is (a webcam for the face plane, a packed cut-out for the hologram, or
+ *  nothing yet) decides how they are drawn. Runs on every change of their video's size, which is
+ *  also when a sender switches between the two. */
 function updateAvatarScreen(peer) {
   const av = peer.avatar, v = peer.video;
   const show = !!(peer.media.camera && v && v.readyState >= 2 && v.videoWidth > 0);
+  const packed = show && v.videoWidth / v.videoHeight >= HOLO_PACKED;
   if (show && !peer.tex) {
     peer.tex = new THREE.VideoTexture(v);
     peer.tex.colorSpace = THREE.SRGBColorSpace;
     av.screen.material.map = peer.tex;
     av.screen.material.needsUpdate = true;
+    av.cut.material.uniforms.map.value = peer.tex;
   }
-  if (show) {
+  if (packed) {
+    av.aspect = v.videoWidth / 2 / v.videoHeight;
+    av.cut.material.uniforms.inset.value = 3 / v.videoWidth;   // 1.5 texels, in one half's uv
+  } else if (show) {
     const aspect = clamp(v.videoWidth / v.videoHeight, 0.5, 2);
     av.sw = Math.min(FACE_H * 4 / 3, FACE_H * aspect);   // FACE_H tall, no wider than 4:3
     av.sh = av.sw / aspect;
   }
-  av.screen.visible = show;
+  const was = av.cut.visible;
+  av.screen.visible = show && !packed;
+  av.cut.visible = packed;
+  av.torso.visible = av.head.visible = !packed;
+  if (was !== packed) renderPeople();
+}
+
+/** Life-size: the head HEAD_M tall (from where the sender says the head is in its frame), the
+ *  eyes at the avatar's eye height, the head over the avatar's position, facing you. */
+function placeCut(peer, dt) {
+  const av = peer.avatar, f = peer.framing || HOLO_FRAMING, fr = av.fr, a = smooth(3, dt);
+  fr.top += (f.top - fr.top) * a; fr.head += (f.head - fr.head) * a; fr.cx += (f.cx - fr.cx) * a;
+  const h = clamp(HEAD_M / fr.head, 0.45, 1.7), w = h * av.aspect;
+  const eyes = fr.top + EYES_IN_HEAD * fr.head;   // the eyes' row, as a fraction from the image top
+  av.cut.scale.set(w, h, 1);
+  av.cut.position.set(clamp((0.5 - fr.cx) * w, -0.25 * w, 0.25 * w), h * (eyes - 0.5), 0);
+  av.label.position.y = av.cut.position.y + h / 2 + 0.08;
+  av.stand.lookAt(camera.position.x, av.root.position.y, camera.position.z);
 }
 
 function stepAvatars(dt) {
@@ -862,6 +985,7 @@ function stepAvatars(dt) {
     av.pitch += (av.tpitch - av.pitch) * a;
     av.root.rotation.y = av.yaw - Math.PI / 2;
     av.head.rotation.x = clamp(av.pitch, -PITCH_LIMIT, PITCH_LIMIT) * 0.7;
+    if (av.cut.visible) { placeCut(peer, dt); continue; }
     if (!av.screen.visible) { av.label.position.y = LABEL_Y; continue; }
     // Grow with distance (constant on-screen size from 1.5 m to ~4 m) so a face stays a face
     // across the room, and keep the name tag above it.
@@ -932,6 +1056,7 @@ function addPeer(p) {
     id: p.id, name: String(p.name || 'Guest').slice(0, 40), color,
     media: { camera: !!p.media?.camera, mic: !!p.media?.mic },
     rtc: null, video: null, audio: null, tex: null,
+    framing: null,                                 // where their head is in their cut-out (data channel)
   };
   peer.avatar = makeAvatar(peer);
   peers.set(p.id, peer);
@@ -955,7 +1080,7 @@ function clearPeers() { for (const id of [...peers.keys()]) removePeer(id); draw
 function renderPeople() {
   const list = $('peopleList');
   list.replaceChildren();
-  const row = (name, color, media, you, rtcFailed = false) => {
+  const row = (name, color, media, you, rtcFailed = false, cutOut = false) => {
     const li = document.createElement('li');
     const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = color;
     const who = document.createElement('span'); who.className = 'who'; who.textContent = name + (you ? ' (you)' : '');
@@ -966,14 +1091,15 @@ function renderPeople() {
       t.title = 'No direct link to this person (a strict firewall or NAT). You still share the room; only their camera and mic do not reach you.';
       tags.appendChild(t);
     } else for (const [k, label] of [['camera', 'cam'], ['mic', 'mic']]) {
-      const t = document.createElement('span'); t.className = 'tag' + (media[k] ? ' on' : ''); t.textContent = label + (media[k] ? ' on' : ' off');
+      const t = document.createElement('span'); t.className = 'tag' + (media[k] ? ' on' : '');
+      t.textContent = k === 'camera' && media[k] && cutOut ? 'hologram' : label + (media[k] ? ' on' : ' off');
       tags.appendChild(t);
     }
     li.append(dot, who, tags);
     list.appendChild(li);
   };
-  row(me.name || 'You', me.color, me.media, true);
-  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed);
+  row(me.name || 'You', me.color, me.media, true, false, holo.state === 'live');
+  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed, p.avatar.cut.visible);
   $('peopleCount').textContent = String(peers.size + 1);
 }
 
@@ -1018,6 +1144,7 @@ async function setLocal(kind, on) {
       local[slot] = track;
       local.stream.addTrack(track);
       track.addEventListener('ended', () => { if (local[slot] === track) setLocal(kind, false); });
+      // The webcam itself goes out first; the hologram replaces it once it sees someone.
       for (const peer of peers.values()) attachTrack(peer, track);
     }
   } else if (!on && local[slot]) {
@@ -1028,6 +1155,7 @@ async function setLocal(kind, on) {
     for (const peer of peers.values()) peer.rtc?.senders[slot]?.replaceTrack(null).catch(() => {});
   }
   if (kind === 'video') me.media.camera = !!local.video; else me.media.mic = !!local.audio;
+  if (kind === 'video') syncHologram();
   showSelfView();
   syncMediaButtons();
   send({ t: 'media', camera: me.media.camera, mic: me.media.mic });
@@ -1038,9 +1166,12 @@ async function setLocal(kind, on) {
 /** What a media button shows: the wish while the browser is still asking, else the real state. */
 const shownOn = (slot) => (local.asking[slot] ? local.want[slot] : !!local[slot]);
 
+/** Your own corner view: your cut-out while the others get one, else your webcam. */
 function showSelfView() {
-  const v = $('selfView');
-  if (local.video) { if (v.srcObject !== local.stream) v.srcObject = local.stream; v.hidden = false; v.play().catch(() => {}); }
+  const v = $('selfView'), cut = $('selfHolo');
+  const live = !!local.video && holo.state === 'live';
+  cut.hidden = !live;
+  if (local.video && !live) { if (v.srcObject !== local.stream) v.srcObject = local.stream; v.hidden = false; v.play().catch(() => {}); }
   else { v.hidden = true; }
 }
 
@@ -1050,7 +1181,460 @@ function syncMediaButtons() {
   $('camBtn').disabled = !canMedia;
   $('micBtn').disabled = !canMedia || !!zoom;
   $('micBtn').title = zoom ? 'Zoom carries your voice' : 'Send your microphone';
+  syncHoloButton();
 }
+
+/* ------------------------------------------------------------------ hologram: you, cut out of your webcam */
+// With the camera on, each webcam frame is segmented here, on this device, by MediaPipe's selfie
+// segmenter, and the person mask travels INSIDE the video: every frame sent is the colour image
+// on the left and the soft mask as grey on the right, drawn into one canvas whose captured track
+// replaces the webcam on every peer connection (replaceTrack, no renegotiation). WebRTC codecs
+// carry no alpha channel, but grey pixels survive them fine, so each receiver can cut the person
+// out (`holoMaterial`) and stand them life-size in the room. The packed frame's 8:3 shape is how a
+// receiver tells it from a webcam, with nothing added to the protocol; the data channel only adds
+// where the head is in the frame (`sendFraming`), so the cut-out can be sized life-size.
+//
+// Whenever the cut-out cannot be trusted, the plain webcam goes out instead, and everyone shows
+// it on the avatar's face as before: while the runtime loads, if it cannot load (CDN, CSP, no
+// WebAssembly or WebGL), on a device too slow for it, while nobody is in frame, while the tab is
+// in the background (it gets no video frame callbacks there), and when the Hologram button is off.
+const holo = {
+  want: store.get('hologram', true) !== false,
+  state: 'off',          // off | loading | ready (running; nobody in frame yet) | live (sending it) | failed
+  why: '',               // why it failed, for the button's title
+  mp: null,              // {vision, files}: the loaded runtime
+  seg: null, segLoad: null, loadFailed: false, delegate: '', triedCpu: false,
+  gen: 0,                // bumped by every start and stop, so a stale frame callback ends itself
+  video: null, color: null, mask: null, alpha: null, packed: null, self: null, track: null,
+  maskImg: null, alphaImg: null, sm: null, tmp: null, rowW: null, rowX: null,
+  segAt: 0, ms: 0, segs: 0, lastTs: 0, lastTime: -1, slowSince: 0, maskAt: 0,
+  slowMs: 150,           // a mask costing more than this for 8 s on end: too slow, give up
+  seen: 0, goneAt: 0,    // masks in a row with someone in them; since when nobody has been
+  framing: { ...HOLO_FRAMING }, sent: null, sentAt: 0,
+};
+
+const holoCapable = () => !!(HTMLCanvasElement.prototype.captureStream && window.WebAssembly && window.RTCRtpSender);
+
+/** Start or stop to match the camera and the button. */
+function syncHologram() {
+  const want = holo.want && !!local.video && holoCapable();
+  if (want && holo.state === 'off') startHologram();
+  else if (!want && holo.state !== 'off' && holo.state !== 'failed') stopHologram('off');
+  syncHoloButton();
+}
+
+function syncHoloButton() {
+  const b = $('holoBtn');
+  b.setAttribute('aria-pressed', String(holo.want && holo.state !== 'failed'));
+  b.dataset.state = local.video ? holo.state : 'off';
+  b.disabled = !canMedia || !holoCapable();
+  b.title = !holo.want ? 'Hologram off: others see your plain webcam'
+    : !local.video ? 'Hologram: once your camera is on, others see you cut out of your background'
+    : { off: 'Hologram', loading: 'Hologram: getting the cut-out ready…',
+        ready: 'Hologram: ready — waiting to see you in the camera',
+        live: 'Hologram on: others see you cut out of your background',
+        failed: `Hologram unavailable (${holo.why}): others see your plain webcam. Click to try again.` }[holo.state];
+}
+
+function holoCanvas(w, h, opts) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return { c, ctx: c.getContext('2d', opts) };
+}
+
+function holoSetup() {
+  if (holo.video) return;
+  // GPU-side canvases throughout, even on a software GL: there a CPU-side colour canvas makes
+  // the runtime's input cheaper (~20 ms) but every camera frame drawn into it dearer (~20 ms,
+  // against 0.5), and frames are drawn more often than they are segmented.
+  holo.color = holoCanvas(HOLO_W, HOLO_H, { alpha: false });
+  holo.mask = holoCanvas(HOLO_W, HOLO_H, { alpha: false });
+  holo.alpha = holoCanvas(HOLO_W, HOLO_H);
+  holo.packed = holoCanvas(2 * HOLO_W, HOLO_H, { alpha: false });
+  holo.maskImg = holo.mask.ctx.createImageData(HOLO_W, HOLO_H);
+  holo.alphaImg = holo.alpha.ctx.createImageData(HOLO_W, HOLO_H);
+  const n = HOLO_W * HOLO_H;
+  holo.sm = new Float32Array(n); holo.tmp = new Float32Array(n);
+  holo.rowW = new Uint16Array(HOLO_H); holo.rowX = new Float32Array(HOLO_H);
+  const self = $('selfHolo');
+  self.width = HOLO_W; self.height = HOLO_H;
+  holo.self = self.getContext('2d');
+  // The camera plays into a video of our own: frame callbacks need one that is in the page.
+  holo.video = document.createElement('video');
+  holo.video.muted = true; holo.video.playsInline = true; holo.video.autoplay = true;
+  $('mediaSink').append(holo.video);
+}
+
+/** The runtime and the model, once per page. The GPU delegate first, the CPU one if that fails;
+ *  the other way round on a software GL (no usable GPU), where WebAssembly SIMD is far faster. */
+function loadSegmenter() {
+  holo.segLoad ??= (async () => {
+    const vision = await withTimeout(import(`${MP_BASE}/vision_bundle.mjs`), 30000);
+    const files = await vision.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
+    holo.mp = { vision, files };
+    const order = softwareGL() ? ['CPU', 'GPU'] : ['GPU', 'CPU'];
+    try { return { seg: await makeSegmenter(order[0]), delegate: order[0] }; }
+    catch (err) { console.info(`hologram: no ${order[0]} segmenter here, trying ${order[1]}`, err); }
+    return { seg: await makeSegmenter(order[1]), delegate: order[1] };
+  })();
+  return holo.segLoad;
+}
+
+/** Whether WebGL here is drawn in software (SwiftShader, llvmpipe: a VM, or a blocklisted GPU). */
+let softGL;
+function softwareGL() {
+  softGL ??= softwareRenderer();
+  return softGL;
+}
+function softwareRenderer() {
+  try {
+    const gl = renderer.getContext();
+    let name = String(gl.getParameter(gl.RENDERER));
+    if (/webkit/i.test(name)) {                    // masked (Chrome, Safari): ask for the real one
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      if (ext) name = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+    }
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
+  } catch { return false; }
+}
+
+// The runtime logs in glog's format ("W1021 16:23:58.43 ... gl_context.cc:1119] ..."), as it
+// starts and on its first frames: delegate notes and GL hints, not ours to act on (real failures
+// throw). While it runs, those lines go to debug; anything else passes through untouched.
+const GLOG = /^[IWEF]\d{4} \d\d:\d\d:\d\d/;
+function quietly(fn) {
+  const saved = {};
+  for (const k of ['log', 'info', 'warn', 'error']) {
+    saved[k] = console[k];
+    console[k] = (...a) => (typeof a[0] === 'string' && GLOG.test(a[0]) ? console.debug('[mediapipe]', ...a) : saved[k].apply(console, a));
+  }
+  // Its Emscripten output goes through the hook its loader reads (and clears) as well.
+  const print = (t) => console.debug('[mediapipe]', t);
+  window.Module = { print, printErr: print };
+  const restore = () => { Object.assign(console, saved); delete window.Module; };
+  let out;
+  try { out = fn(); } catch (err) { restore(); throw err; }
+  if (typeof out?.then === 'function') return out.finally(restore);
+  restore();
+  return out;
+}
+
+async function makeSegmenter(delegate) {
+  const making = quietly(() => holo.mp.vision.ImageSegmenter.createFromOptions(holo.mp.files, {
+    baseOptions: { modelAssetPath: SEG_MODEL, delegate },
+    runningMode: 'VIDEO', outputCategoryMask: false, outputConfidenceMasks: true,
+  }));
+  try { return await withTimeout(making, 30000); }
+  catch (err) { making.then((s) => s.close(), () => {}); throw err; }   // one that turns up late is freed
+}
+
+async function startHologram() {
+  holoSetup();
+  const gen = ++holo.gen;
+  Object.assign(holo, { state: 'loading', seen: 0, goneAt: 0, segAt: 0, lastTime: -1, slowSince: 0, maskAt: 0 });
+  holo.video.srcObject = new MediaStream([local.video]);
+  holo.video.play().catch(() => {});
+  holoSchedule(gen);
+  syncHoloButton();
+  try {
+    const got = await loadSegmenter();
+    if (gen !== holo.gen) return;
+    if (!holo.seg) { holo.seg = got.seg; holo.delegate = got.delegate; }   // kept across restarts
+    holo.state = 'ready';
+    syncHoloButton();
+  } catch (err) {
+    if (gen !== holo.gen) return;
+    holo.loadFailed = true;
+    holoFail('the cut-out did not load', err);
+  }
+}
+
+function stopHologram(state) {
+  holo.gen++;
+  holo.state = state;
+  if (holo.video) holo.video.srcObject = null;
+  if (holo.track) { holo.track.stop(); holo.track = null; }
+  sendOut();
+  showSelfView();
+  syncHoloButton();
+  renderPeople();
+}
+
+function holoFail(why, err) {
+  // A load or runtime error is worth a warning; a device that is merely too slow is not.
+  (err ? console.warn : console.info)('hologram off:', why, err || '');
+  holo.why = why;
+  stopHologram('failed');
+  toast(`Hologram off: ${why}. Others see your plain webcam.`, 'error');
+}
+
+/** One callback per camera frame where the browser has them; else a poll that skips repeats. */
+function holoSchedule(gen) {
+  const v = holo.video;
+  if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(() => holoFrame(gen));
+  else setTimeout(() => holoFrame(gen), 1000 / 30);
+}
+
+function holoFrame(gen) {
+  if (gen !== holo.gen) return;
+  holoSchedule(gen);
+  const v = holo.video;
+  if (v.readyState < 2 || !v.videoWidth || v.currentTime === holo.lastTime) return;
+  holo.lastTime = v.currentTime;
+  drawFit(holo.color.ctx, v);
+  if (!holo.seg) return;
+  // At most about a third of the main thread: a mask starts no sooner than three times what one
+  // costs after the last one started. A fast device masks every camera frame; a slow one every
+  // Nth, keeping the last mask. With nobody in frame, a look every HOLO_IDLE_MS is enough.
+  const now = performance.now();
+  const idle = holo.state === 'ready' && holo.seen === 0 ? HOLO_IDLE_MS : 0;
+  const fresh = now - holo.segAt >= Math.max(3 * holo.ms, idle);
+  if (fresh) { holo.segAt = now; segment(gen); }
+  // A mask a frame or two old still fits the person; an older one leaves a ghost edge around
+  // anyone moving. So once masks come further apart than that, only the frames that got their own
+  // mask go out: a lower frame rate, but the colour and its mask always match.
+  if (gen === holo.gen && holo.state === 'live' && (fresh || 3 * holo.ms < HOLO_STALE_MS)) compose();
+}
+
+/** The camera image into one 4:3 half: a wider image loses its sides, a narrower one (a phone
+ *  held upright) keeps all of it between black bars that the mask leaves out. */
+function drawFit(ctx, v) {
+  const vw = v.videoWidth, vh = v.videoHeight, k = HOLO_W / HOLO_H;
+  if (vw / vh >= k) {
+    const sw = vh * k;
+    ctx.drawImage(v, (vw - sw) / 2, 0, sw, vh, 0, 0, HOLO_W, HOLO_H);
+  } else {
+    const dw = HOLO_H * vw / vh;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, HOLO_W, HOLO_H);
+    ctx.drawImage(v, 0, 0, vw, vh, (HOLO_W - dw) / 2, 0, dw, HOLO_H);
+  }
+}
+
+function segment(gen) {
+  const t0 = performance.now();
+  holo.lastTs = Math.max(t0, holo.lastTs + 1);    // VIDEO mode wants strictly increasing timestamps
+  try {
+    quietly(() => holo.seg.segmentForVideo(holo.color.c, holo.lastTs, (res) => {
+      const m = res.confidenceMasks?.[0];          // the selfie segmenter's one channel: person
+      if (m) takeMask(m.getAsFloat32Array(), m.width, m.height);
+    }));
+  } catch (err) { holoFail('the cut-out stopped working', err); return; }
+  if (gen !== holo.gen) return;
+  const dt = performance.now() - t0;
+  holo.segs++;
+  // The first one is mostly warm-up (shader compiles, first allocations): not what a mask costs.
+  holo.ms = holo.segs === 1 ? 0 : holo.segs <= 3 ? dt : holo.ms * 0.9 + dt * 0.1;
+  pace();
+}
+
+/** On a slow device: try the CPU delegate once if the GPU one is slow (a software GL loses to
+ *  WebAssembly SIMD), and give up when a mask has cost over `slowMs` for 8 s on end (the pacing
+ *  in `holoFrame` keeps the page usable meanwhile). */
+function pace() {
+  if (holo.segs < 5) return;
+  if (holo.delegate === 'GPU' && holo.ms > 25 && !holo.triedCpu) { holo.triedCpu = true; tryCpu(); return; }
+  const now = performance.now();
+  if (holo.ms <= holo.slowMs) holo.slowSince = 0;
+  else if (!holo.slowSince) holo.slowSince = now;
+  else if (now - holo.slowSince > 8000 && (holo.triedCpu || holo.delegate === 'CPU')) holoFail('this device is too slow for it');
+}
+
+async function tryCpu() {
+  let cpu = null;
+  try {
+    cpu = await makeSegmenter('CPU');
+    if (!holo.seg || holo.state === 'off' || holo.state === 'failed') { cpu.close(); return; }
+    const run = () => {
+      holo.lastTs = Math.max(performance.now(), holo.lastTs + 1);
+      quietly(() => cpu.segmentForVideo(holo.color.c, holo.lastTs, () => {}));
+    };
+    run();                                         // warm-up, not timed
+    const t0 = performance.now();
+    for (let i = 0; i < 3; i++) run();
+    const ms = (performance.now() - t0) / 3;
+    if (ms < holo.ms * 0.8) {
+      console.info(`hologram: the CPU segmenter is faster here (${ms.toFixed(1)} ms vs ${holo.ms.toFixed(1)} ms)`);
+      holo.seg.close();
+      Object.assign(holo, { seg: cpu, delegate: 'CPU', ms, segs: 5 });
+    } else cpu.close();
+  } catch (err) { console.info('hologram: no CPU segmenter to compare', err); cpu?.close(); }
+}
+
+/** A new mask: smoothed over time (a little), feathered (a 3x3 box), stretched so that what the
+ *  model is sure about is exactly black or white (flat areas cost the codec nothing), then
+ *  written as grey for the packed frame and as alpha for the self view. Also counts, per row, how
+ *  much of the row is person: for whether anyone is there, and where their head is.
+ *  The smoothing has a time constant (MASK_TAU), not a fixed weight per mask: at a mask per
+ *  camera frame it calms the flicker at the edges, while masks that come seldom (a slow device)
+ *  are used as they are, so a moving person leaves no ghost of where they were. */
+const MASK_TAU = 70;                               // ms
+function takeMask(src, w, h) {
+  const W = HOLO_W, H = HOLO_H, sm = holo.sm, tmp = holo.tmp, now = performance.now();
+  const k = holo.maskAt ? 1 - Math.exp(-(now - holo.maskAt) / MASK_TAU) : 1;
+  holo.maskAt = now;
+  if (w === W && h === H) for (let i = 0; i < W * H; i++) sm[i] += (src[i] - sm[i]) * k;
+  else {
+    for (let y = 0; y < H; y++) {
+      const sy = Math.min(h - 1, Math.floor(y * h / H)) * w;
+      for (let x = 0; x < W; x++) { const i = y * W + x; sm[i] += (src[sy + Math.min(w - 1, Math.floor(x * w / W))] - sm[i]) * k; }
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    const r = y * W;
+    tmp[r] = (2 * sm[r] + sm[r + 1]) / 3;
+    for (let x = 1; x < W - 1; x++) tmp[r + x] = (sm[r + x - 1] + sm[r + x] + sm[r + x + 1]) / 3;
+    tmp[r + W - 1] = (sm[r + W - 2] + 2 * sm[r + W - 1]) / 3;
+  }
+  const md = holo.maskImg.data, ad = holo.alphaImg.data, rowW = holo.rowW, rowX = holo.rowX;
+  let count = 0;
+  for (let y = 0; y < H; y++) {
+    const up = (y > 0 ? y - 1 : y) * W, mid = y * W, dn = (y < H - 1 ? y + 1 : y) * W;
+    let n = 0, sx = 0;
+    for (let x = 0; x < W; x++) {
+      const v = (tmp[up + x] + tmp[mid + x] + tmp[dn + x]) / 3;
+      const g = v <= 0.2 ? 0 : v >= 0.8 ? 255 : Math.round((v - 0.2) * 425);
+      const j = (mid + x) * 4;
+      md[j] = md[j + 1] = md[j + 2] = g; md[j + 3] = 255;
+      ad[j + 3] = g;
+      if (g > 127) { n++; sx += x; }
+    }
+    rowW[y] = n; rowX[y] = n ? sx / n : 0;
+    count += n;
+  }
+  holo.mask.ctx.putImageData(holo.maskImg, 0, 0);
+  holo.alpha.ctx.putImageData(holo.alphaImg, 0, 0);
+  // Someone in frame: go live after three masks in a row with a person in them; back to the
+  // webcam after 1.5 s with nobody (walked off, camera knocked aside).
+  const cover = count / (W * H);
+  if (cover >= 0.03) { holo.seen++; holo.goneAt = 0; } else if (cover < 0.01) { holo.seen = 0; holo.goneAt ||= now; }
+  if (holo.state === 'ready' && holo.seen >= 3 && !document.hidden) goLive();
+  else if (holo.state === 'live' && holo.goneAt && now - holo.goneAt > 1500) goRaw();
+  if (holo.state === 'live' && holo.segs % 3 === 0) measureFraming();
+}
+
+/** Where the head is in the frame, from the mask's row widths: down from the top the silhouette
+ *  widens over the head, narrows at the chin and neck, then jumps at the shoulders; the narrowest
+ *  row before that jump ends the head. Without a clear neck (hair to the shoulders, a hood) the
+ *  head is taken as 1.3 times as tall as it is wide. Smoothed, and sent when it moves. */
+function measureFraming() {
+  const W = HOLO_W, H = HOLO_H, rw = holo.rowW, rx = holo.rowX, minW = W * 0.03;
+  let top = -1;
+  for (let y = 0; y < H - 2; y++) if (rw[y] >= minW && rw[y + 1] >= minW && rw[y + 2] >= minW) { top = y; break; }
+  if (top < 0) return;
+  let widest = 0, shoulders = -1;
+  for (let y = top; y < H; y++) {
+    if (y - top > 6 && rw[y] > 1.6 * widest) { shoulders = y; break; }
+    widest = Math.max(widest, rw[y]);
+  }
+  let head = 0, headW = 0;
+  if (shoulders > 0) {
+    let neck = shoulders - 1;
+    for (let y = Math.round(top + 0.4 * (shoulders - top)); y < shoulders; y++) if (rw[y] < rw[neck]) neck = y;
+    head = neck - top;
+    for (let y = top; y < neck; y++) headW = Math.max(headW, rw[y]);
+  }
+  if (!(head > 0.9 * headW && head < 2 * headW)) {
+    // No clear neck: 1.3 times as tall as the silhouette is wide over its top part.
+    const span = shoulders > 0 ? 0.5 * (shoulders - top) : 0.25 * H;
+    headW = 0;
+    for (let y = top; y < Math.min(H, top + span); y++) headW = Math.max(headW, rw[y]);
+    head = 1.3 * headW;
+  }
+  let n = 0, cx = 0;
+  for (let y = top; y < Math.min(H, top + 0.8 * head); y++) if (rw[y]) { cx += rx[y]; n++; }
+  const f = holo.framing, a = 0.3;
+  f.top += (top / H - f.top) * a;
+  f.head += (clamp(head / H, 0.12, 0.8) - f.head) * a;
+  f.cx += ((n ? cx / n : W / 2) / W - f.cx) * a;
+  const s = holo.sent, now = performance.now();
+  if (now - holo.sentAt > 500 && (!s || Math.abs(s.top - f.top) + Math.abs(s.head - f.head) + Math.abs(s.cx - f.cx) > 0.02)) sendFraming();
+}
+
+function goLive() {
+  if (!holo.track) {
+    holo.track = holo.packed.c.captureStream(30).getVideoTracks()[0] || null;
+    if (!holo.track) { holoFail('this browser cannot send it'); return; }
+  }
+  holo.state = 'live';
+  compose();                                       // the track's first frame is a whole one
+  sendOut();
+  sendFraming();
+  showSelfView();
+  syncHoloButton();
+  renderPeople();
+}
+
+function goRaw() {
+  holo.state = 'ready';
+  sendOut();
+  showSelfView();
+  syncHoloButton();
+  renderPeople();
+}
+
+function compose() {
+  const p = holo.packed.ctx;
+  p.drawImage(holo.color.c, 0, 0);
+  p.drawImage(holo.mask.c, HOLO_W, 0);
+  if (!$('selfHolo').hidden) {
+    const s = holo.self;
+    s.globalCompositeOperation = 'copy';
+    s.drawImage(holo.alpha.c, 0, 0);
+    s.globalCompositeOperation = 'source-in';
+    s.drawImage(holo.color.c, 0, 0);
+    s.globalCompositeOperation = 'source-over';
+  }
+}
+
+/** The video every peer gets: the packed cut-out while it is live, else the webcam itself. */
+const outVideo = () => (holo.state === 'live' && holo.track ? holo.track : local.video);
+
+function sendOut() {
+  const t = outVideo();
+  for (const peer of peers.values()) {
+    const s = peer.rtc?.senders.video;
+    if (s) s.replaceTrack(t).then(() => tuneSender(s)).catch(() => {});
+    else if (t) attachTrack(peer, t);
+  }
+}
+
+/** The cut-out has twice the webcam's pixels (half of them flat grey): cap what it may cost per
+ *  peer, so a mesh of a few people fits a home uplink. The webcam keeps WebRTC's default. */
+function tuneSender(sender) {
+  try {
+    const p = sender.getParameters();
+    if (!p.encodings?.length) return;              // not negotiated yet: tuned again once connected
+    if (sender.track && sender.track === holo.track) p.encodings[0].maxBitrate = HOLO_KBPS * 1000;
+    else delete p.encodings[0].maxBitrate;
+    sender.setParameters(p).catch(() => {});
+  } catch { /* closing */ }
+}
+
+/** Where the head is in the cut-out, to everyone (or one peer whose channel just opened). */
+function sendFraming(only) {
+  const f = holo.framing;
+  const msg = JSON.stringify({ t: 'holo', top: r3(f.top), head: r3(f.head), cx: r3(f.cx) });
+  for (const peer of only ? [only] : peers.values()) {
+    const dc = peer.rtc?.dc;
+    if (dc?.readyState === 'open') { try { dc.send(msg); } catch { /* closing */ } }
+  }
+  if (!only) { holo.sent = { ...f }; holo.sentAt = performance.now(); }
+}
+
+function onPeerData(peer, data) {
+  if (typeof data !== 'string' || data.length > 512) return;
+  let m;
+  try { m = JSON.parse(data); } catch { return; }
+  const ok = (v, a, b) => Number.isFinite(v) && v >= a && v <= b;
+  if (m?.t === 'holo' && ok(m.top, 0, 0.9) && ok(m.head, 0.05, 1) && ok(m.cx, 0, 1)) {
+    peer.framing = { top: m.top, head: m.head, cx: m.cx };
+  }
+}
+
+// A background tab gets no video frame callbacks, so the cut-out would freeze on its last frame:
+// the plain webcam (which keeps running) goes out until the tab is back and sees someone again.
+document.addEventListener('visibilitychange', () => { if (document.hidden && holo.state === 'live') goRaw(); });
 
 /* ------------------------------------------------------------------ WebRTC mesh (perfect negotiation) */
 // polite = the lower id. The polite side yields on an offer collision, the impolite side ignores
@@ -1059,7 +1643,7 @@ function ensureRtc(peer, initiator = false) {
   if (peer.rtc) return peer.rtc;
   const pc = new RTCPeerConnection({ iceServers: STUN });
   const rtc = { pc, polite: me.id < peer.id, makingOffer: false, ignoreOffer: false, answerPending: false,
-                senders: {}, remote: new MediaStream(), restarts: 0, failed: false };
+                senders: {}, remote: new MediaStream(), restarts: 0, failed: false, dc: null };
   peer.rtc = rtc;
 
   pc.addEventListener('negotiationneeded', async () => {
@@ -1087,13 +1671,26 @@ function ensureRtc(peer, initiator = false) {
     if (!streams[0]) rtc.remote.addTrack(track);
     attachRemote(peer, stream, track);
   });
+  // A sender's bitrate cap needs its encodings, which exist once negotiated.
+  pc.addEventListener('connectionstatechange', () => {
+    if (pc.connectionState === 'connected' && rtc.senders.video) tuneSender(rtc.senders.video);
+  });
+  pc.addEventListener('datachannel', ({ channel }) => wireChannel(peer, rtc, channel));
 
-  if (local.video) attachTrack(peer, local.video);
+  const video = outVideo();
+  if (video) attachTrack(peer, video);
   if (local.audio) attachTrack(peer, local.audio);
   // A newcomer with no camera and no mic still opens the connection, so the other side's tracks
-  // have something to ride on; the channel itself carries nothing.
-  if (initiator) pc.createDataChannel('room');
+  // have something to ride on. The channel carries only where a hologram's head is (sendFraming).
+  if (initiator) wireChannel(peer, rtc, pc.createDataChannel('room'));
   return rtc;
+}
+
+function wireChannel(peer, rtc, ch) {
+  rtc.dc = ch;
+  ch.addEventListener('open', () => sendFraming(peer));
+  ch.addEventListener('message', (e) => onPeerData(peer, e.data));
+  if (ch.readyState === 'open') sendFraming(peer);
 }
 
 function attachTrack(peer, track) {
@@ -1397,6 +1994,18 @@ function closePanels() {
 $('peopleBtn').addEventListener('click', () => togglePanel('people'));
 $('helpBtn').addEventListener('click', () => togglePanel('help'));
 $('camBtn').addEventListener('click', () => setLocal('video', !shownOn('video')));
+$('holoBtn').addEventListener('click', () => {
+  if (holo.state === 'failed' && holo.want) {      // unavailable: a click tries again
+    if (holo.loadFailed) { holo.segLoad = null; holo.loadFailed = false; }
+    Object.assign(holo, { state: 'off', why: '', segs: 0, slowSince: 0 });
+  } else {
+    holo.want = !holo.want;
+    store.set('hologram', holo.want);
+    if (holo.state === 'failed') holo.state = 'off';
+  }
+  syncHologram();
+  if (holo.want && !local.video) toast('Turn your camera on to appear as a hologram');
+});
 $('micBtn').addEventListener('click', () => { if (!zoom) setLocal('audio', !shownOn('audio')); });
 $('inviteClose').addEventListener('click', () => togglePanel('invitePop', false));
 
@@ -1465,13 +2074,20 @@ async function detectZoom() {
 /* ------------------------------------------------------------------ frame loop */
 const clock = new THREE.Clock();
 let lastPose = 0, lastPoseMsg = '';
+let lastFrameAt = 0;
 
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.2);   // a slow frame still walks, a stall does not teleport
   const now = performance.now();
+  // After this page itself stood still for a while (a long task such as the segmenter starting
+  // on a slow machine, or a tab the browser paused), the state frames sent meanwhile are still
+  // waiting to be read: the silence was ours, so it does not count toward a dead socket.
+  if (lastFrameAt && now - lastFrameAt > 1000) lastStateAt += now - lastFrameAt;
+  lastFrameAt = now;
   stepWalker(dt);
   stepBodies(dt);
   stepAvatars(dt);
+  stepGrabLines();
   updateGrabTarget(now);
 
   if (hoverAt && !grab && gesture === 'none' && now - hoverPickedAt > 70) {

@@ -106,11 +106,13 @@ required-version = ">=0.9.17"
 testpaths = ["tests"]
 # The default run must stay offline and fast, so it is worth running before every commit. Anything
 # needing Blender, a real scan, or a paid model call is opt-in by marker.
-addopts = "-m 'not blender and not scan and not live' --strict-markers"
+addopts = "-m 'not blender and not scan and not live and not render and not infinigen' --strict-markers"
 markers = [
     "blender: needs a Blender install ($LITEREALITY_BLENDER) — run with `-m blender`",
     "scan: needs real scan data under scans_uploaded/ — run with `-m scan`",
     "live: makes paid model calls — run with `-m live`",
+    "render: needs headless Chromium via Playwright (`uv run --with playwright`) — run with `-m render`",
+    "infinigen: builds a real Infinigen asset ($LR_INFINIGEN_PYTHON, minutes of CPU) — run with `-m infinigen`",
 ]
 
 [tool.ruff]

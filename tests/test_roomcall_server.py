@@ -14,6 +14,7 @@ import contextlib
 import gc
 import hashlib
 import json
+import re
 import threading
 import time
 import weakref
@@ -60,6 +61,10 @@ INDEX = f"""<!doctype html>
 """
 
 
+# Stands in for the vendored segmenter model: the server must serve it as opaque bytes.
+MODEL = b"\x1c\x00\x00\x00TFL3 stand-in segmenter"
+
+
 def _sha256(text: str) -> str:
     return base64.b64encode(hashlib.sha256(text.encode()).digest()).decode()
 
@@ -72,6 +77,8 @@ def web_dir(tmp_path_factory):
     (web / "index.html").write_text(INDEX)
     (web / "app.js").write_text("console.log('room call');\n")
     (web / "app.css").write_text("body { margin: 0; }\n")
+    (web / server.SEGMENTER_MODEL).write_bytes(MODEL)
+    (web / "selfie_multiclass.tflite").write_bytes(b"not served: only the one fixed name is")
     (root / "secret.txt").write_text("not for browsers\n")
     return web
 
@@ -157,6 +164,7 @@ ROUTES = {
     "/": "text/html",
     "/app.js": "text/javascript",
     "/app.css": "text/css",
+    "/selfie_segmenter.tflite": "application/octet-stream",
     "/scene.json": "application/json",
     "/scene.glb": "model/gltf-binary",
     "/healthz": "application/json",
@@ -173,6 +181,8 @@ def _assert_security_headers(response) -> None:
     script_src = directives["script-src"]
     assert f"'sha256-{_sha256(IMPORT_MAP)}'" in script_src
     assert "'unsafe-inline'" not in script_src and "'unsafe-eval'" not in script_src
+    # WebAssembly for the hologram's segmenter, and only that: JS eval stays blocked.
+    assert "'wasm-unsafe-eval'" in script_src
     assert "https://cdn.jsdelivr.net" in script_src and "https://appssdk.zoom.us" in script_src
     assert "'self'" in script_src
     assert "ws:" in directives["connect-src"] and "wss:" in directives["connect-src"]
@@ -217,12 +227,47 @@ def test_route_bodies(client, model, web_dir):
     "/index.html", "/web/app.js", "/app.jsx", "/server.py", "/.env", "/secret.txt",
     "/../secret.txt", "/%2e%2e/secret.txt", "/app.js/../../secret.txt", "/..%2fsecret.txt",
     "/web/..%2f..%2fsecret.txt", "/docs", "/openapi.json", "/redoc", "/ws",
+    "/selfie_multiclass.tflite", "/web/selfie_segmenter.tflite", "/selfie_segmenter.tflite.map",
 ])
 def test_anything_else_is_404_and_still_has_headers(client, path):
     response = client.get(path)
     assert response.status_code == 404
     assert b"not for browsers" not in response.content
     _assert_security_headers(response)
+
+
+def test_the_segmenter_model_is_served_and_revalidated(client):
+    first = client.get("/selfie_segmenter.tflite")
+    assert first.status_code == 200 and first.content == MODEL
+    assert first.headers["cache-control"] == "no-cache"
+    again = client.get("/selfie_segmenter.tflite", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == 304 and not again.content
+    _assert_security_headers(again)
+
+
+def test_a_client_without_the_model_gets_a_404_not_a_crash(model, tmp_path):
+    (tmp_path / "index.html").write_text(INDEX)
+    app = server.create_app(model=model, web_dir=tmp_path, settle_seconds=0.05)
+    with TestClient(app) as bare:
+        response = bare.get("/selfie_segmenter.tflite")
+    assert response.status_code == 404
+    _assert_security_headers(response)
+
+
+def test_the_real_client_vendors_its_segmenter_and_pins_its_runtime():
+    """The hologram runs MediaPipe's selfie segmenter: the model ships with the client (never
+    fetched from Google), and the runtime comes from the one CDN the CSP admits, at an exact
+    version."""
+    weights = (server.WEB_DIR / server.SEGMENTER_MODEL).read_bytes()
+    assert weights[4:8] == b"TFL3" and 100_000 < len(weights) < 1_000_000
+    assert hashlib.sha256(weights).hexdigest() == (
+        "191ac9529ae506ee0beefa6b2c945a172dab9d07d1e802a290a4e4038226658b")
+    app_js = (server.WEB_DIR / "app.js").read_text("utf-8")
+    pins = set(re.findall(r"@mediapipe/tasks-vision@([^/'\"`]+)", app_js))
+    assert len(pins) == 1 and re.fullmatch(r"\d+\.\d+\.\d+", pins.pop()), pins
+    assert f"{server.THREE_CDN}/npm/@mediapipe/tasks-vision@" in app_js
+    assert f"'{server.SEGMENTER_MODEL}'" in app_js
+    assert "storage.googleapis.com" not in app_js and "mediapipe-models" not in app_js
 
 
 def test_inline_script_hashes_follow_the_browser():

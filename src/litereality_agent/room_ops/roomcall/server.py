@@ -185,6 +185,14 @@ PALETTE = ("#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f
 JS = "text/javascript; charset=utf-8"
 CSS = "text/css; charset=utf-8"
 HTML = "text/html; charset=utf-8"
+BINARY = "application/octet-stream"
+
+# The hologram's person-segmentation model: MediaPipe's selfie segmenter (float16, 250 KB,
+# Apache-2.0, from storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/
+# float16/latest/). It is vendored in web/ and served from here under this fixed name, so a browser
+# never fetches it from Google at runtime. The runtime that runs it comes from jsDelivr, pinned in
+# app.js like three.js.
+SEGMENTER_MODEL = "selfie_segmenter.tflite"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -216,18 +224,22 @@ def inline_script_hashes(page: str) -> list[str]:
 def content_security_policy(script_hashes: Iterable[str]) -> str:
     """The page's CSP: our own files, three.js from jsDelivr, the Zoom Apps SDK, and nothing else.
 
-    - script-src: no 'unsafe-inline' — the import map is let in by hash.
+    - script-src: no 'unsafe-inline' and no 'unsafe-eval'. The import map is let in by its hash.
+      'wasm-unsafe-eval' lets the hologram's segmenter compile its WebAssembly runtime (MediaPipe,
+      from jsDelivr). It allows WebAssembly only: JavaScript eval and new Function stay blocked.
     - style-src keeps 'unsafe-inline': styles are not code, and the client may set style
       attributes from JS; forbidding that buys nothing here and breaks UI in surprising places.
     - connect-src: ws:/wss: for the room socket (also behind a tunnel on another host), blob:/data:
-      because GLTFLoader fetches its embedded textures through blob URLs.
+      because GLTFLoader fetches its embedded textures through blob URLs. The segmenter's .wasm
+      comes from jsDelivr and its model from 'self'; both are already covered.
     - img/media: blob:/data: for textures and webcam video. frame-ancestors lets Zoom (desktop and
       the zoom.us web client) embed the page, and nobody else.
     """
     hashes = " ".join(f"'sha256-{h}'" for h in script_hashes)
     directives = {
         "default-src": "'self'",
-        "script-src": " ".join(filter(None, ("'self'", hashes, THREE_CDN, ZOOM_SDK))),
+        "script-src": " ".join(filter(None, ("'self'", "'wasm-unsafe-eval'", hashes, THREE_CDN,
+                                              ZOOM_SDK))),
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data: blob:",
         "media-src": "'self' data: blob: mediastream:",
@@ -282,7 +294,7 @@ class SecurityHeaders:
 @dataclass(frozen=True)
 class WebAssets:
     """index.html read once (so the CSP hash and the served page can never disagree) and the
-    folder app.js / app.css are read from per request."""
+    folder app.js, app.css and the segmenter model are read from per request."""
 
     root: Path
     index: bytes
@@ -301,7 +313,7 @@ class WebAssets:
         return cls(root, index, hashes)
 
     def asset(self, name: str) -> bytes | None:
-        """One of the two vendored files by fixed name. The name never comes from a request."""
+        """One of the vendored files by fixed name. The name never comes from a request."""
         path = self.root / name
         return path.read_bytes() if path.is_file() else None
 
@@ -1447,6 +1459,19 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     @app.get("/app.css")
     async def app_css() -> Response:
         return file_response("app.css", CSS)
+
+    @app.get("/" + SEGMENTER_MODEL)
+    async def segmenter_model(request: Request) -> Response:
+        """The hologram's segmentation model, by its fixed name. Every page with a camera on
+        fetches it, so a repeat visit revalidates against its hash and is not sent again."""
+        body = web.asset(SEGMENTER_MODEL)
+        if body is None:
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+        headers = {"ETag": etag, "Cache-Control": "no-cache"}
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        return Response(body, media_type=BINARY, headers=headers)
 
     @app.get("/scene.json")
     async def scene_manifest(request: Request) -> Response:

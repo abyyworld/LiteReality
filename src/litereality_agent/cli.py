@@ -554,6 +554,56 @@ def _estimate_line(generator, objects: int, passes) -> str:
             f"final, ~${dollars:.2f} of GPU time (an estimate, see `realroom.generate.estimate`)")
 
 
+def _articulated_source(args, settings=None):
+    """Infinigen's openable furniture for the objects stage (`realroom.articulated`), or None.
+
+    ``--articulated`` asks for it, ``--no-articulated`` refuses it; without either it is on only
+    with ``$LR_ARTICULATED=1`` (minutes of CPU per room the first time: never by surprise). It runs
+    in a local Infinigen env when ``$LR_INFINIGEN_PYTHON`` names that env's python, else — with
+    ``--fake`` — as the offline stand-in, else on Modal (``litereality-infinigen``,
+    deploy/modal/infinigen). Both variables are read from the shell, not `.env`."""
+    from litereality_agent.models.articulated import infinigen
+    from litereality_agent.pipeline.realroom import articulated
+
+    choice = getattr(args, "articulated", None)
+    local = os.environ.get(infinigen.PYTHON_ENV, "").strip()
+    wanted = os.environ.get("LR_ARTICULATED", "").strip().lower() in ("1", "true", "yes", "on")
+    if choice is False or (choice is None and not wanted):
+        return None
+    fake = bool(getattr(args, "fake", False))
+    modal_kwargs = None
+    if not local and not fake:
+        settings = settings or load_settings()
+        if not settings.modal_configured():
+            raise SystemExit("--articulated needs Infinigen: a local env ($LR_INFINIGEN_PYTHON, "
+                             "see deploy/modal/infinigen/README.md) or Modal credentials in "
+                             ".env and `modal deploy deploy/modal/infinigen/app.py` once")
+        modal_kwargs = _modal_kwargs(settings)
+    runner = infinigen.runner_from_env(fake=fake, modal_kwargs=modal_kwargs)
+    try:
+        runner.check()
+    except Exception as exc:  # noqa: BLE001 — said once here rather than once per object
+        message = f"Infinigen ({runner.name}) is not available: {type(exc).__name__}: {exc}"
+        if choice:
+            raise SystemExit(message) from None
+        print(f"  {console.colour('yellow')}{message}{console.colour('off')}; "
+              "openable furniture skipped", file=sys.stderr)
+        return None
+    drawers = [h.strip() for h in (getattr(args, "drawers", "") or "").split(",") if h.strip()]
+    return articulated.ArticulatedSource(runner, drawers=drawers)
+
+
+def _plan_articulated(room, source) -> list:
+    """Claim the openable objects before the crops are cut; print what will be built."""
+    if source is None:
+        return []
+    source.plan(room)
+    if source.targets:
+        print(f"  {console.colour('dim')}openable{console.colour('off')} "
+              f"{len(source.targets)} with {source.runner.name}: {source.describe()}")
+    return [source]
+
+
 def _report_objects(room, progress) -> None:
     from litereality_agent.pipeline.realroom import build
 
@@ -563,6 +613,9 @@ def _report_objects(room, progress) -> None:
           f"{have['template']} still templates  {dim}{progress.seconds:.0f} s, "
           f"{progress.versions} version(s){off}")
     print(f"  scene    {console.short(room.scene_path)}")
+    opened = sorted(h for h, s in progress.installed.items() if s == "infinigen")
+    if opened:
+        print(f"  openable {len(opened)} from Infinigen: {', '.join(opened)}")
     for key, error in sorted(progress.failed.items()):
         print(f"  {console.colour('yellow')}failed{off}   {key}: {error}")
     for handle, donor in sorted(progress.borrowed.items()):
@@ -586,11 +639,13 @@ def _realroom(args) -> int:
     room = realroom.RealRoom(scan_dir, out, label=args.label or context.scan,
                              colours=args.colours, textures=args.textures, rebuild=True)
     room.write(check=False)
+    extras = _plan_articulated(room, _articulated_source(args))
     room.make_crops()
     print(f"realroom  {context.scan}: {len(room.generated_handles())} objects, pass "
           f"{args.pass_name} — {_estimate_line(generator, len(room.crops), [args.pass_name])}")
     progress = realroom.generate_room(room, generator, passes=[args.pass_name],
-                                      min_interval=float("inf"), reuse=not args.fresh)
+                                      min_interval=float("inf"), reuse=not args.fresh,
+                                      extras=extras)
     _report_objects(room, progress)
     print(f"  {console.colour('dim')}walk it with others:{console.colour('off')} "
           f"uv run litereality roomcall {console.short(room.scene_path)}")
@@ -617,6 +672,7 @@ def _realistic_roomcall(args) -> int:
     label = args.label or context.scan
     settings = load_settings()
     generator = _object_generator(args, settings)
+    source = _articulated_source(args, settings)
     started = time.perf_counter()
     room = realroom.RealRoom(scan_dir, out, label=label,
                              textures=getattr(args, "textures", True), rebuild=True)
@@ -627,10 +683,12 @@ def _realistic_roomcall(args) -> int:
     passes = ["preview", "final"]
 
     def generate(on_version=None):
+        extras = _plan_articulated(room, source)
         room.make_crops()
         print(f"  objects  {len(room.crops)}: "
               f"{_estimate_line(generator, len(room.crops), passes)}")
-        progress = realroom.generate_room(room, generator, passes=passes, on_version=on_version)
+        progress = realroom.generate_room(room, generator, passes=passes, on_version=on_version,
+                                          extras=extras)
         _report_objects(room, progress)
         return progress
 
@@ -720,6 +778,20 @@ def _generate_3d(args) -> int:
     return int(not result or not Path(result).is_file())
 
 
+def _add_articulated_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--articulated", dest="articulated", action="store_true", default=None,
+        help="openable furniture from Infinigen-Sim: cabinets, a dishwasher, the door and "
+             "windows built with real hinges and drawers, sized to the scan (in "
+             "$LR_INFINIGEN_PYTHON's env, else on Modal; default off, or on with "
+             "$LR_ARTICULATED=1)")
+    parser.add_argument("--no-articulated", dest="articulated", action="store_false",
+                        help="keep every object's template (or TRELLIS mesh)")
+    parser.add_argument("--drawers", metavar="HANDLES", default="",
+                        help="with --articulated: storage units that are drawer chests, "
+                             "comma-separated (e.g. Storage3)")
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="litereality", description="LiteReality-Agent")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -785,6 +857,7 @@ def _parser() -> argparse.ArgumentParser:
                            "(offline, free) to try the flow")
     call.add_argument("--fake-delay", type=float, default=1.0, metavar="S",
                       help=argparse.SUPPRESS)
+    _add_articulated_options(call)
     call.set_defaults(handler=_roomcall)
 
     real = commands.add_parser(
@@ -809,6 +882,7 @@ def _parser() -> argparse.ArgumentParser:
                       help="the quick room in category colours (skip reading the frames)")
     real.add_argument("--no-textures", dest="textures", action="store_false",
                       help="flat colours only; skip the wall/floor/ceiling photos")
+    _add_articulated_options(real)
     real.set_defaults(handler=_realroom, fake_delay=0.0)
 
     quick = commands.add_parser(
@@ -868,7 +942,143 @@ def _parser() -> argparse.ArgumentParser:
     generate.add_argument("--seed", type=int, default=42)
     generate.add_argument("--simplify", type=float, default=0.95)
     generate.set_defaults(handler=_generate_3d)
+
+    evaluate = commands.add_parser(
+        "evaluate",
+        help="the paper's numbers for a room: physics audit per stage and, with --render, "
+             "visual fidelity against the scan's own photos",
+    )
+    evaluate.add_argument(
+        "targets", nargs="+", metavar="SCENE_OR_RUN",
+        help="a scene.xml, a folder holding one, a run folder (run/<scan>: every stage it has — "
+             "quick/, objects/, mujoco_seed/) or a scan name; several are compared in one table")
+    evaluate.add_argument("--scan", help="the capture to compare renders with (a scan folder or "
+                                         "a name under $LR_SCANS_DIR); default: what the scene's "
+                                         "build recorded")
+    evaluate.add_argument("--out", metavar="DIR",
+                          help="where the reports go (default: run/<scan>/eval, or eval/ beside "
+                               "the scene)")
+    evaluate.add_argument("--output-root")
+    evaluate.add_argument("--render", action="store_true",
+                          help="render the room from the scan's camera poses in headless "
+                               "Chromium (needs `uv run --with playwright`) and compare with the "
+                               "photos: PSNR/SSIM overall, on walls/floor, on objects")
+    evaluate.add_argument("--size", default="320x240", metavar="WxH",
+                          help="the resolution images are compared at (default 320x240)")
+    evaluate.add_argument("--max-views", type=int, default=None, metavar="N",
+                          help="compare at most N of the capture's frames, evenly spread")
+    evaluate.add_argument("--holdout", type=int, default=None, metavar="K",
+                          help="with --render: also score each photo against a quick room "
+                               "rebuilt WITHOUT it (K folds of the capture's frames; default 4, "
+                               "0 to skip). The quick room's walls are made of these photos, so "
+                               "the as-built numbers are training views")
+    evaluate.add_argument("--holdout-split", choices=("interleaved", "block"),
+                          default="interleaved",
+                          help="folds of every K-th frame (default), or K contiguous stretches "
+                               "of the trajectory (stricter)")
+    evaluate.add_argument("--fast", action="store_true",
+                          help="shorter physics checks (2 s stability, one timing run, no "
+                               "concurrency or server-capacity test, no hold-out unless "
+                               "--holdout): for a quick look, not for the paper's numbers")
+    evaluate.set_defaults(handler=_evaluate)
     return parser
+
+
+def _is_capture(path: Path) -> bool:
+    """A scan folder (or its room.usdz) rather than a scene, a stage folder or a run folder."""
+    from litereality_agent.pipeline.evaluate.report import SCENE_NAME, STAGE_FOLDERS
+    from litereality_agent.pipeline.quickroom import find_room_usdz
+
+    if path.is_file():
+        return path.suffix == ".usdz"
+    if not path.is_dir() or (path / SCENE_NAME).is_file():
+        return False
+    if any((path / folder / SCENE_NAME).is_file() for folder in STAGE_FOLDERS):
+        return False
+    return find_room_usdz(path) is not None
+
+
+def _run_root(path: Path) -> Path:
+    """The run folder a target belongs to: itself for a run folder, the parent of its stage
+    folder for a stage or a scene file in one."""
+    from litereality_agent.pipeline.evaluate.report import SCENE_NAME, STAGE_FOLDERS
+
+    folder = path if path.is_dir() else path.parent
+    if path.is_dir() and not (path / SCENE_NAME).is_file():
+        return folder
+    return folder.parent if folder.name in STAGE_FOLDERS else folder
+
+
+def _evaluate(args) -> int:
+    """`litereality evaluate`: the per-stage reports and the comparison tables.
+
+    Each target is compared with ITS OWN capture. A scan name or a scan folder is resolved here
+    (this layer knows the run layout): it means that scan's run folder, compared with that scan.
+    A scene, stage or run folder is compared with the capture its build recorded. ``--scan``
+    names one capture for every target, because the caller said so (the report flags a scene
+    whose build recorded another)."""
+    from litereality_agent.pipeline import evaluate as evaluation
+
+    try:
+        w, h = (int(v) for v in args.size.lower().split("x"))
+    except ValueError:
+        raise SystemExit(f"--size {args.size}: expected WxH, e.g. 320x240") from None
+    scan = None
+    if args.scan:
+        found = _quick_target(args.scan, args.output_root)
+        if found is None:
+            raise SystemExit(f"--scan {args.scan}: no RoomPlan scan there (a folder holding "
+                             "room.usdz, or a scan name under $LR_SCANS_DIR)")
+        scan = found[0]
+    targets: list[tuple[Path, Path | None]] = []
+    for target in args.targets:
+        path = Path(target).expanduser()
+        own = scan
+        if not path.exists() or _is_capture(path):
+            found = _quick_target(target, args.output_root)
+            if found is None:
+                raise SystemExit(f"{target}: no such scene, run folder or scan")
+            capture, context = found
+            path, own = context.scene_dir, scan or capture
+            if not path.is_dir():
+                raise SystemExit(f"{target}: a scan, but its run folder {path} does not exist "
+                                 f"yet; build a stage first (`litereality quickroom {target}`)")
+        try:
+            evaluation.find_scenes(path)
+        except ValueError as exc:
+            raise SystemExit(f"{target}: {exc}") from None
+        targets.append((path, own))
+    roots = {_run_root(path.resolve()) for path, _own in targets}
+    if args.out:
+        out = Path(args.out).expanduser()
+    elif len(roots) == 1:
+        out = roots.pop() / "eval"
+    else:
+        out = Path(os.path.commonpath([str(r) for r in roots])) / "eval"
+    renderer = None
+    if args.render:
+        try:
+            renderer = evaluation.PlaywrightRenderer()
+        except evaluation.RendererUnavailable as exc:
+            raise SystemExit(str(exc)) from None
+    holdout = args.holdout if args.holdout is not None else (0 if args.fast else 4)
+    options = ({"stability_seconds": 2.0, "cost_repeats": 1, "measure_concurrency": False}
+               if args.fast else {})
+    result = evaluation.evaluate(targets, out, render=args.render, renderer=renderer,
+                                 size=(w, h), max_views=args.max_views, physics_options=options,
+                                 holdout=holdout if args.render else 0,
+                                 holdout_split=args.holdout_split)
+    bold, dim, yellow, off = (console.colour(c) for c in ("bold", "dim", "yellow", "off"))
+    print()
+    print((out / "comparison.md").read_text(encoding="utf-8"))
+    for report in result["reports"]:
+        print(f"  {bold}{report['name']}{off}  {console.short(out / report['name'] / 'report.md')}"
+              + ("" if report.get("fidelity") else f"  {dim}({report['fidelity_skipped']}){off}"))
+        if report.get("scan_mismatch"):
+            print(f"    {yellow}scan mismatch{off}: {report['scan_mismatch']}")
+    print(f"  {dim}tables:{off} {console.short(out / 'comparison.md')} "
+          f"{dim}(+ .json, .tex){off}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:

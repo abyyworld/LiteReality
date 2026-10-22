@@ -49,6 +49,25 @@ physics-perception project.
   (preview, then final). TRELLIS now runs up to 4 GPUs safely: weights are downloaded once by a CPU
   function and loaded offline. Built and tested offline with a fake generator; **the real Modal run
   is not done yet.**
+- **Opening furniture** (`models/articulated/`, `--articulated`): Infinigen-Articulated (BSD-3) builds
+  doors, windows, cabinets, drawers and appliances sized to the scanned boxes on the CPU (8–45 s
+  each), with our masses and joint settings. Validated on tea_room with a local Infinigen env: every
+  part opens under a pull and the room is stable. The Modal path is not run yet.
+- **Hologram participants**: the webcam is segmented in the browser (MediaPipe 0.10.35, model served
+  by us), and each person appears as a live photoreal cut-out in the room. A webcam frames only head
+  and shoulders, so there are no arms below the frame and no legs; full-body options are being
+  researched (LHM, real-time video models).
+- **Evaluation harness** (`pipeline/evaluate/`, `litereality evaluate <room>`): for the paper, it
+  measures:
+  - interactability: grab, pull and rest for every movable body;
+  - mass plausibility and stability;
+  - step cost and rooms per server;
+  - photo fidelity: PSNR/SSIM against the scan's own frames, from their camera poses, with k-fold
+    held-out frames, split into walls/floor and objects.
+
+  First numbers (tea_room and office_room quick rooms): 0/5 and 0/6 mass outliers, no overlaps, no
+  drift. Photo walls add +2.5–2.7 dB PSNR on walls/floor. Tucked chairs dropped back onto the table
+  edge keep rocking; that is a real fault found by the audit.
 - **Not tried yet:** a real call with several people, `--publish` against the deployed link, the
   real `--realistic` run, and the Zoom App mode inside the Zoom client (needs a Zoom developer
   account).
