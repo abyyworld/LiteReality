@@ -727,7 +727,8 @@ def _roomcall(args) -> int:
     if getattr(args, "realistic", False):
         return _realistic_roomcall(args)
     _quick_room_for_scan(args)
-    if not args.deploy:
+    # The `.env` Modal token is needed to deploy, and to build full bodies on the GPU from here.
+    if not args.deploy and getattr(args, "avatars", "standin") != "modal":
         return roomcall.run(args)
     settings = load_settings()
     return roomcall.run(

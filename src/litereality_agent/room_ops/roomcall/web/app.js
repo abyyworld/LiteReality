@@ -10,6 +10,12 @@
    With the camera on, each person is sent as a hologram: cut out of their background on their own
    device and stood life-size in the room (see "hologram", sender, and `holoMaterial`, receiver).
 
+   Full bodies: a person can give the room a turnaround of themselves (or photos) once; the server
+   builds a 3D Gaussian-splat body from it, and every browser draws it with Spark, posed live —
+   arms and head from the sender's own pose tracker ("j" on the pose message), legs walking
+   procedurally, their live face on top (see "bodies" and "making my body"; the maths is in
+   body.js).
+
    CSP: the page's only inline script is the import map; there are no inline handlers or style
    attributes, so every listener is attached here and styling goes through classes or CSSOM. */
 
@@ -17,6 +23,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+import {
+  parseAvatar, headMask, poseSkeleton, UpperBodySolver, packJoints, unpackJoints, Gait, SENT,
+  relaxedUpperBody, assembleLocal, qSlerp, qRot, smoothstep, QI,
+} from './body.js';
 
 // Picking walks a BVH instead of every triangle: a scanned room's merged static shell is up to a
 // million triangles and its bounds contain the camera, so a plain raycast tests all of them on
@@ -54,6 +64,23 @@ const HAND_SIDE = 0.2, HAND_DROP = 0.45;           // where a grab line starts: 
 // head top 15 % down, head 35 % of the height, centred. Life-size, that puts the image top
 // ~0.2 m above the eyes.
 const HOLO_FRAMING = { top: 0.15, head: 0.35, cx: 0.5 };
+// Full bodies. Spark (MIT, @sparkjsdev/spark in the import map) draws them; it is imported only
+// when the first body is about to load, so a browser it cannot run in loses nothing else. Each
+// body file is pre-shuffled, so its first n splats are a uniform subsample: the level of detail.
+const BODY_SPLATS = { desktop: 120000, lowMemory: 40000, software: 2500 };
+const BODY_FADE_S = 0.4, BODY_RETRY_MS = 5000, UPPER_SMOOTH = 12;
+const LABEL_OVER_HEAD = 0.25;                      // name tag over a body's Head joint
+const FACE_SCREEN_H = 0.28, FACE_PUSH = 0.04;      // the live face on a body: size, and toward you
+const FACE_TAU = 0.15;                             // s: the live face eases in and out
+const FACE_SHOW_DEG = 70, FACE_HIDE_DEG = 95;      // head turned further from you: the splat head
+const POSE_MODEL = '/pose_landmarker_lite.task';
+const POSE_TRACK_HZ = 15, POSE_STALE_MS = 500, POSE_LOST_MS = 1000, POSE_INIT_MS = 30000;
+// A sender's tracker can fall behind (a busy laptop runs it next to the hologram's segmenter), and
+// then its rows come without "j" between two results: their arms stay as they were for this long
+// rather than dropping to relaxed and back up about once a second.
+const JOINTS_HOLD_MS = POSE_LOST_MS;
+const CAPTURE = { frames: 8, everyMs: 450, count: 3, quality: 0.88, photoMax: 1600, maxFiles: 8 };
+const AVATAR_URL = /^\/avatars\/a[0-9a-f]{16}\.bin$/;
 const STATE_DEAD_MS = 5000, MAX_ICE_RESTARTS = 3;
 const STUN = [{ urls: 'stun:stun.l.google.com:19302' }];
 const ZOOM_SDK = 'https://appssdk.zoom.us/sdk.min.js';
@@ -505,7 +532,8 @@ function applyManifest(man, first) {
     bounds.minX = cx - hx; bounds.maxX = cx + hx;
     bounds.minZ = -(cy + hy); bounds.maxZ = -(cy - hy);   // three z = -mj y
   }
-  eyeY = (Number.isFinite(man.floor_z) ? man.floor_z : 0) + EYE;
+  floorY = Number.isFinite(man.floor_z) ? man.floor_z : 0;
+  eyeY = floorY + EYE;
   if (first) placeSpawn(man); else clampWalker();
 }
 
@@ -567,7 +595,7 @@ function stepWalker(dt) {
 
 addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.code === 'Escape') { closePanels(); return; }
+  if (e.code === 'Escape') { if (capture) capture.cancelled = true; else closePanels(); return; }
   if (!joined) return;
   keys.add(e.code);
   if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -814,11 +842,14 @@ function stepGrabLines() {
   for (const [pid, rec] of grabLines) placeHand(pid, rec.line.geometry.attributes.position);
 }
 
-/** Roughly where someone's right hand is, in three space. A cut-out always faces you, so their
- *  right is your left of it; a capsule's right follows its own yaw. */
+/** Roughly where someone's right hand is, in three space: a body's own right wrist; else, a
+ *  cut-out always faces you, so their right is your left of it; a capsule's right follows its
+ *  own yaw. */
 function handOf(pid, out) {
-  const av = peers.get(pid)?.avatar;
+  const peer = peers.get(pid), av = peer?.avatar;
   if (!av?.has || !av.root.visible) return null;
+  const wrist = bodyJoint(peer, 21);
+  if (wrist) return out.set(wrist[0], wrist[1], wrist[2]);
   const p = av.root.position;
   let rx, rz;
   if (av.cut.visible) {
@@ -878,12 +909,16 @@ function makeAvatar(peer) {
   stand.add(cut);
   const label = labelSprite(peer.name, peer.color);
   label.position.y = LABEL_Y;
+  // Draw order stays three's own (renderOrder 0: transparent things back to front, the room's
+  // glass among them) until they have a body; then `setFaceMode` draws the face and name tag
+  // after the splats.
   root.add(torso, head, face, stand, label);
   root.visible = false;                           // until their first pose arrives
   scene.add(root);
   return { root, torso, head, face, screen, cut, stand, label, skin, sw: FACE_H * 4 / 3, sh: FACE_H,
            aspect: 4 / 3, fr: { ...HOLO_FRAMING },
-           tp: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0, has: false };
+           tp: new THREE.Vector3(), yaw: 0, pitch: 0, tyaw: 0, tpitch: 0, has: false,
+           joints: null, jointsAt: 0 };            // their tracked upper body ("j"), if sent
 }
 
 // The receiving end of the hologram. One video carries both halves of each frame: colour on the
@@ -895,6 +930,9 @@ function makeAvatar(peer) {
 // sampled raw (video textures are uploaded without sRGB decoding), so colour comes out exactly as
 // the face plane shows it. Output is premultiplied; near-transparent fragments are discarded so
 // the depth written is the person's outline and later transparent things sort against it.
+// On a full body only the head is shown: `crop` picks it out of the frame (u0, v0, u1, v1 in one
+// half's image coordinates, top-down) and `opacity` fades it as they turn away. The defaults,
+// (0, 0, 1, 1) and 1, are exactly the whole cut-out.
 const HOLO_VERT = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -905,21 +943,28 @@ const HOLO_FRAG = /* glsl */ `
 uniform sampler2D map;
 uniform float inset;
 uniform float fade;
+uniform vec4 crop;
+uniform float opacity;
 varying vec2 vUv;
 void main() {
-  float x = clamp(vUv.x, inset, 1.0 - inset) * 0.5;
-  vec3 color = texture2D(map, vec2(x, vUv.y)).rgb;
-  float m = dot(texture2D(map, vec2(x + 0.5, vUv.y)).rgb, vec3(0.299, 0.587, 0.114));
+  float x = clamp(mix(crop.x, crop.z, vUv.x), inset, 1.0 - inset) * 0.5;
+  float y = 1.0 - mix(crop.y, crop.w, 1.0 - vUv.y);
+  vec3 color = texture2D(map, vec2(x, y)).rgb;
+  float m = dot(texture2D(map, vec2(x + 0.5, y)).rgb, vec3(0.299, 0.587, 0.114));
   float a = smoothstep(0.3, 0.7, m);
   a *= smoothstep(0.0, fade, vUv.y) * smoothstep(0.0, 0.02, 1.0 - vUv.y)
      * smoothstep(0.0, 0.03, vUv.x) * smoothstep(0.0, 0.03, 1.0 - vUv.x);
+  a *= opacity;
   if (a < 0.05) discard;
   gl_FragColor = vec4(color * a, a);
 }`;
 
+const HOLO_FADE = 0.22, HOLO_NECK_FADE = 0.3;     // bottom fade: the whole cut-out; a head on a body
+
 function holoMaterial() {
   return new THREE.ShaderMaterial({
-    uniforms: { map: { value: null }, inset: { value: 3 / (2 * HOLO_W) }, fade: { value: 0.22 } },
+    uniforms: { map: { value: null }, inset: { value: 3 / (2 * HOLO_W) }, fade: { value: HOLO_FADE },
+                crop: { value: new THREE.Vector4(0, 0, 1, 1) }, opacity: { value: 1 } },
     vertexShader: HOLO_VERT, fragmentShader: HOLO_FRAG,
     transparent: true, premultipliedAlpha: true, depthWrite: true,
   });
@@ -958,15 +1003,21 @@ function updateAvatarScreen(peer) {
   const was = av.cut.visible;
   av.screen.visible = show && !packed;
   av.cut.visible = packed;
-  av.torso.visible = av.head.visible = !packed;
+  av.torso.visible = av.head.visible = !packed && !bodyShown(peer);
   if (was !== packed) renderPeople();
+}
+
+/** Where their head is in their cut-out, eased (it comes over the data channel in jumps). */
+function easeFraming(peer, dt) {
+  const av = peer.avatar, f = peer.framing || HOLO_FRAMING, fr = av.fr, a = smooth(3, dt);
+  fr.top += (f.top - fr.top) * a; fr.head += (f.head - fr.head) * a; fr.cx += (f.cx - fr.cx) * a;
+  return fr;
 }
 
 /** Life-size: the head HEAD_M tall (from where the sender says the head is in its frame), the
  *  eyes at the avatar's eye height, the head over the avatar's position, facing you. */
 function placeCut(peer, dt) {
-  const av = peer.avatar, f = peer.framing || HOLO_FRAMING, fr = av.fr, a = smooth(3, dt);
-  fr.top += (f.top - fr.top) * a; fr.head += (f.head - fr.head) * a; fr.cx += (f.cx - fr.cx) * a;
+  const av = peer.avatar, fr = easeFraming(peer, dt);
   const h = clamp(HEAD_M / fr.head, 0.45, 1.7), w = h * av.aspect;
   const eyes = fr.top + EYES_IN_HEAD * fr.head;   // the eyes' row, as a fraction from the image top
   av.cut.scale.set(w, h, 1);
@@ -975,8 +1026,12 @@ function placeCut(peer, dt) {
   av.stand.lookAt(camera.position.x, av.root.position.y, camera.position.z);
 }
 
-function stepAvatars(dt) {
-  const a = smooth(AVATAR_SMOOTH, dt);
+/** `realDt` is the frame's real duration (up to 0.5 s). People are eased toward where the server
+ *  says they are over real time, and a body's gait must see the distance its avatar moved over
+ *  the time it really took: on a slow device a clamped frame time would make everyone lag behind
+ *  their pose, sprint, and take seconds to settle their feet. */
+function stepAvatars(dt, realDt = dt) {
+  const a = smooth(AVATAR_SMOOTH, realDt), t = performance.now() / 1000;
   for (const peer of peers.values()) {
     const av = peer.avatar;
     if (!av.has) continue;
@@ -985,6 +1040,9 @@ function stepAvatars(dt) {
     av.pitch += (av.tpitch - av.pitch) * a;
     av.root.rotation.y = av.yaw - Math.PI / 2;
     av.head.rotation.x = clamp(av.pitch, -PITCH_LIMIT, PITCH_LIMIT) * 0.7;
+    if (bodyShown(peer)) {
+      try { stepBody(peer, realDt, t); continue; } catch (err) { sparkFailed(err); }
+    }
     if (av.cut.visible) { placeCut(peer, dt); continue; }
     if (!av.screen.visible) { av.label.position.y = LABEL_Y; continue; }
     // Grow with distance (constant on-screen size from 1.5 m to ~4 m) so a face stays a face
@@ -993,6 +1051,313 @@ function stepAvatars(dt) {
     av.screen.scale.set(av.sw * s, av.sh * s, 1);
     av.label.position.y = Math.max(LABEL_Y, av.sh * s / 2 + 0.1);
     av.face.lookAt(camera.position.x, av.root.position.y, camera.position.z);
+  }
+}
+
+/* ------------------------------------------------------------------ bodies: other people, whole */
+// Someone who made a body (see "making my body") is drawn as a 3D Gaussian-splat person, posed
+// every frame (`stepBody`): their arms and head from their own pose tracker when they send it
+// (the "j" in their state row), relaxed otherwise; their legs from the procedural gait, walking
+// as their avatar moves; their live face (hologram or webcam) over the splat head while they
+// face you, the splat head when they turn away. Each body is two SplatMeshes — the head apart, so
+// it can fade on its own — skinned with Spark's SplatSkinning on the file's skeleton. The meshes
+// sit in the scene with an identity transform: the skin transforms map the body's canonical
+// frame straight to the world, so rest poses stay identity (Spark's own rest-pose convention
+// rotates about the wrong point). Spark rule: never hide a splat mesh with `visible` or by
+// removing it — Spark shows those only after its next (asynchronous) depth sort; `opacity` shows
+// at once. Anything Spark cannot do here leaves everyone a capsule and hologram, as before.
+const spark = { mod: null, sr: null, loading: null, failed: false, why: '' };
+const bodyTmp = { q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3() };
+let floorY = 0;                                    // three Y of the room's floor (manifest floor_z)
+
+function newBody() {
+  // `url` is the body on screen (or loading, when there is none); `pending` a new one loading
+  // to replace it.
+  return { state: 'none', url: null, pending: null, kind: '', note: '', gen: 0, building: false,
+           meshes: null, skel: null, fade: 0, faceVis: 0, count: 0, faceMode: false };
+}
+
+/** Spark, once per page, and the one SparkRenderer every body draws through. */
+function loadSpark() {
+  if (spark.failed) return Promise.reject(new Error('full bodies unavailable: ' + spark.why));
+  spark.loading ??= (async () => {
+    const mod = await withTimeout(import('@sparkjsdev/spark'), 30000);
+    const sr = new mod.SparkRenderer({ renderer, maxStdDev: Math.sqrt(5) });
+    sr.renderOrder = 1;                            // splats first, then live faces and labels
+    scene.add(sr);
+    spark.mod = mod; spark.sr = sr;
+    return mod;
+  })().catch((err) => { sparkFailed(err); throw err; });
+  return spark.loading;
+}
+
+/** Spark cannot run here (blocked CDN, no WebGL2, a shader it cannot compile…): every body goes,
+ *  everyone is a capsule and hologram again, and the person is told once. */
+function sparkFailed(err) {
+  if (spark.failed) return;
+  spark.failed = true;
+  spark.why = String(err?.message || err);
+  console.info('full bodies unavailable here:', err);
+  for (const peer of peers.values()) {
+    if (peer.body.meshes || peer.body.state === 'loading') { disposeBody(peer); peer.body.state = 'failed'; }
+  }
+  if (spark.sr) { scene.remove(spark.sr); try { spark.sr.dispose?.(); } catch { /* half made */ } spark.sr = null; }
+  toast("Full bodies aren't available in this browser");
+  renderPeople();
+}
+
+const bodyShown = (peer) => peer?.body?.state === 'ready' && !!peer.body.skel;
+
+/** A body joint's world position (three space), or null. */
+function bodyJoint(peer, j) {
+  const out = bodyShown(peer) ? peer.body.skel.out : null;
+  return out && peer.avatar.has ? [out.p[3 * j], out.p[3 * j + 1], out.p[3 * j + 2]] : null;
+}
+
+function perAvatarSplats() {
+  return softwareGL() ? BODY_SPLATS.software : LOW_MEMORY ? BODY_SPLATS.lowMemory : BODY_SPLATS.desktop;
+}
+
+/** What the server says about a peer's body (welcome, join, or an "avatar" message). */
+function onPeerAvatar(peer, info) {
+  const b = peer.body;
+  switch (info?.status) {
+    case 'building':
+      b.building = true;
+      if (b.state === 'none' || b.state === 'failed') b.state = 'building';
+      break;
+    case 'ready':
+      b.building = false;
+      if (typeof info.url !== 'string' || !AVATAR_URL.test(info.url)) break;
+      b.note = typeof info.note === 'string' ? info.note.slice(0, 200) : '';
+      if (bodyShown(peer)) {
+        if (info.url === b.url) { if (b.pending) { b.gen++; b.pending = null; } }   // keep this one
+        else if (info.url !== b.pending) loadBody(peer, info.url, info.kind);
+      } else if (b.state !== 'loading' || info.url !== b.url) loadBody(peer, info.url, info.kind);
+      break;
+    case 'failed':
+      b.building = false;
+      if (b.state === 'building') b.state = 'failed';
+      break;
+    case 'none':
+      disposeBody(peer);
+      Object.assign(b, { state: 'none', url: null, pending: null, kind: '', building: false });
+      break;
+    default: return;
+  }
+  renderPeople();
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** One load at a time per peer: a newer url (or the peer leaving) abandons an older one. A
+ *  failure is retried once after BODY_RETRY_MS. Someone without a body stays a capsule while
+ *  theirs loads, and after it fails. Someone who has one keeps it on, posed and moving, while
+ *  their new one loads (`b.pending`); `installBody` swaps it in, and if it cannot be loaded they
+ *  keep the one they have — never a frozen body left behind. */
+async function loadBody(peer, url, kind) {
+  const b = peer.body, gen = ++b.gen;
+  if (bodyShown(peer)) b.pending = url;
+  else Object.assign(b, { state: 'loading', url, kind: String(kind || ''), pending: null });
+  renderPeople();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const mod = await loadSpark();
+      if (gen !== b.gen) return;
+      const res = await fetch(url, { cache: 'force-cache' });   // an avatar file never changes
+      if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+      const buf = await res.arrayBuffer();
+      if (gen !== b.gen || peers.get(peer.id) !== peer) return;
+      installBody(peer, mod, parseAvatar(buf));
+      Object.assign(b, { url, kind: String(kind || ''), pending: null });
+      return;
+    } catch (err) {
+      if (gen !== b.gen) return;
+      if (spark.failed) { b.pending = null; b.state = 'failed'; renderPeople(); return; }
+      if (attempt === 0) { await sleep(BODY_RETRY_MS); if (gen !== b.gen) return; continue; }
+      console.warn(`the body of ${peer.name} could not be loaded:`, err?.message || err);
+      b.pending = null;
+      if (!bodyShown(peer)) b.state = 'failed';    // someone with a body keeps the one they have
+      renderPeople();
+      return;
+    }
+  }
+}
+
+/** One SplatMesh of the splats `idx` (a subset of a prefix of the file), skinned. */
+const SPLAT_ENCODING = { lnScaleMin: -10, lnScaleMax: -1 };   // 4.5e-5 .. 0.37 m
+const IQ = new THREE.Quaternion(), ZERO = new THREE.Vector3();
+function makeMesh(SPARK, av, idx, scaleK) {
+  const n = idx.length, { maxSplats } = SPARK.utils.getTextureSize(n);   // padded: it rounds to 2048s
+  const packedArray = new Uint32Array(maxSplats * 4);
+  const P = av.positions, S = av.scales, R = av.rotations, C = av.colors, enc = SPLAT_ENCODING;
+  idx.forEach((i, k) => SPARK.setPackedSplat(packedArray, k, P[3 * i], P[3 * i + 1], P[3 * i + 2],
+    S[3 * i] * scaleK, S[3 * i + 1] * scaleK, S[3 * i + 2] * scaleK, R[4 * i], R[4 * i + 1], R[4 * i + 2], R[4 * i + 3],
+    C[4 * i + 3] / 255, C[4 * i] / 255, C[4 * i + 1] / 255, C[4 * i + 2] / 255, enc));
+  const packed = new SPARK.PackedSplats({ packedArray, numSplats: n, splatEncoding: enc });
+  const mesh = new SPARK.SplatMesh({ packedSplats: packed, splatEncoding: enc,
+    lod: false, enableLod: false, raycastable: false, editable: false });
+  const sk = new SPARK.SplatSkinning({ mesh, numSplats: n, numBones: av.names.length });
+  idx.forEach((i, k) => { for (let c = 0; c < 4; c++) sk.skinData[4 * k + c] = av.skin[4 * i + c]; });
+  sk.skinTexture.needsUpdate = true;
+  for (let j = 0; j < av.names.length; j++) sk.setBoneQuatPos(j, IQ, ZERO);   // zeros would be NaN
+  sk.updateBones();
+  mesh.skinning = sk; mesh.updateGenerator();
+  return { mesh, sk, packed, n };
+}
+
+/** A parsed body file -> this peer's two meshes and skeleton (replacing any body it had). */
+function installBody(peer, SPARK, av) {
+  const b = peer.body;
+  disposeBodyMeshes(b);
+  const n = Math.min(av.count, perAvatarSplats());
+  const scaleK = Math.min(2.5, Math.sqrt(av.count / n));   // a thinned body stays covered
+  const head = headMask(av.skin, n), bodyIdx = [], headIdx = [];
+  for (let i = 0; i < n; i++) (head[i] ? headIdx : bodyIdx).push(i);
+  let meshes;
+  try {
+    meshes = { body: bodyIdx.length ? makeMesh(SPARK, av, bodyIdx, scaleK) : null,
+               head: headIdx.length ? makeMesh(SPARK, av, headIdx, scaleK) : null };
+  } catch (err) { sparkFailed(err); throw err; }
+  for (const m of [meshes.body, meshes.head]) {
+    if (!m) continue;
+    m.mesh.opacity = 0;                            // fades in once posed (`stepBody`)
+    m.mesh.userData.rcBody = peer.id;
+    scene.add(m.mesh);
+  }
+  const J = av.names.length, rows = [];
+  for (let j = 0; j < J; j++) rows.push([av.rest[3 * j], av.rest[3 * j + 1], av.rest[3 * j + 2]]);
+  // Where the eyes are from the Head joint: the file's own eye joints when it has them.
+  const eyeOff = J >= 25
+    ? [0, 1, 2].map((c) => (rows[23][c] + rows[24][c]) / 2 - rows[15][c])
+    : [0, 0.08, 0.09];
+  const upper = {};
+  for (const j of SENT) upper[j] = QI();
+  b.skel = { J, parents: av.parents, rest: av.rest, floorY: av.floorY, eyeOff, upper, out: null,
+             gait: new Gait({ J0: rows, ankleHeight: rows[7][1] - av.floorY }), g: null };
+  b.meshes = meshes;
+  b.count = n; b.fade = 0; b.faceVis = 0;
+  b.state = 'ready';
+  setFaceMode(peer, true);
+  updateAvatarScreen(peer);
+  renderPeople();
+}
+
+function disposeBodyMeshes(b) {
+  for (const m of [b.meshes?.body, b.meshes?.head]) {
+    if (!m) continue;
+    scene.remove(m.mesh);
+    try {
+      m.mesh.dispose(); m.sk.skinTexture.dispose(); m.sk.boneTexture.dispose(); m.packed.dispose?.();
+    } catch (err) { console.info('disposing a body', err); }
+  }
+  b.meshes = null; b.skel = null;
+}
+
+/** A peer's body gone (left, replaced elsewhere, Spark failed): back to capsule and hologram. */
+function disposeBody(peer) {
+  const b = peer.body;
+  b.gen++;                                         // abandons a load in flight
+  b.pending = null;
+  disposeBodyMeshes(b);
+  if (b.state === 'ready' || b.state === 'loading') b.state = 'none';
+  setFaceMode(peer, false);
+  updateAvatarScreen(peer);
+}
+
+/** The live face as a head on a body, or as the whole cut-out / webcam plane it is otherwise.
+ *  On a body the face and the name tag are drawn after the splats (Spark's renderer is
+ *  renderOrder 1), so the face shows over the splat head; off a body they go back to 0, so a
+ *  hologram behind the room's glass is drawn behind it, tinted, as before bodies existed. Known
+ *  limits of drawing in that order: a body's live face shows over another body standing in
+ *  front of it, and a body behind glass shows over the glass (the splats come after the room's
+ *  transparent surfaces too). */
+function setFaceMode(peer, on) {
+  const av = peer.avatar, b = peer.body;
+  if (b.faceMode === on) return;
+  b.faceMode = on;
+  av.screen.renderOrder = av.cut.renderOrder = on ? 2 : 0;
+  av.label.renderOrder = on ? 3 : 0;
+  const u = av.cut.material.uniforms;
+  u.fade.value = on ? HOLO_NECK_FADE : HOLO_FADE;
+  if (!on) {
+    u.crop.value.set(0, 0, 1, 1); u.opacity.value = 1;
+    av.stand.position.set(0, 0, 0); av.face.position.set(0, 0, 0);
+    av.cut.position.z = 0; av.screen.position.set(0, 0, 0.2);
+    av.label.position.y = LABEL_Y;
+  }
+  av.screen.material.transparent = on;             // it fades with the head turning away
+  av.screen.material.opacity = 1;
+  av.screen.material.needsUpdate = true;
+}
+
+/** One frame of a body (§2.4 of the contract): gait, upper body, forward kinematics, the bones of
+ *  both meshes; then the live face and the name tag on it. */
+function stepBody(peer, dt, t) {
+  const av = peer.avatar, b = peer.body, sk = b.skel;
+  const yaw = av.yaw + Math.PI / 2;                // three rotation about +Y; the body faces +Z
+  const g = sk.gait.update(dt, [av.root.position.x, floorY, av.root.position.z], yaw, t);
+  const target = (av.joints && unpackJoints(av.joints)) || relaxedUpperBody(av.pitch);
+  const k = smooth(UPPER_SMOOTH, dt);
+  for (const j of SENT) sk.upper[j] = qSlerp(sk.upper[j], target[j] || QI(), k);
+  const local = assembleLocal(g.local, sk.upper, sk.J);
+  sk.out = poseSkeleton(sk.parents, sk.rest, local, g.pelvis, sk.out);
+  sk.g = g;
+  const { q, v } = bodyTmp, out = sk.out;
+  for (const m of [b.meshes.body, b.meshes.head]) {
+    if (!m) continue;
+    for (let j = 0; j < sk.J; j++) {
+      m.sk.setBoneQuatPos(j, q.fromArray(out.sq, 4 * j), v.fromArray(out.st, 3 * j));
+    }
+    m.sk.updateBones();
+  }
+  b.fade = Math.min(1, b.fade + dt / BODY_FADE_S);
+  // The eyes, and where the head faces.
+  const q15 = [out.q[60], out.q[61], out.q[62], out.q[63]];
+  const e = qRot(q15, sk.eyeOff), fwd = qRot(q15, [0, 0, 1]);
+  const eyes = bodyTmp.w.set(out.p[45] + e[0], out.p[46] + e[1], out.p[47] + e[2]);
+  placeBodyFace(peer, dt, eyes, fwd);
+  if (b.meshes.body) b.meshes.body.mesh.opacity = b.fade;
+  if (b.meshes.head) b.meshes.head.mesh.opacity = b.fade * (1 - b.faceVis);
+  av.root.updateMatrixWorld();
+  av.label.position.copy(av.root.worldToLocal(v.set(out.p[45], out.p[46] + LABEL_OVER_HEAD, out.p[47])));
+}
+
+/** Their live face on the body: the hologram cropped to the head, or the webcam plane, with its
+ *  eye row on the body's eyes, a little toward you, turned to face you — shown while their head
+ *  faces you, faded out (and the splat head in) as they turn away. */
+function placeBodyFace(peer, dt, eyes, fwd) {
+  const av = peer.avatar, b = peer.body;
+  const live = av.cut.visible || av.screen.visible;
+  const dx = camera.position.x - eyes.x, dz = camera.position.z - eyes.z;
+  const fl = Math.hypot(fwd[0], fwd[2]), cl = Math.hypot(dx, dz);
+  const ang = fl > 1e-6 && cl > 1e-6 ? Math.acos(clamp((fwd[0] * dx + fwd[2] * dz) / (fl * cl), -1, 1)) : 0;
+  const want = live ? 1 - smoothstep(FACE_SHOW_DEG * Math.PI / 180, FACE_HIDE_DEG * Math.PI / 180, ang) : 0;
+  b.faceVis += (want - b.faceVis) * (1 - Math.exp(-dt / FACE_TAU));
+  if (!live) return;
+  av.root.updateMatrixWorld();
+  const at = av.root.worldToLocal(bodyTmp.v.copy(eyes));
+  if (av.cut.visible) {
+    const fr = easeFraming(peer, dt), u = av.cut.material.uniforms;
+    const v0 = clamp(fr.top - 0.12 * fr.head, 0, 1), v1 = clamp(fr.top + 1.2 * fr.head, 0, 1);
+    const hw = 0.475 * fr.head / av.aspect;          // in one half's width: head * H/W
+    const u0 = clamp(fr.cx - hw, 0, 1), u1 = clamp(fr.cx + hw, 0, 1);
+    u.crop.value.set(u0, v0, u1, v1);
+    u.opacity.value = b.faceVis;
+    const h = Math.max(0.05, (v1 - v0) / fr.head * HEAD_M);
+    const w = h * (u1 - u0) / Math.max(1e-3, v1 - v0) * av.aspect;
+    const eyeRow = (fr.top + EYES_IN_HEAD * fr.head - v0) / Math.max(1e-3, v1 - v0);   // from the crop's top
+    av.cut.scale.set(w, h, 1);
+    av.cut.position.set(0, h * (eyeRow - 0.5), FACE_PUSH);
+    av.stand.position.copy(at);
+    av.stand.lookAt(camera.position.x, eyes.y, camera.position.z);
+  } else {
+    const aspect = clamp(av.sw / av.sh, 0.5, 2);
+    av.screen.scale.set(FACE_SCREEN_H * aspect, FACE_SCREEN_H, 1);
+    av.screen.position.set(0, 0, FACE_PUSH);
+    av.screen.material.opacity = b.faceVis;
+    av.face.position.copy(at);
+    av.face.lookAt(camera.position.x, eyes.y, camera.position.z);
   }
 }
 
@@ -1016,6 +1381,9 @@ function onState(m) {
     const av = peer.avatar;
     mjToThree(v[0], v[1], v[2], av.tp);
     av.tyaw = v[3]; av.tpitch = v[4];
+    const j = v.length >= 5 + 3 * SENT.length ? v.slice(5, 5 + 3 * SENT.length) : null;
+    if (j) { av.joints = j; av.jointsAt = lastStateAt; }
+    else if (av.joints && lastStateAt - av.jointsAt > JOINTS_HOLD_MS) av.joints = null;
     if (!av.has) { av.root.position.copy(av.tp); av.yaw = av.tyaw; av.pitch = av.tpitch; av.has = true; av.root.visible = true; }
   }
 }
@@ -1057,9 +1425,11 @@ function addPeer(p) {
     media: { camera: !!p.media?.camera, mic: !!p.media?.mic },
     rtc: null, video: null, audio: null, tex: null,
     framing: null,                                 // where their head is in their cut-out (data channel)
+    body: newBody(),                               // their full body, if they made one ("bodies")
   };
   peer.avatar = makeAvatar(peer);
   peers.set(p.id, peer);
+  if (p.avatar) onPeerAvatar(peer, p.avatar);
   renderPeople();
   return peer;
 }
@@ -1068,6 +1438,7 @@ function removePeer(id) {
   const peer = peers.get(id);
   if (!peer) return;
   closeRtc(peer);
+  disposeBody(peer);
   disposeAvatar(peer.avatar);
   peer.tex?.dispose();
   peer.video?.remove(); peer.audio?.remove();
@@ -1077,10 +1448,19 @@ function removePeer(id) {
 
 function clearPeers() { for (const id of [...peers.keys()]) removePeer(id); drawGrabs([]); }
 
+/** The people list's word for a peer's body. */
+function bodyTag(peer) {
+  const b = peer.body;
+  if (b.state === 'ready') return 'body';
+  if (b.state === 'loading' || b.state === 'building' || b.building) return 'building body…';
+  if (b.state === 'failed' && !spark.failed) return 'body failed';
+  return '';
+}
+
 function renderPeople() {
   const list = $('peopleList');
   list.replaceChildren();
-  const row = (name, color, media, you, rtcFailed = false, cutOut = false) => {
+  const row = (name, color, media, you, rtcFailed = false, cutOut = false, body = '') => {
     const li = document.createElement('li');
     const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = color;
     const who = document.createElement('span'); who.className = 'who'; who.textContent = name + (you ? ' (you)' : '');
@@ -1095,11 +1475,18 @@ function renderPeople() {
       t.textContent = k === 'camera' && media[k] && cutOut ? 'hologram' : label + (media[k] ? ' on' : ' off');
       tags.appendChild(t);
     }
+    if (body) {
+      const t = document.createElement('span');
+      t.className = 'tag' + (body === 'body' ? ' on' : body === 'body failed' ? ' bad' : '');
+      t.textContent = body;
+      tags.appendChild(t);
+    }
     li.append(dot, who, tags);
     list.appendChild(li);
   };
-  row(me.name || 'You', me.color, me.media, true, false, holo.state === 'live');
-  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed, p.avatar.cut.visible);
+  const myTag = { building: 'building body…', ready: 'body', failed: 'body failed' }[mine.status] || '';
+  row(me.name || 'You', me.color, me.media, true, false, holo.state === 'live', myTag);
+  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed, p.avatar.cut.visible, bodyTag(p));
   $('peopleCount').textContent = String(peers.size + 1);
 }
 
@@ -1155,7 +1542,7 @@ async function setLocal(kind, on) {
     for (const peer of peers.values()) peer.rtc?.senders[slot]?.replaceTrack(null).catch(() => {});
   }
   if (kind === 'video') me.media.camera = !!local.video; else me.media.mic = !!local.audio;
-  if (kind === 'video') syncHologram();
+  if (kind === 'video') { syncHologram(); syncPoseTrack(); syncBodyUi(); }
   showSelfView();
   syncMediaButtons();
   send({ t: 'media', camera: me.media.camera, mic: me.media.mic });
@@ -1636,6 +2023,340 @@ function onPeerData(peer, data) {
 // the plain webcam (which keeps running) goes out until the tab is back and sees someone again.
 document.addEventListener('visibilitychange', () => { if (document.hidden && holo.state === 'live') goRaw(); });
 
+/* ------------------------------------------------------------------ pose tracking: my arms and head */
+// While I have a body (or one is being built) and my camera is on, MediaPipe's PoseLandmarker
+// runs on my camera in a worker (pose_worker.js), POSE_TRACK_HZ at most and one frame in flight;
+// the solver (body.js) turns its world landmarks into my upper body's joint rotations, which ride
+// on my pose messages as "j". Nobody in view for POSE_LOST_MS, or a worker that fails: no "j", and
+// the others see relaxed arms. There is no main-thread fallback — the page's thread already
+// carries three.js and the hologram's segmenter.
+const poseTrack = { state: 'off', worker: null, busy: false, j: null, jAt: 0, frames: 0, seen: 0, why: '',
+                    solver: null, video: null, timer: 0, initTimer: 0, lostAt: 0, lastAt: 0, sent: 0 };
+
+function syncPoseTrack() {
+  const want = !!local.video && (mine.status === 'building' || mine.status === 'ready') && poseTrack.state !== 'failed';
+  if (want && poseTrack.state === 'off') startPoseTrack();
+  else if (!want && (poseTrack.state === 'loading' || poseTrack.state === 'running')) stopPoseTrack('off');
+}
+
+function startPoseTrack() {
+  let w;
+  try { w = new Worker('pose_worker.js', { type: 'module' }); } catch (err) { poseFail('this browser cannot run it', err); return; }
+  Object.assign(poseTrack, { state: 'loading', worker: w, busy: false, j: null, jAt: 0, lostAt: 0, lastAt: 0,
+                             solver: new UpperBodySolver() });
+  w.addEventListener('message', (e) => onPoseMessage(w, e.data));
+  w.addEventListener('error', (e) => { if (poseTrack.worker === w) poseFail('the tracker stopped', e.message || e); });
+  poseTrack.initTimer = setTimeout(() => {
+    if (poseTrack.worker === w && poseTrack.state === 'loading') poseFail('the tracker did not start in time');
+  }, POSE_INIT_MS);
+  w.postMessage({ t: 'init', base: MP_BASE, model: POSE_MODEL });
+  if (!poseTrack.video) {
+    poseTrack.video = document.createElement('video');
+    poseTrack.video.muted = true; poseTrack.video.playsInline = true; poseTrack.video.autoplay = true;
+    $('mediaSink').append(poseTrack.video);
+  }
+  poseTrack.video.srcObject = new MediaStream([local.video]);
+  poseTrack.video.play().catch(() => {});
+}
+
+function stopPoseTrack(state) {
+  clearInterval(poseTrack.timer); clearTimeout(poseTrack.initTimer);
+  poseTrack.worker?.terminate();
+  Object.assign(poseTrack, { state, worker: null, busy: false, j: null, timer: 0, initTimer: 0 });
+  if (poseTrack.video) poseTrack.video.srcObject = null;
+}
+
+function poseFail(why, err) {
+  console.warn('pose tracking off:', why, err || '');
+  poseTrack.why = why;
+  stopPoseTrack('failed');
+}
+
+function onPoseMessage(w, m) {
+  if (poseTrack.worker !== w || !m) return;
+  if (m.t === 'ready') {
+    clearTimeout(poseTrack.initTimer);
+    poseTrack.state = 'running';
+    poseTrack.timer = setInterval(poseTick, 1000 / POSE_TRACK_HZ);
+  } else if (m.t === 'error') {
+    poseFail('the tracker failed', m.msg);
+  } else if (m.t === 'pose') {
+    poseTrack.busy = false;
+    poseTrack.frames++;
+    const now = performance.now();
+    if (m.world instanceof Float32Array && m.image instanceof Float32Array) {
+      const world = [], image = [];
+      for (let i = 0; i < 33; i++) {
+        world.push({ x: m.world[4 * i], y: m.world[4 * i + 1], z: m.world[4 * i + 2], visibility: m.world[4 * i + 3] });
+        image.push({ x: m.image[2 * i], y: m.image[2 * i + 1] });
+      }
+      const dt = poseTrack.lastAt ? clamp((now - poseTrack.lastAt) / 1000, 1e-3, 0.5) : 1 / POSE_TRACK_HZ;
+      poseTrack.lastAt = now;
+      try {
+        const res = poseTrack.solver.solve(world, image, now / 1000, dt);
+        const j = packJoints(res.local);
+        if (j.every((v) => Number.isFinite(v) && Math.abs(v) <= 400)) {
+          poseTrack.j = j; poseTrack.jAt = now; poseTrack.seen++;
+          if (me.id && now - lastPose > 1000 / POSE_HZ) sendPose(now);
+        }
+      } catch (err) { console.info('pose solve', err); }
+      poseTrack.lostAt = 0;
+    } else {
+      poseTrack.lostAt ||= now;
+      if (now - poseTrack.lostAt > POSE_LOST_MS) poseTrack.j = null;
+    }
+  }
+}
+
+/** One camera frame to the worker, unless one is still there. Its aspect is kept: a squashed
+ *  frame would squash the landmarks, and the arm angles with them. */
+function poseTick() {
+  const v = poseTrack.video, w = poseTrack.worker;
+  if (poseTrack.busy || poseTrack.state !== 'running' || !w || !v || v.readyState < 2 || !v.videoWidth || document.hidden) return;
+  poseTrack.busy = true;
+  const height = Math.max(1, Math.round(320 * v.videoHeight / v.videoWidth));
+  createImageBitmap(v, { resizeWidth: 320, resizeHeight: height }).then((bmp) => {
+    if (poseTrack.worker !== w) { bmp.close(); return; }
+    w.postMessage({ t: 'frame', bmp, ts: performance.now() }, [bmp]);
+  }).catch(() => { poseTrack.busy = false; });
+}
+
+/** My upper body for the next pose message, or null (not tracked, or the last result is stale). */
+function bodyJoints() {
+  return poseTrack.j && performance.now() - poseTrack.jAt < POSE_STALE_MS ? poseTrack.j : null;
+}
+
+/* ------------------------------------------------------------------ making my body */
+// At join (or from the Body button), a person can give the room a full body: a turnaround in
+// front of their own camera (8 frames as they turn once, CAPTURE) or a few photos. They go to the
+// server as JPEGs (re-encoded here, which also drops EXIF and GPS); the server builds the body and
+// tells the room. The upload key from the welcome proves who is asking; the avatar's own key, kept
+// in this tab's sessionStorage, lets a reload claim the same body back instead of building again.
+// I never see my own body: this is first person.
+const mine = { enabled: false, mode: '', key: null, cooldown: 120, status: 'none', url: null, kind: '', note: '',
+               busy: false, claim: '' };
+// Where the pictures go, said in the body panel before anyone sends any (by the server's mode).
+const BODY_WHERE = {
+  standin: "The pictures go to this room's server to build the body; it is kept in memory only and forgotten soon after you leave.",
+  modal: "The pictures go to this room's server and from there to a GPU service on Modal that builds the body. Neither keeps the pictures once it is built; the body is kept in the server's memory only and forgotten soon after you leave.",
+};
+const UPLOAD_RETRIES = 4;                         // a busy server's short Retry-After, at most this often
+let capture = null;                               // {cancelled} while the turnaround runs
+
+const session = {
+  get(k) { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } },
+  set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
+  del(k) { try { sessionStorage.removeItem(k); } catch { /* private mode */ } },
+};
+const bodySkipped = () => { try { return !!localStorage.getItem('rc.bodySkip'); } catch { return false; } };
+
+function setBodyStatus(text) { $('bodyStatus').textContent = text || ''; }
+
+/** The Body button and the panel's buttons, for what is possible right now. */
+function syncBodyUi() {
+  const btn = $('bodyBtn');
+  btn.hidden = !mine.enabled;
+  const building = mine.status === 'building' || mine.busy;
+  btn.disabled = building;
+  btn.dataset.state = mine.status;
+  btn.title = building ? 'Your body is being built…' : mine.status === 'ready' ? 'Your full body (make a new one)' : 'Show the others all of you';
+  const camOff = !local.video;
+  $('bodyCamBtn').disabled = camOff || building;
+  $('bodyPhotoBtn').disabled = building;
+  $('bodyCamHint').hidden = !camOff;
+}
+
+function openBodyPanel() { syncBodyUi(); togglePanel('bodyPanel', true); }
+
+/** Closed by one of its own buttons: the first-visit help comes next. */
+function closeBodyPanel() {
+  togglePanel('bodyPanel', false);
+  if (!store.get('helpSeen', false)) { togglePanel('help', true); store.set('helpSeen', true); }
+}
+
+/** My own "avatar" messages (and what a claim brings back). */
+function onMyAvatar(info) {
+  const was = mine.status, claim = mine.claim;
+  if (['building', 'ready', 'failed', 'none'].includes(info?.status)) mine.claim = '';
+  switch (info?.status) {
+    case 'building': mine.status = 'building'; break;
+    case 'ready': {
+      if (typeof info.url !== 'string' || !AVATAR_URL.test(info.url)) break;
+      const fresh = info.url !== mine.url;
+      mine.status = 'ready'; mine.url = info.url; mine.kind = String(info.kind || '');
+      mine.note = typeof info.note === 'string' ? info.note : '';
+      // The body I have is not the one my key is for (another tab of mine took over the one I
+      // was building): that key claims nothing of mine any more.
+      const held = session.get('rc.avatar');
+      if (held && typeof held.aid === 'string' && info.url !== `/avatars/${held.aid}.bin`) session.del('rc.avatar');
+      if (was === 'building' && fresh) {
+        const extra = mine.kind === 'standin' ? ` (${mine.note || 'a simple stand-in body'})` : '';
+        toast('Your full body is ready — the others now see all of you' + extra);
+        setBodyStatus('Your body is ready.');
+      } else if (was === 'building') setBodyStatus('');
+      break;
+    }
+    case 'failed':
+      mine.status = mine.url ? 'ready' : 'failed';
+      toast(`Your body could not be built${info.note ? ': ' + info.note : ''}`, 'error');
+      setBodyStatus('Building your body failed. You can try again.');
+      break;
+    case 'none':                                   // another tab of mine took it over, or my claim found nothing
+      Object.assign(mine, { status: 'none', url: null, kind: '' });
+      session.del('rc.avatar');
+      if (was === 'building') setBodyStatus('');
+      // The body this tab had is gone (the server restarted, or it was kept too long unclaimed):
+      // offer a new one as on a first visit, or say so when it went during the call.
+      if (claim === 'join' && !bodySkipped() && $('bodyPanel').hidden && !capture) openBodyPanel();
+      else if (claim === 'reconnect') toast('Your full body was not kept by the server — press Body to make a new one');
+      break;
+    default: return;
+  }
+  syncBodyUi();
+  syncPoseTrack();
+  renderPeople();
+}
+
+/** The turnaround: count down, then CAPTURE.frames frames CAPTURE.everyMs apart while the person
+ *  turns once. Frames are drawn unmirrored (the preview is mirrored by CSS only). The camera is
+ *  asked for 720p meanwhile and put back to VIDEO afterwards, whatever happens. */
+async function captureTurnaround() {
+  const track = local.video;
+  if (!track) throw new Error('the camera is off');
+  const overlay = $('bodyCapture'), video = $('bodyCapVideo'), cap = { cancelled: false };
+  capture = cap;
+  const stop = () => { if (cap.cancelled) throw new Error('cancelled'); };
+  overlay.hidden = false;
+  video.srcObject = new MediaStream([track]);
+  video.play().catch(() => {});
+  $('bodyProgress').textContent = '';
+  $('bodyGuide').textContent = 'Step back until the camera sees you from head to knees — feet if you can. '
+    + 'When the count ends, turn slowly once all the way round.';
+  try {
+    try { await track.applyConstraints({ width: { ideal: 1280 }, height: { ideal: 720 } }); } catch { /* keeps what it has */ }
+    for (let k = CAPTURE.count; k >= 1; k--) { $('bodyCount').textContent = String(k); await sleep(1000); stop(); }
+    $('bodyCount').textContent = '';
+    const shots = [], t0 = performance.now();
+    for (let k = 1; k <= CAPTURE.frames; k++) {
+      const due = t0 + (k - 1) * CAPTURE.everyMs - performance.now();
+      if (due > 0) await sleep(due);
+      stop();
+      $('bodyProgress').textContent = `Turn… ${k}/${CAPTURE.frames}`;
+      shots.push(await frameJpeg(video, video.videoWidth, video.videoHeight));
+    }
+    return shots;
+  } finally {
+    try { await track.applyConstraints(VIDEO); } catch { /* the track may be gone */ }
+    overlay.hidden = true;
+    video.srcObject = null;
+    $('bodyCount').textContent = '';
+    if (capture === cap) capture = null;
+  }
+}
+
+/** Any drawable into a JPEG, as base64 (scaled to `w` x `h`). */
+async function frameJpeg(src, w, h) {
+  if (!(w > 0 && h > 0)) throw new Error('no picture yet');
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  c.getContext('2d').drawImage(src, 0, 0, w, h);
+  const blob = await new Promise((res) => c.toBlob(res, 'image/jpeg', CAPTURE.quality));
+  if (!blob) throw new Error('could not encode the picture');
+  const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+  return String(url).slice(String(url).indexOf(',') + 1);
+}
+
+/** Photos: the first CAPTURE.maxFiles, upright (EXIF orientation applied), at most
+ *  CAPTURE.photoMax on the long side, re-encoded as JPEG (which also drops EXIF and GPS). */
+async function photosJpeg(files) {
+  const out = [];
+  for (const f of [...files].slice(0, CAPTURE.maxFiles)) {
+    const bmp = await createImageBitmap(f);
+    try {
+      const k = Math.min(1, CAPTURE.photoMax / Math.max(bmp.width, bmp.height));
+      out.push(await frameJpeg(bmp, Math.round(bmp.width * k), Math.round(bmp.height * k)));
+    } finally { bmp.close(); }
+  }
+  return out;
+}
+
+async function uploadBody(mode, images) {
+  setBodyStatus('Sending your pictures…');
+  const payload = JSON.stringify({ room: roomId, peer: me.id, key: mine.key, mode, images_b64: images });
+  // Who I am goes in headers as well: the server checks them before it reads the pictures.
+  const headers = { 'Content-Type': 'application/json', 'X-Roomcall-Room': roomId,
+                    'X-Roomcall-Peer': me.id || '', 'X-Roomcall-Key': mine.key || '' };
+  let res, body = {};
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch('avatar', { method: 'POST', headers, body: payload });
+      body = await res.json().catch(() => ({}));
+    } catch {
+      setBodyStatus('Could not reach the server — try again.');
+      return false;
+    }
+    // Busy checking other people's pictures: it says when to come back, in a few seconds.
+    const wait = Number(body.retry ?? res.headers.get('Retry-After'));
+    if (res.status !== 503 || !(wait > 0 && wait <= 10) || attempt >= UPLOAD_RETRIES) break;
+    setBodyStatus('The server is busy — sending again in a moment…');
+    await sleep(wait * 1000);
+  }
+  if (res.status === 202 && typeof body.avatar === 'string' && typeof body.key === 'string') {
+    session.set('rc.avatar', { aid: body.avatar, akey: body.key });
+    onMyAvatar({ status: 'building' });
+    const text = 'Building your body… usually ~20 s, up to 2 min when the GPU has to start.';
+    setBodyStatus(text);
+    toast(text);
+    return true;
+  }
+  if (res.status === 429) {
+    const s = Number(body.retry ?? res.headers.get('Retry-After')) || mine.cooldown;
+    setBodyStatus(`You can make a new body in ${Math.ceil(s)} s`);
+  } else setBodyStatus(String(body.error || `The server could not take it (HTTP ${res.status})`));
+  return false;
+}
+
+/** `files` null: the turnaround from my camera; else the photos picked. */
+async function makeBody(files) {
+  if (mine.busy || !me.id) return;
+  mine.busy = true; syncBodyUi();
+  try {
+    let images;
+    if (!files) {
+      togglePanel('bodyPanel', false);
+      try { images = await captureTurnaround(); } catch (err) {
+        if (String(err?.message) !== 'cancelled') setBodyStatus('The capture stopped: ' + (err?.message || err));
+        else setBodyStatus('');
+        openBodyPanel();
+        return;
+      }
+    } else {
+      setBodyStatus('Preparing your photos…');
+      images = await photosJpeg(files);
+      if (!images.length) return;
+    }
+    if (await uploadBody(files ? 'photo' : 'turnaround', images)) closeBodyPanel();
+    else openBodyPanel();
+  } catch (err) {
+    setBodyStatus('Could not use those pictures: ' + (err?.message || err));
+    openBodyPanel();
+  } finally { mine.busy = false; syncBodyUi(); }
+}
+
+$('bodyBtn').addEventListener('click', () => ($('bodyPanel').hidden ? openBodyPanel() : togglePanel('bodyPanel', false)));
+$('bodyCamBtn').addEventListener('click', () => makeBody(null));
+$('bodyPhotoBtn').addEventListener('click', () => $('bodyFiles').click());
+$('bodyFiles').addEventListener('change', (e) => {
+  const files = [...(e.target.files || [])];       // a copy: clearing the input empties the live list
+  e.target.value = '';                             // so picking the same photos again is a change
+  if (files.length) makeBody(files);
+});
+$('bodySkipBtn').addEventListener('click', () => {
+  try { localStorage.setItem('rc.bodySkip', '1'); } catch { /* private mode */ }
+  closeBodyPanel();
+});
+$('bodyCancelBtn').addEventListener('click', () => { if (capture) capture.cancelled = true; });
+
 /* ------------------------------------------------------------------ WebRTC mesh (perfect negotiation) */
 // polite = the lower id. The polite side yields on an offer collision, the impolite side ignores
 // the incoming offer; together that settles glare without either side tracking who started.
@@ -1848,9 +2569,30 @@ function handle(m) {
         const peer = addPeer(p);
         if (peer) ensureRtc(peer, true);         // the newcomer dials everyone already here
       }
+      // Full bodies: what this server makes, my upload key, and my body back after a reload or a
+      // reconnect (the server released it when my old connection went; the key claims it).
+      mine.enabled = !!m.avatars?.enabled;
+      mine.mode = String(m.avatars?.mode || '');
+      mine.cooldown = Number(m.avatars?.cooldown) || 120;
+      mine.key = typeof m.key === 'string' ? m.key : null;
+      Object.assign(mine, { status: 'none', url: null, kind: '', claim: '' });
+      $('bodyWhere').textContent = BODY_WHERE[mine.mode] || BODY_WHERE.standin;
+      const held = mine.enabled ? session.get('rc.avatar') : null;
+      if (held && typeof held.aid === 'string' && typeof held.akey === 'string') {
+        send({ t: 'avatar', claim: held.aid, key: held.akey });
+        mine.claim = welcomed ? 'reconnect' : 'join';   // answered by ready, building or none
+      }
+      syncBodyUi();
+      syncPoseTrack();
       liveStatus(performance.now());
       if (!welcomed) { welcomed = true; enterRoom(); }
       renderPeople();
+      break;
+    }
+    case 'avatar': {
+      if (typeof m.id !== 'string') break;
+      if (m.id === me.id) onMyAvatar(m);
+      else { const peer = peers.get(m.id); if (peer) onPeerAvatar(peer, m); }
       break;
     }
     case 'join': {
@@ -1973,23 +2715,28 @@ function enterRoom() {
   renderPeople();
   syncMediaButtons();
   canvas.focus({ preventScroll: true });
-  if (!store.get('helpSeen', false)) { togglePanel('help', true); store.set('helpSeen', true); }
+  // A full body first (help follows when that panel is closed), unless there is nothing to ask.
+  if (mine.enabled && mine.status === 'none' && !session.get('rc.avatar') && !bodySkipped()) openBodyPanel();
+  else if (!store.get('helpSeen', false)) { togglePanel('help', true); store.set('helpSeen', true); }
 }
 
 /* ------------------------------------------------------------------ HUD buttons */
 function togglePanel(id, force) {
   const el = $(id);
   const open = force ?? el.hidden;
-  for (const other of ['people', 'help', 'invitePop']) if (other !== id) $(other).hidden = true;
+  for (const other of PANELS) if (other !== id) $(other).hidden = true;
   el.hidden = !open;
   $('peopleBtn').setAttribute('aria-expanded', String(!$('people').hidden));
   $('helpBtn').setAttribute('aria-expanded', String(!$('help').hidden));
+  $('bodyBtn').setAttribute('aria-expanded', String(!$('bodyPanel').hidden));
 }
 function closePanels() {
-  for (const id of ['people', 'help', 'invitePop']) $(id).hidden = true;
+  for (const id of PANELS) $(id).hidden = true;
   $('peopleBtn').setAttribute('aria-expanded', 'false');
   $('helpBtn').setAttribute('aria-expanded', 'false');
+  $('bodyBtn').setAttribute('aria-expanded', 'false');
 }
+const PANELS = ['people', 'help', 'invitePop', 'bodyPanel'];
 
 $('peopleBtn').addEventListener('click', () => togglePanel('people'));
 $('helpBtn').addEventListener('click', () => togglePanel('help'));
@@ -2076,8 +2823,21 @@ const clock = new THREE.Clock();
 let lastPose = 0, lastPoseMsg = '';
 let lastFrameAt = 0;
 
+/** Where I am (eye, yaw, pitch) and, while tracked, my upper body ("j"). Sent from the frame loop
+ *  at POSE_HZ, and also as soon as the pose tracker has something new: a long frame (a slow
+ *  device starting its segmenter) must not make every tracked pose stale before it goes out. */
+function sendPose(now) {
+  const pose = { t: 'pose', p: threeToMj(walker.pos), yaw: r3(walker.yaw), pitch: r3(walker.pitch) };
+  const j = bodyJoints();                          // my tracked arms and head, when there are any
+  if (j) pose.j = j;
+  const msg = JSON.stringify(pose);
+  if (msg !== lastPoseMsg || now - lastPose > 1000) { if (ws?.readyState === WebSocket.OPEN) ws.send(msg); lastPoseMsg = msg; }
+  lastPose = now;
+}
+
 function frame() {
-  const dt = Math.min(clock.getDelta(), 0.2);   // a slow frame still walks, a stall does not teleport
+  const raw = clock.getDelta();
+  const dt = Math.min(raw, 0.2);                   // a slow frame still walks, a stall does not teleport
   const now = performance.now();
   // After this page itself stood still for a while (a long task such as the segmenter starting
   // on a slow machine, or a tab the browser paused), the state frames sent meanwhile are still
@@ -2086,7 +2846,7 @@ function frame() {
   lastFrameAt = now;
   stepWalker(dt);
   stepBodies(dt);
-  stepAvatars(dt);
+  stepAvatars(dt, Math.min(raw, 0.5));
   stepGrabLines();
   updateGrabTarget(now);
 
@@ -2094,11 +2854,7 @@ function frame() {
     setHover(pick(hoverAt.x, hoverAt.y)?.body ?? null);   // occluded: no grab cursor through walls
     hoverAt = null; hoverPickedAt = now;
   }
-  if (me.id && now - lastPose > 1000 / POSE_HZ) {
-    const msg = JSON.stringify({ t: 'pose', p: threeToMj(walker.pos), yaw: r3(walker.yaw), pitch: r3(walker.pitch) });
-    if (msg !== lastPoseMsg || now - lastPose > 1000) { if (ws?.readyState === WebSocket.OPEN) ws.send(msg); lastPoseMsg = msg; }
-    lastPose = now;
-  }
+  if (me.id && now - lastPose > 1000 / POSE_HZ) sendPose(now);
   // A socket can die without a 'close' (laptop sleep, a NAT or tunnel dropping it): the server
   // sends state at 30 Hz, so a long silence after the welcome means it is gone. Treat it as closed
   // now; the real 'close' may take minutes and is ignored when it comes.

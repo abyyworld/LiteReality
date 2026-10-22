@@ -42,6 +42,13 @@ ticks, carrying what people did across by body name (`RoomSim.adopt`). The first
 the new "v" is the switch; nobody reconnects. A version that fails to load is reported on /healthz
 and the room carries on with the one it has.
 
+Full-body people (`avatars`). A person may POST /avatar a turnaround of themselves or a few photos
+(authorised by the upload key in their welcome, sent in headers so a stranger's upload is refused
+unread); the hub's `AvatarService` builds a body in the
+background — on the Modal GPU function, or the stand-in — and tells the room ({"t": "avatar"}),
+and every browser fetches it from GET /avatars/<id>.bin. Bodies live in memory only. A tracked
+sender's pose message carries "j" (its arms and head), which rides on its row of the state frames.
+
 Every HTTP response carries the OWASP headers the Zoom client checks before it will render a Zoom
 App at all (Strict-Transport-Security, X-Content-Type-Options, Content-Security-Policy,
 Referrer-Policy — developers.zoom.us/docs/zoom-apps/security/owasp/). The CSP admits the page's one
@@ -85,6 +92,12 @@ from fastapi.responses import JSONResponse, Response
 from starlette.websockets import WebSocketDisconnect
 
 from litereality_agent.room_ops.roomcall import DEFAULT_PORT, add_arguments
+from litereality_agent.room_ops.roomcall import avatars as bodies
+from litereality_agent.room_ops.roomcall.avatars import (
+    AvatarConfig,
+    AvatarRequestError,
+    AvatarService,
+)
 from litereality_agent.room_ops.roomcall.geometry import build_scene_assets
 from litereality_agent.room_ops.roomcall.hosted import scene_digest, scene_files, version_name
 from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
@@ -193,6 +206,16 @@ BINARY = "application/octet-stream"
 # never fetches it from Google at runtime. The runtime that runs it comes from jsDelivr, pinned in
 # app.js like three.js.
 SEGMENTER_MODEL = "selfie_segmenter.tflite"
+# Full-body people (`avatars`): the sender's upper body is tracked in its own browser by
+# MediaPipe's PoseLandmarker (lite, float16, 5.8 MB, Apache-2.0, from storage.googleapis.com/
+# mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/), vendored and served like the
+# segmenter. Its joint rotations ride on each "pose" message as "j": SENT_JOINTS rotation vectors
+# in centiradians (web/body.js `packJoints`), each an integer within JOINT_LIMIT.
+POSE_MODEL = "pose_landmarker_lite.task"
+SENT_JOINTS = 13
+JOINT_LIMIT = 400
+# An avatar file never changes once built (a new body is a new id), so a browser keeps it.
+AVATAR_CACHE = "private, max-age=86400, immutable"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -365,6 +388,23 @@ def clean_name(value: Any) -> str | None:
 
 def clean_color(value: Any) -> str | None:
     return value.lower() if isinstance(value, str) and COLOR.fullmatch(value) else None
+
+
+def clean_joints(value: Any) -> list[int] | None:
+    """A pose message's "j": exactly 3 * SENT_JOINTS integers within JOINT_LIMIT, else None.
+    Floats are accepted only when they are whole (JSON has one number type); bools never."""
+    if not isinstance(value, list) or len(value) != 3 * SENT_JOINTS:
+        return None
+    out = []
+    for v in value:
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return None
+        if isinstance(v, float) and not (math.isfinite(v) and v.is_integer()):
+            return None
+        if abs(v) > JOINT_LIMIT:
+            return None
+        out.append(int(v))
+    return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -677,6 +717,11 @@ class Peer:
     camera: bool = False
     mic: bool = False
     pose: list[float] | None = None  # [x, y, z, yaw, pitch], eye position in world frame
+    joints: list[int] | None = None  # the tracked upper body ("j"), while the sender tracks it
+    # This connection's upload key (in its welcome): POST /avatar must name it.
+    key: str = field(default_factory=lambda: secrets.token_hex(16))
+    avatar_id: str | None = None     # its body (`AvatarService` keeps these two)
+    avatar_info: dict | None = None
     outbox: deque[str] = field(default_factory=deque)
     latest_state: str | None = None
     wake: asyncio.Event = field(default_factory=asyncio.Event)
@@ -684,8 +729,15 @@ class Peer:
     sender: asyncio.Task | None = None
 
     def info(self) -> dict:
-        return {"id": self.id, "name": self.name, "color": self.color,
+        info = {"id": self.id, "name": self.name, "color": self.color,
                 "media": {"camera": self.camera, "mic": self.mic}}
+        if self.avatar_info is not None:
+            info["avatar"] = dict(self.avatar_info)
+        return info
+
+    def row(self) -> list:
+        """Its state frame entry: the pose, and the tracked joints after it when there are any."""
+        return self.pose + self.joints if self.joints else self.pose
 
     def push(self, text: str) -> None:
         if len(self.outbox) >= OUTBOX_LIMIT:
@@ -810,7 +862,8 @@ class RoomHub:
     one still needed — live, or still being run or fetched by some room."""
 
     def __init__(self, version: SceneVersion | mujoco.MjModel, *, settle_seconds: float = 1.0,
-                 prefetch_seconds: float | None = None, watch: Any = None) -> None:
+                 prefetch_seconds: float | None = None, watch: Any = None,
+                 avatars: AvatarConfig | None = None) -> None:
         if isinstance(version, mujoco.MjModel):  # a bare model: a version with nothing to draw
             version = SceneVersion("scene", "room", "scene", version, b"", {})
         self.version = version
@@ -829,6 +882,19 @@ class RoomHub:
         self._failed: str | None = None        # a version id that failed: not tried again
         self._watcher: asyncio.Task | None = None
         self._watcher_loop: asyncio.AbstractEventLoop | None = None
+        # Full bodies: one store and one set of limits for every room of this server.
+        self.avatars = AvatarService(avatars or AvatarConfig(), find_peer=self._find_peer,
+                                     broadcast=self._broadcast_room,
+                                     tell=lambda peer, message: peer.push(dumps(message)))
+
+    def _find_peer(self, room_id: str, peer_id: str) -> Peer | None:
+        room = self.rooms.get(room_id)
+        return room.peers.get(peer_id) if room is not None else None
+
+    def _broadcast_room(self, room_id: str, message: dict) -> None:
+        room = self.rooms.get(room_id)
+        if room is not None:
+            room.broadcast(message)
 
     @property
     def model(self) -> mujoco.MjModel:
@@ -857,6 +923,7 @@ class RoomHub:
                     if peer.sender:
                         peer.sender.cancel()
             self.rooms.clear()
+            self.avatars.close()
             if self._settler is not None:
                 self._settler.shutdown(wait=False, cancel_futures=True)
                 self._settler = None
@@ -1183,7 +1250,8 @@ class RoomHub:
         peer = Peer(peer_id, ws, name or "guest", color or PALETTE[int(peer_id, 16) % len(PALETTE)])
         welcome = {"t": "welcome", "id": peer.id, "room": room.id, "name": peer.name,
                    "color": peer.color, "v": room.v,
-                   "peers": [p.info() for p in room.peers.values()]}
+                   "peers": [p.info() for p in room.peers.values()],
+                   "key": peer.key, "avatars": self.avatars.welcome_info()}
         room.peers[peer.id] = peer
         try:
             peer.sender = asyncio.create_task(self._send_loop(peer))
@@ -1261,6 +1329,7 @@ class RoomHub:
             peer.sender.cancel()
         room.command("release", peer.id)
         room.broadcast({"t": "leave", "id": peer.id})
+        self.avatars.leave(peer)
         self._drop_if_empty(room)
 
     async def _send_loop(self, peer: Peer) -> None:
@@ -1293,11 +1362,14 @@ class RoomHub:
 
     def _dispatch(self, room: Room, peer: Peer, message: dict) -> None:
         kind = message["t"]
+        self.avatars.seen(peer)
         if kind == "pose":
             p, yaw, pitch = vec3(message.get("p")), finite(message.get("yaw")), \
                 finite(message.get("pitch", 0.0))
             if p is not None and yaw is not None and pitch is not None:
                 peer.pose = [round(v, 4) for v in (*p, yaw, pitch)]
+            # No "j" (the sender stopped tracking) or a bad one: receivers relax the arms.
+            peer.joints = clean_joints(message.get("j")) if "j" in message else None
         elif kind == "grab":
             body, point = message.get("body"), vec3(message.get("point"))
             v = message.get("v")
@@ -1322,6 +1394,9 @@ class RoomHub:
                 peer.mic = mic
             room.broadcast({"t": "media", "id": peer.id, "camera": peer.camera, "mic": peer.mic},
                            exclude=peer.id)
+        elif kind == "avatar":
+            if "claim" in message:
+                self.avatars.claim(peer, room.id, message.get("claim"), message.get("key"))
         elif kind == "rtc":
             to = message.get("to")
             target = room.peers.get(to) if isinstance(to, str) else None
@@ -1387,7 +1462,7 @@ class RoomHub:
             next_state = max(next_state + STATE_INTERVAL, now)
             frame = {"t": "state", "v": room.v, "time": snapshot.get("time", 0.0),
                      "bodies": snapshot.get("bodies", []), "grabs": snapshot.get("grabs", []),
-                     "avatars": {p.id: p.pose for p in room.peers.values() if p.pose}}
+                     "avatars": {p.id: p.row() for p in room.peers.values() if p.pose}}
             try:
                 text = dumps(frame)
             except ValueError:  # non-finite pose: the sim blew up — never broadcast NaN
@@ -1412,7 +1487,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                label: str = "room", web_dir: Path | None = None,
                settle_seconds: float = 1.0, stage: str = "scene", version: str | None = None,
                prebuilt: Path | None = None, watch: Any = None,
-               prefetch_seconds: float | None = None) -> FastAPI:
+               prefetch_seconds: float | None = None,
+               avatars: AvatarConfig | None = None) -> FastAPI:
     """The room call app for one scene: its first version's geometry built here, once (or read
     from `prebuilt`, see `read_prebuilt`); rooms made on demand.
 
@@ -1421,6 +1497,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     polled for the app's lifetime; each is offered to every room and swapped in after
     `prefetch_seconds` (default `PREFETCH_SECONDS`). `web_dir` exists for tests (a stand-in client) and for working on the
     client from a checkout; `settle_seconds` is passed to every version's `RoomSim`.
+    `avatars` says how full bodies are made (default: off — everyone a capsule or hologram).
     """
     if model is None:
         if scene_xml is None:
@@ -1431,7 +1508,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
         version = version_name(label, scene_digest(Path(scene_xml)))
     first = SceneVersion.build(model, label=label, stage=stage, id=version, prebuilt=prebuilt)
     hub = RoomHub(first, settle_seconds=settle_seconds, watch=watch,
-                  prefetch_seconds=PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds)
+                  prefetch_seconds=PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds,
+                  avatars=avatars)
 
     # No /docs, /redoc or /openapi.json: nothing to document for a browser, and less surface.
     app = FastAPI(title="LiteReality room call", docs_url=None, redoc_url=None,
@@ -1460,11 +1538,18 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     async def app_css() -> Response:
         return file_response("app.css", CSS)
 
-    @app.get("/" + SEGMENTER_MODEL)
-    async def segmenter_model(request: Request) -> Response:
-        """The hologram's segmentation model, by its fixed name. Every page with a camera on
-        fetches it, so a repeat visit revalidates against its hash and is not sent again."""
-        body = web.asset(SEGMENTER_MODEL)
+    @app.get("/body.js")
+    async def body_js() -> Response:
+        return file_response("body.js", JS)
+
+    @app.get("/pose_worker.js")
+    async def pose_worker_js() -> Response:
+        return file_response("pose_worker.js", JS)
+
+    def model_response(name: str, request: Request) -> Response:
+        """A vendored model by its fixed name. Every page that uses one fetches it, so a repeat
+        visit revalidates against its hash and is not sent again."""
+        body = web.asset(name)
         if body is None:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
@@ -1472,6 +1557,73 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
         if request.headers.get("if-none-match") == etag:
             return Response(status_code=304, headers=headers)
         return Response(body, media_type=BINARY, headers=headers)
+
+    @app.get("/" + SEGMENTER_MODEL)
+    async def segmenter_model(request: Request) -> Response:
+        """The hologram's segmentation model."""
+        return model_response(SEGMENTER_MODEL, request)
+
+    @app.get("/" + POSE_MODEL)
+    async def pose_model(request: Request) -> Response:
+        """The pose tracker's model (full-body people: the sender's arms and head)."""
+        return model_response(POSE_MODEL, request)
+
+    def avatar_error(status: int, message: str, retry: int | None = None) -> Response:
+        body: dict = {"error": message}
+        headers = {"Cache-Control": "no-store"}
+        if retry is not None:
+            body["retry"] = retry
+            headers["Retry-After"] = str(retry)
+        return JSONResponse(body, status_code=status, headers=headers)
+
+    @app.post("/avatar")
+    async def avatar_upload(request: Request) -> Response:
+        """A person's photos (a turnaround from the camera, or uploads) -> their body, built in
+        the background; everyone in their room hears "building" now and "ready" when it is.
+        Who is asking comes in headers (`bodies.ROOM_HEADER`, `PEER_HEADER`, `KEY_HEADER`), so
+        a stranger, or someone over a limit, is refused before the body is read at all; the
+        body is then read with a cap, into one buffer, so an oversized upload is refused before
+        it is in memory."""
+        service = hub.avatars
+        if not service.enabled:
+            return avatar_error(503, "full bodies are off on this server")
+        limit = bodies.MAX_UPLOAD_BYTES
+        length = request.headers.get("content-length")
+        if length is not None:
+            try:
+                declared = int(length)
+            except ValueError:
+                return avatar_error(400, "bad Content-Length")
+            if declared > limit:
+                return avatar_error(413, "the upload is too big")
+
+        async def read() -> bytearray:
+            body = bytearray()
+            async for chunk in request.stream():
+                body += chunk
+                if len(body) > limit:
+                    raise AvatarRequestError(413, "the upload is too big")
+            return body
+
+        headers = request.headers
+        try:
+            result = await service.upload(
+                read, room=headers.get(bodies.ROOM_HEADER), peer=headers.get(bodies.PEER_HEADER),
+                key=headers.get(bodies.KEY_HEADER),
+                client=request.client.host if request.client else None)
+        except AvatarRequestError as exc:
+            return avatar_error(exc.status, exc.message, exc.retry_after)
+        return JSONResponse(result, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @app.get("/avatars/{name}")
+    async def avatar_file(name: str) -> Response:
+        """A ready body (LRAV, `avatar_format`). Its name is its id, so it never changes."""
+        data = hub.avatars.avatar_bytes(name)
+        if data is None:
+            return JSONResponse({"detail": "Not Found"}, status_code=404,
+                                headers={"Cache-Control": "no-store"})
+        return Response(data, media_type=BINARY,
+                        headers={"Cache-Control": AVATAR_CACHE, "ETag": f'"{name[:-4]}"'})
 
     @app.get("/scene.json")
     async def scene_manifest(request: Request) -> Response:
@@ -1509,7 +1661,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     async def healthz() -> Response:
         hub.ensure_watching()
         return JSONResponse({"ok": True, "label": hub.version.label, **hub.stats(),
-                             **hub.status()}, headers={"Cache-Control": "no-store"})
+                             **hub.status(), "avatars": hub.avatars.stats()},
+                            headers={"Cache-Control": "no-store"})
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket) -> None:
@@ -1583,9 +1736,12 @@ def _open_when_up(server, url: str) -> None:
 
 def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAULT_PORT,
           label: str | None = None, demo: bool = False, open_browser: bool = True,
-          watch: bool = False, stage: str | None = None) -> int:
+          watch: bool = False, stage: str | None = None, avatars: str = "standin",
+          modal_env: str | None = None) -> int:
     """Serve one scene (or the demo room, with `demo` or no scene) until interrupted. With
-    `watch`, every change to the scene's files is a new version, swapped into the rooms live."""
+    `watch`, every change to the scene's files is a new version, swapped into the rooms live.
+    `avatars` is how full bodies are made: "standin" here, "modal" on the GPU function in the
+    Modal environment `modal_env` (the stand-in when that fails), "off" not at all."""
     import uvicorn
 
     with tempfile.TemporaryDirectory(prefix="roomcall-demo-") as scratch:
@@ -1609,7 +1765,8 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
         print(f"room call  building {label} from {scene} …")
         model = load_model(scene)
         app = create_app(scene, model=model, label=label, stage=stage or scene_stage(scene),
-                         version=version, watch=watcher)
+                         version=version, watch=watcher,
+                         avatars=AvatarConfig(mode=avatars, environment=modal_env or "main"))
         sock = bind_socket(host, port)
         shown = "localhost" if host in {"0.0.0.0", "::", ""} else host
         url = f"http://{shown}:{sock.getsockname()[1]}/"
@@ -1622,6 +1779,7 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
               f"up to {MAX_PEERS} people per room")
         print(f"  share  expose it over https (e.g. `cloudflared tunnel --url {url.rstrip('/')}`) "
               "and paste the link in the Zoom/Meet/Teams chat · ctrl-c to stop")
+        print(f"  bodies {_BODIES[avatars]}")
         if watcher is not None:
             print(f"  watch  {watched}: a change to the scene is swapped in live, nobody leaves "
                   f"(version {app.state.roomcall.version.id})")
@@ -1650,6 +1808,15 @@ def _exit_quietly(_signum, _frame) -> None:
     raise SystemExit(0)
 
 
+_BODIES = {
+    "off": "off: everyone is a capsule, or their hologram",
+    "standin": "full bodies from each person's photos, as simple stand-ins (--avatars modal for "
+               "photoreal ones on your Modal GPU)",
+    "modal": "photoreal full bodies with LHM++ on Modal (litereality-avatar); the stand-in "
+             "whenever that fails",
+}
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
 
@@ -1660,12 +1827,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     return run(args)
 
 
-def run(args) -> int:
+def run(args, *, modal_env: str | None = None) -> int:
     """Run from parsed `add_arguments` arguments — shared by `litereality roomcall` and
     `python -m litereality_agent.room_ops.roomcall` so the two can never drift apart."""
     try:
         return serve(Path(args.scene) if args.scene else None, host=args.host, port=args.port,
                      label=args.label, demo=args.demo, open_browser=args.open_browser,
-                     watch=getattr(args, "watch", False), stage=getattr(args, "stage", None))
+                     watch=getattr(args, "watch", False), stage=getattr(args, "stage", None),
+                     avatars=getattr(args, "avatars", "standin"),
+                     modal_env=modal_env or getattr(args, "modal_env", None))
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc

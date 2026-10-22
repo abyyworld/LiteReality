@@ -12,9 +12,10 @@
 <!-- The ONLY inline script on this page. The server allows it by its sha256 hash in the CSP, so
      any edit here (even whitespace) changes the hash; the server recomputes it from this file. -->
 <script type="importmap">{ "imports": {
-  "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
-  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/",
-  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.15/build/index.module.js"
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.9.15/build/index.module.js",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.min.js"
 }}</script>
 <script type="module" src="app.js"></script>
 </head>
@@ -89,6 +90,8 @@
         <span class="tool-ico ico-cam" aria-hidden="true"></span><span class="tool-txt">Camera</span></button>
       <button class="btn tool" id="holoBtn" type="button" aria-pressed="true" title="Hologram: you, cut out of your background">
         <span class="tool-ico ico-holo" aria-hidden="true"></span><span class="tool-txt">Hologram</span></button>
+      <button class="btn tool" id="bodyBtn" type="button" aria-expanded="false" aria-controls="bodyPanel" title="Your full body" hidden>
+        <span class="tool-ico ico-body" aria-hidden="true"></span><span class="tool-txt">Body</span></button>
       <button class="btn tool" id="micBtn" type="button" aria-pressed="false" title="Send your microphone">
         <span class="tool-ico ico-mic" aria-hidden="true"></span><span class="tool-txt">Mic</span></button>
       <button class="btn tool" id="inviteBtn" type="button" title="Copy a link to paste in the call chat">
@@ -124,6 +127,23 @@
       only — nothing in the real room moves.</p>
   </section>
 
+  <section id="bodyPanel" class="card panel body-panel" hidden aria-label="Your full body">
+    <h2>Show the others all of you</h2>
+    <p class="muted small">Your webcam only sees your head and shoulders. Give the room a few
+      pictures of the rest of you and everyone sees your whole body, moving your arms as you do,
+      with your live face on top. <span id="bodyWhere">The pictures go to this room's server to
+      build the body; it is kept in memory only and forgotten soon after you leave.</span></p>
+    <div class="body-actions">
+      <button class="btn primary" id="bodyCamBtn" type="button">Use my camera — turn around once</button>
+      <button class="btn" id="bodyPhotoBtn" type="button">Upload photos</button>
+      <button class="btn" id="bodySkipBtn" type="button">Not now</button>
+    </div>
+    <p class="muted small" id="bodyCamHint" hidden>Turn your camera on to use it here, or upload
+      photos (head to toe, facing the camera, a plain background helps).</p>
+    <p class="body-status" id="bodyStatus" role="status" aria-live="polite"></p>
+    <input id="bodyFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+  </section>
+
   <div id="invitePop" class="card panel invite-pop" hidden>
     <label class="field">
       <span class="field-label">Copy this link into the call chat</span>
@@ -135,6 +155,17 @@
   <div id="joystick" class="joystick" hidden aria-hidden="true"><div class="joystick-knob" id="joyKnob"></div></div>
   <video id="selfView" class="self-view" muted playsinline autoplay hidden></video>
   <canvas id="selfHolo" class="self-view self-holo" hidden aria-label="You, as the others see you"></canvas>
+</div>
+
+<!-- ------------------------------------------------------------ turnaround capture -->
+<div id="bodyCapture" class="capture" hidden role="dialog" aria-modal="true" aria-label="Turnaround capture">
+  <video id="bodyCapVideo" class="capture-video" muted playsinline autoplay></video>
+  <div class="capture-count" id="bodyCount" aria-live="assertive"></div>
+  <div class="capture-panel card">
+    <p class="capture-guide" id="bodyGuide"></p>
+    <p class="capture-progress" id="bodyProgress" aria-live="polite"></p>
+    <button class="btn" id="bodyCancelBtn" type="button">Cancel</button>
+  </div>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>

@@ -55,8 +55,21 @@ physics-perception project.
   part opens under a pull and the room is stable. The Modal path is not run yet.
 - **Hologram participants**: the webcam is segmented in the browser (MediaPipe 0.10.35, model served
   by us), and each person appears as a live photoreal cut-out in the room. A webcam frames only head
-  and shoulders, so there are no arms below the frame and no legs; full-body options are being
-  researched (LHM, real-time video models).
+  and shoulders.
+- **Full-body people** (`roomcall/avatars.py`, `models/avatar/`, `deploy/modal/avatar/`): at join,
+  each person turns in front of the camera or uploads photos. A 3D splat body is built (stand-in on
+  the server in ~2 s, or LHM++ on a Modal L4 for photoreal), drawn in every browser with Spark
+  2.3.1 (three.js 0.180).
+  - Upper body: driven live by MediaPipe pose from the sender's webcam.
+  - Legs: procedural.
+  - Face: the live hologram, on the body's head.
+
+  Tested end to end with stand-in bodies in headless browsers. The LHM++ GPU path is written but
+  **not built or run yet**.
+
+  A search (2026-10-22) found no open repo that makes a live photoreal full-body person from a
+  head-and-shoulders webcam. Real-time video generation (e.g. EditaLive) costs ~$4–8 per hour per
+  person on an H100, adds ~2 s of lag and gives flat video, so a 3D body is the paper's main path.
 - **Evaluation harness** (`pipeline/evaluate/`, `litereality evaluate <room>`): for the paper, it
   measures:
   - interactability: grab, pull and rest for every movable body;

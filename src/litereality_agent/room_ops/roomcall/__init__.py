@@ -18,7 +18,8 @@ with what people did carried over: `--watch` does it here whenever the scene's f
 
 Parts: `sim` (the shared physics), `geometry` (scene -> glb + manifest for the browser),
 `server` (HTTP + WebSocket), `web/` (the client), `demo` (the built-in room), `hosted` (the same
-server on Modal, so a call needs no tunnel).
+server on Modal, so a call needs no tunnel), `avatars` and `avatar_format` (full-body people:
+each person's body, built from their photos, drawn with Spark and driven live).
 
 Under `room_ops` because it reads a scene file and knows nothing about run layout. This module
 stays import-light — only argparse wiring — so building the `litereality` parser never pulls in
@@ -33,6 +34,8 @@ DEFAULT_PORT = 8790
 # What a version may say it is (shown to people, and on the wire as the "scene" message's stage):
 # RoomPlan boxes, per-object meshes, the full pipeline's room, any other scene, the demo.
 STAGES = ("quick", "objects", "full", "scene", "demo")
+# How full bodies are made (`avatars.MODES`, repeated here so the parser needs no numpy).
+AVATAR_MODES = ("off", "standin", "modal")
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -77,6 +80,14 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
              "redeploying: everyone in it switches over within seconds, nobody leaves",
     )
     parser.add_argument("--modal-env", help="Modal environment to deploy into (default: main)")
+    parser.add_argument(
+        "--avatars", choices=AVATAR_MODES, default="standin",
+        help="full-body people, from each person's turnaround or photos: 'standin' builds a "
+             "simple body tinted from the photos here (default); 'modal' builds a photoreal one "
+             "with LHM++ on your Modal GPU (deploy deploy/modal/avatar/app.py; the stand-in "
+             "whenever that fails); 'off' keeps everyone a capsule or hologram. The hosted link "
+             "always uses 'modal'",
+    )
 
 
 def run(args: argparse.Namespace, *, credentials: tuple[str, str] | None = None,
@@ -92,7 +103,22 @@ def run(args: argparse.Namespace, *, credentials: tuple[str, str] | None = None,
                        environment=args.modal_env or environment or "main")
     from litereality_agent.room_ops.roomcall import server
 
-    return server.run(args)
+    if getattr(args, "avatars", "standin") != "modal":
+        return server.run(args)
+    # Bodies on the GPU: this process calls the Modal function itself, with the `.env` token
+    # (set before the client is imported, which is when it reads its configuration).
+    import os
+
+    if credentials:
+        os.environ["MODAL_TOKEN_ID"], os.environ["MODAL_TOKEN_SECRET"] = credentials
+    if profile:
+        os.environ["MODAL_PROFILE"] = profile
+    try:
+        import modal  # noqa: F401
+    except ImportError:
+        raise SystemExit("--avatars modal needs the Modal client: run `uv sync --extra modal`, "
+                         "or use --avatars standin") from None
+    return server.run(args, modal_env=args.modal_env or environment or "main")
 
 
 def _deploy(args: argparse.Namespace, *, credentials, profile, environment: str) -> int:

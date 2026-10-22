@@ -130,6 +130,39 @@ Limits:
 - Full 3D photoreal people would need something like LAM (a one-shot animatable 3D head, SIGGRAPH
   2025, Apache-2.0). That isn't built.
 
+## Full-body people
+
+A webcam frames only head and shoulders, so on its own the hologram floats. When you join, the
+**body** button (the figure in the toolbar) gives you a 3D body:
+
+1. **Make your body.** Step back about 2 m and turn slowly through a 3-2-1 countdown (the page grabs
+   a few frames), or upload one or more photos.
+2. **The server builds it:**
+   - `--avatars standin` (the default): a simple splat body on our skeleton, tinted with your
+     clothes' colours, in about 2 s, with no GPU. It isn't photoreal.
+   - `--avatars modal`: a photoreal body from your photos, made by LHM++ on a Modal L4 GPU in about
+     5–15 s warm (1–2 min cold). You deploy it once:
+     ```bash
+     uv run modal run --env main deploy/modal/avatar/app.py::populate     # image + weights, once
+     uv run modal deploy --env main deploy/modal/avatar/app.py
+     uv run litereality roomcall my_room --avatars modal
+     ```
+     See `deploy/modal/avatar/README.md`. The LHM++ weights are CC-BY-NC-4.0 and SMPL-X is
+     non-commercial, which is fine for research but not for a product.
+3. **Everyone sees your body move live:**
+   - Spark 2.3.1 draws it in every browser, on three.js 0.180.
+   - Your upper body follows MediaPipe pose tracking in your own browser, sent as joint rotations
+     with your position.
+   - Your legs walk when you move.
+   - Your live hologram face sits on the body's head.
+
+Limits and protections:
+- **Limits:** uploads are rate-limited per person, per room, per client address and server-wide.
+  GPU builds have a daily cap and fall back to the stand-in.
+- **Not tried yet:** a real webcam, real GPU bodies, and real hardware.
+- **Speed:** two bodies took a software-rendered test page from about 18 to 8 fps; real GPUs
+  should do far better.
+
 ## Switching rooms live, mid-call
 
 Every publish is a new **version** of the same link. People in the room are never disconnected:

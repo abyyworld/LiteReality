@@ -399,17 +399,32 @@ class VolumeWatch:
 
 
 def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None = None,
-              reload=None, poll_seconds: float = POLL_SECONDS, freeze: bool = False):
+              reload=None, poll_seconds: float = POLL_SECONDS, freeze: bool = False,
+              avatars: str = "modal"):
     """The room call app the container serves: the Volume's current version, else the demo room,
     watching the Volume (`VolumeWatch`; `reload` is the Volume's own `reload`) for the next one.
     `freeze` (the container: the app is the process) exempts startup objects from the garbage
-    collector (`server.freeze_startup_objects`)."""
+    collector (`server.freeze_startup_objects`).
+
+    Full bodies are built on the GPU function in the container's own Modal environment, at most
+    `avatars.GPU_DAILY_CAP` a day across restarts (`ModalDictBudget`), the stand-in otherwise.
+    Nothing here touches Modal: the budget and the function are looked up by the first build."""
+    from litereality_agent.room_ops.roomcall.avatars import (
+        GPU_DAILY_CAP,
+        AvatarConfig,
+        ModalDictBudget,
+    )
     from litereality_agent.room_ops.roomcall.server import create_app, freeze_startup_objects
 
+    if avatars == "modal":
+        bodies = AvatarConfig(mode="modal", environment=None,
+                              budget=ModalDictBudget(GPU_DAILY_CAP))
+    else:
+        bodies = AvatarConfig(mode=avatars)
     watch = VolumeWatch(root, reload=reload, poll_seconds=poll_seconds, scratch=scratch)
     ref = served_ref(root) or watch.demo()
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
-                     prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch)
+                     prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies)
     if freeze:
         freeze_startup_objects()
     return app
