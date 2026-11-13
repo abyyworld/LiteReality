@@ -513,9 +513,12 @@ function installVersion(next) {
     if (id === undefined) endGrab(true);          // gone, or no longer movable: let go
     else grab.body = id;                          // the server carries the grab by name too
   }
+  detachBodySplats();                              // before the old nodes are disposed with them
   if (old?.root) { world.remove(old.root); disposeTree(old.root); }
   world.add(next.root);
   shown = next; bodies = next.bodies; sceneRoot = next.root;
+  attachBodySplats();
+  refreshSplat();
   sceneReady = true;
   applyManifest(next.manifest, fresh);
   if (grab) setHighlight(grab.body, true);
@@ -618,6 +621,7 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === 'Escape') { if (capture) capture.cancelled = true; else closePanels(); return; }
   if (!joined) return;
+  if (e.code === 'KeyP' && photo.room) { togglePhoto(); return; }
   keys.add(e.code);
   if (e.code.startsWith('Arrow')) e.preventDefault();
 });
@@ -655,7 +659,7 @@ const inStep = () => ver.room === shown?.v;
 function pick(x, y) {
   if (!sceneReady || !inStep()) return null;
   setNdc(x, y);
-  const h = raycaster.intersectObject(sceneRoot, true).find((i) => i.object.isMesh && i.object.visible);
+  const h = raycaster.intersectObject(sceneRoot, true).find((i) => i.object.isMesh && (i.object.visible || i.object.userData.photoHidden));
   if (!h || h.object.userData.bodyId === undefined) return null;
   return { body: h.object.userData.bodyId, point: h.point.clone(), distance: h.distance };
 }
@@ -1122,9 +1126,124 @@ function sparkFailed(err) {
   for (const peer of peers.values()) {
     if (peer.body.meshes || peer.body.state === 'loading') { disposeBody(peer); peer.body.state = 'failed'; }
   }
+  clearSplat();
   if (spark.sr) { scene.remove(spark.sr); try { spark.sr.dispose?.(); } catch { /* half made */ } spark.sr = null; }
   toast("Full bodies aren't available in this browser");
   renderPeople();
+}
+
+/* ------------------------------------------------------------------ the photoreal room (splats) */
+// The scanned room as Gaussian splats (server splats.py, pipeline/splatroom): the static room in
+// the world group (MuJoCo frame) and each movable object's splat under its body's node, in that
+// body's frame, so the real chair moves when the physics moves it. The meshes stay underneath:
+// they pick and block exactly as before (`photoHidden`), they are just not drawn while splats are
+// shown. Bundles change on their own clock (the instant room, then sharper trained snapshots):
+// the server says {"t": "splat"} and the new files load beside the old, then replace them.
+const SPLAT_URL = /^splat\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]{1,140}\.spz$/;
+const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map() };
+try { const s = localStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
+
+const photoShown = () => photo.want && !!photo.room;
+
+function disposeSplat(mesh) {
+  if (!mesh) return;
+  mesh.parent?.remove(mesh);
+  try { mesh.dispose?.(); } catch { /* already gone */ }
+}
+
+function clearSplat() {
+  photo.gen++;
+  disposeSplat(photo.room); photo.room = null;
+  for (const m of photo.bodies.values()) disposeSplat(m);
+  photo.bodies.clear();
+  Object.assign(photo, { v: null, created: null, stage: '', step: null });
+  applyPhoto();
+}
+
+/** Body splats off their nodes (a version swap is about to dispose those nodes). */
+function detachBodySplats() {
+  for (const m of photo.bodies.values()) m.parent?.remove(m);
+}
+
+/** Body splats onto the nodes on screen, matched by body name (ids change between versions). */
+function attachBodySplats() {
+  if (!shown) return;
+  for (const [name, m] of photo.bodies) {
+    const rec = shown.bodies.get(shown.byName.get(name));
+    if (rec) rec.node.add(m); else m.parent?.remove(m);
+  }
+  applyPhoto();
+}
+
+/** Meshes drawn or not: not where a splat stands in for them (the static room; a body that has
+ *  its own splat). Splats are faded with `opacity`, never `visible` (Spark shows a re-shown mesh
+ *  only after its next sort). */
+function applyPhoto() {
+  const on = photoShown();
+  if (photo.room) photo.room.opacity = on ? 1 : 0;
+  for (const m of photo.bodies.values()) m.opacity = on ? 1 : 0;
+  sceneRoot?.traverse((o) => {
+    if (!o.isMesh) return;
+    const id = o.userData.bodyId;
+    const covered = id === undefined ? true : photo.bodies.has(shown?.bodies.get(id)?.name);
+    const hide = on && covered;
+    o.visible = !hide;
+    o.userData.photoHidden = hide;
+  });
+  const btn = $('photoBtn');
+  if (btn) {
+    btn.hidden = !photo.room;
+    btn.setAttribute('aria-pressed', String(on));
+    btn.title = photo.room ? `Photoreal room${photo.stage ? ` (${photo.stage}${photo.step ? ` ${photo.step}` : ''})` : ''}` : 'Photoreal room';
+  }
+}
+
+/** Fetch the bundle for the version on screen; load what changed; swap it in whole. */
+async function refreshSplat() {
+  if (!shown?.v || spark.failed) return;
+  const gen = ++photo.gen, v = shown.v;
+  let man;
+  try {
+    const res = await fetch('splat.json?v=' + encodeURIComponent(v), { cache: 'no-cache' });
+    if (gen !== photo.gen) return;
+    if (!res.ok) { if (res.status === 404 && photo.room) clearSplat(); return; }
+    man = await res.json();
+  } catch (err) { console.warn('splat manifest', err); return; }
+  if (gen !== photo.gen || !man || typeof man.room !== 'string' || !SPLAT_URL.test(man.room)) return;
+  if (photo.v === v && photo.created === man.created) return;
+  const entries = Object.entries(man.bodies || {}).filter(([n, u]) => typeof n === 'string' && typeof u === 'string' && SPLAT_URL.test(u));
+  let SPARK;
+  try { SPARK = await loadSpark(); } catch { return; }
+  const made = [];
+  const load = async (url) => {
+    const mesh = new SPARK.SplatMesh({ url });
+    made.push(mesh);
+    mesh.opacity = 0;
+    await mesh.initialized;
+    return mesh;
+  };
+  try {
+    const room = await load(man.room);
+    const loaded = await Promise.all(entries.map(async ([name, url]) => [name, await load(url)]));
+    if (gen !== photo.gen || shown?.v !== v) { made.forEach(disposeSplat); return; }
+    const first = !photo.room;
+    disposeSplat(photo.room);
+    for (const m of photo.bodies.values()) disposeSplat(m);
+    photo.room = room; world.add(room);
+    photo.bodies = new Map(loaded);
+    Object.assign(photo, { v, created: man.created ?? null, stage: String(man.stage || ''), step: man.step ?? null });
+    attachBodySplats();
+    if (first && photo.want) toast('Photoreal room on (P switches)');
+  } catch (err) {
+    made.forEach(disposeSplat);
+    console.warn('the photoreal room could not be loaded:', err?.message || err);
+  }
+}
+
+function togglePhoto() {
+  photo.want = !photo.want;
+  try { localStorage.setItem('rc.photo', photo.want ? '1' : '0'); } catch { /* storage blocked */ }
+  applyPhoto();
 }
 
 const bodyShown = (peer) => peer?.body?.state === 'ready' && !!peer.body.skel;
@@ -3380,6 +3499,7 @@ function handle(m) {
     }
     case 'state': onState(m); break;
     case 'scan': onScan(m); break;
+    case 'splat': if (!m.v || m.v === shown?.v) refreshSplat(); break;
     case 'scene': {
       // A new version of the room: fetch it now; the room switches to it a few seconds later, at
       // the first state frame that carries it (or already has, if the server did not wait). The
@@ -3533,6 +3653,7 @@ $('holoBtn').addEventListener('click', () => {
   if (holo.want && !local.video) toast('Turn your camera on to appear as a hologram');
 });
 $('micBtn').addEventListener('click', () => { if (!zoom) setLocal('audio', !shownOn('audio')); });
+$('photoBtn').addEventListener('click', togglePhoto);
 $('inviteClose').addEventListener('click', () => togglePanel('invitePop', false));
 
 $('inviteBtn').addEventListener('click', async () => {

@@ -54,6 +54,20 @@ physics-perception project.
   swaps it into that room only, then streams realistic-object versions as they finish. Uploads are
   checked hard (zip-slip, bombs, prim-name injection) and rate- and cost-limited. Tested locally
   with fake objects and headless browsers; not run on Modal or a real iPhone yet.
+- **Photoreal room as Gaussian splats** (`models/splat/`, `pipeline/splatroom/`, `roomcall/splats.py`,
+  `deploy/modal/splat/`, `litereality splatroom`): the real room from the scan's own photos.
+  - Instant (no GPU, ~10 s): photos + LiDAR fused into splats.
+  - Trained: gsplat 1.5.3's trainer on a Modal H100, fed ARKit poses and LiDAR directly (no
+    COLMAP). Snapshots stream into the call live.
+  - Every bundle is cut against the MuJoCo scene, so each movable object's splat hangs on its body
+    and moves with the physics.
+  - Measured on tea_room (2026-11-13): final room at 184 s; held-out PSNR 19.2 dB (21.6 dB
+    colour-corrected), SSIM 0.78, LPIPS 0.36; about $0.30 per room. Details:
+    [`results/tea_room/splat_run.md`](results/tea_room/splat_run.md).
+  - Gaps: chairs near tables are cut by boxes (SAM 2 masks next); a hole where a moved object
+    stood.
+- **First real `--realistic` run done** (2026-11-13): tea_room, last object final at 7.2 min, $2.24
+  ([`results/tea_room/realistic_run.md`](results/tea_room/realistic_run.md)).
 - **Opening furniture** (`models/articulated/`, `--articulated`): Infinigen-Articulated (BSD-3) builds
   doors, windows, cabinets, drawers and appliances sized to the scanned boxes on the CPU (8–45 s
   each), with our masses and joint settings. Validated on tea_room with a local Infinigen env: every

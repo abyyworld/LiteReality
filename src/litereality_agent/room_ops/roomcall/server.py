@@ -112,6 +112,9 @@ from litereality_agent.room_ops.roomcall.hosted import scene_digest, scene_files
 from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
 from litereality_agent.room_ops.roomcall.scans import ScanConfig, ScanRequestError, ScanService
 from litereality_agent.room_ops.roomcall.sim import RoomSim, load_model
+from litereality_agent.room_ops.roomcall.splats import NAME as SPLAT_NAME
+from litereality_agent.room_ops.roomcall.splats import SplatSource
+from litereality_agent.room_ops.roomcall.splats import room_name as splat_room_name
 
 log = logging.getLogger(__name__)
 
@@ -877,7 +880,8 @@ class RoomHub:
 
     def __init__(self, version: SceneVersion | mujoco.MjModel, *, settle_seconds: float = 1.0,
                  prefetch_seconds: float | None = None, watch: Any = None,
-                 avatars: AvatarConfig | None = None, scans: ScanConfig | None = None) -> None:
+                 avatars: AvatarConfig | None = None, scans: ScanConfig | None = None,
+                 splats: SplatSource | None = None) -> None:
         if isinstance(version, mujoco.MjModel):  # a bare model: a version with nothing to draw
             version = SceneVersion("scene", "room", "scene", version, b"", {})
         self.version = version
@@ -899,6 +903,10 @@ class RoomHub:
         self._failed: str | None = None        # a version id that failed: not tried again
         self._watcher: asyncio.Task | None = None
         self._watcher_loop: asyncio.AbstractEventLoop | None = None
+        # The photoreal room (`splats`): bundles watched on their own clock, never versions.
+        self.splats = splats
+        self._splat_task: asyncio.Task | None = None
+        self._splat_stamps: dict[str | None, Any] = {}
         # Full bodies: one store and one set of limits for every room of this server.
         self.avatars = AvatarService(avatars or AvatarConfig(), find_peer=self._find_peer,
                                      broadcast=self._broadcast_room,
@@ -938,6 +946,9 @@ class RoomHub:
             if self._watcher is not None:
                 self._watcher.cancel()
                 self._watcher = None
+            if self._splat_task is not None:
+                self._splat_task.cancel()
+                self._splat_task = None
             for room in list(self.rooms.values()):
                 room.ready.cancel()
                 if room.task:
@@ -1030,9 +1041,11 @@ class RoomHub:
         (modal/_runtime/asgi.py: `LifespanManager`, started before the first input, on the same
         event loop as every request), but every route calls this too, which costs a comparison:
         a host that skips the lifespan still gets its watcher, on the first request."""
+        loop = asyncio.get_running_loop()
+        if self.splats is not None and (self._splat_task is None or self._splat_task.done()):
+            self._splat_task = loop.create_task(self._watching_splats())
         if self.watch is None:
             return
-        loop = asyncio.get_running_loop()
         task = self._watcher
         if task is not None and not task.done() and self._watcher_loop is loop:
             return
@@ -1062,6 +1075,33 @@ class RoomHub:
             if ref is None or ref.id == self.version.id or ref.id == self._failed:
                 continue
             await self.load_and_offer(ref)
+
+    def room_version(self, room_id: str) -> SceneVersion:
+        return self.room_versions.get(room_id) or self.version
+
+    async def _watching_splats(self) -> None:
+        """Every `splats.poll_seconds`: has the bundle of any room's version changed? Then tell
+        that room {"t": "splat"}; its browsers fetch the new files (`splats`). Never raises."""
+        while True:
+            await asyncio.sleep(max(0.05, float(self.splats.poll_seconds)))
+            try:
+                for room in list(self.rooms.values()):
+                    version = room.version or self.room_version(room.id)
+                    name = splat_room_name(version.id)
+                    stamp = await asyncio.to_thread(self.splats.stamp, name)
+                    key = (room.id, name)
+                    if stamp is not None and self._splat_stamps.get(key) != stamp:
+                        if key in self._splat_stamps:
+                            room.broadcast({"t": "splat", "v": version.id, "created": stamp})
+                        self._splat_stamps[key] = stamp
+                live = {(room.id, splat_room_name((room.version or self.version).id))
+                        for room in self.rooms.values()}
+                for key in [k for k in self._splat_stamps if k not in live]:
+                    del self._splat_stamps[key]
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — the next look carries on
+                log.warning("roomcall: looking at the splats: %s", exc)
 
     async def load_and_offer(self, ref: SceneRef) -> SceneVersion | None:
         """Load `ref` off the event loop (`load_version`) and offer it to every room. One that
@@ -1607,7 +1647,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                prebuilt: Path | None = None, watch: Any = None,
                prefetch_seconds: float | None = None,
                avatars: AvatarConfig | None = None,
-               scans: ScanConfig | None = None) -> FastAPI:
+               scans: ScanConfig | None = None,
+               splats: SplatSource | None = None) -> FastAPI:
     """The room call app for one scene: its first version's geometry built here, once (or read
     from `prebuilt`, see `read_prebuilt`); rooms made on demand.
 
@@ -1618,6 +1659,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     client from a checkout; `settle_seconds` is passed to every version's `RoomSim`.
     `avatars` says how full bodies are made (default: off — everyone a capsule or hologram).
     `scans` says whether, and how far, a scan sent into a room is built (default: off).
+    `splats` is where the photoreal room's splat bundles are (`splats.SplatSource`; default none:
+    everyone sees the meshes).
     """
     if model is None:
         if scene_xml is None:
@@ -1629,7 +1672,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     first = SceneVersion.build(model, label=label, stage=stage, id=version, prebuilt=prebuilt)
     hub = RoomHub(first, settle_seconds=settle_seconds, watch=watch,
                   prefetch_seconds=PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds,
-                  avatars=avatars, scans=scans)
+                  avatars=avatars, scans=scans, splats=splats)
 
     # No /docs, /redoc or /openapi.json: nothing to document for a browser, and less surface.
     app = FastAPI(title="LiteReality room call", docs_url=None, redoc_url=None,
@@ -1812,6 +1855,36 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
             return Response(status_code=304, headers=headers)
         return Response(live.glb, media_type="model/gltf-binary", headers=headers)
 
+    @app.get("/splat.json")
+    async def splat_manifest(request: Request) -> Response:
+        """The photoreal room for ?v=<version> (default the live one): {"room": url,
+        "bodies": {name: url}, "stage", "step", "created"}, or 404 when it has none."""
+        hub.ensure_watching()
+        vid = request.query_params.get("v")
+        version = hub.version if vid is None else hub.versions.get(vid)
+        if version is None:
+            version = next((v for v in hub.room_versions.values() if v.id == vid), None)
+        name = splat_room_name(version.id) if version is not None else None
+        found = None
+        if hub.splats is not None and version is not None:
+            found = await asyncio.to_thread(hub.splats.public, name, name or "room")
+        if found is None:
+            return JSONResponse({"detail": "no splats for this room"}, status_code=404,
+                                headers={"Cache-Control": "no-store"})
+        return JSONResponse(found, headers={"Cache-Control": "no-cache"})
+
+    @app.get("/splat/{name}/{file}")
+    async def splat_file(name: str, file: str) -> Response:
+        """One SPZ file of a bundle. Files are named by their content: cached forever."""
+        data = None
+        if hub.splats is not None and SPLAT_NAME.match(name):
+            data = await asyncio.to_thread(hub.splats.file, None if name == "room" else name,
+                                           file)
+        if data is None:
+            return JSONResponse({"detail": "Not Found"}, status_code=404,
+                                headers={"Cache-Control": "no-store"})
+        return Response(data, media_type=BINARY, headers={"Cache-Control": IMMUTABLE})
+
     @app.get("/healthz")
     async def healthz() -> Response:
         hub.ensure_watching()
@@ -1894,14 +1967,14 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
           label: str | None = None, demo: bool = False, open_browser: bool = True,
           watch: bool = False, stage: str | None = None, avatars: str = "standin",
           modal_env: str | None = None, uploads: str = "quick", fake_objects: bool = False,
-          articulated: bool = False) -> int:
+          articulated: bool = False, splat: Path | None = None) -> int:
     """Serve one scene (or the demo room, with `demo` or no scene) until interrupted. With
     `watch`, every change to the scene's files is a new version, swapped into the rooms live.
     `avatars` is how full bodies are made: "standin" here, "modal" on the GPU function in the
     Modal environment `modal_env` (the stand-in when that fails), "off" not at all. `uploads` is
     what a scan sent into a room becomes: "off", "quick" (its quick room), "realistic" (then
     TRELLIS objects too — the stand-in boxes with `fake_objects`; Infinigen's openable furniture
-    as well with `articulated`)."""
+    as well with `articulated`). `splat` is a splat bundle folder (`splats`): the photoreal room."""
     import uvicorn
 
     with tempfile.TemporaryDirectory(prefix="roomcall-demo-") as scratch:
@@ -1928,7 +2001,10 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
                          version=version, watch=watcher,
                          avatars=AvatarConfig(mode=avatars, environment=modal_env or "main"),
                          scans=ScanConfig(mode=uploads, fake=fake_objects,
-                                          articulated=articulated))
+                                          articulated=articulated),
+                         splats=SplatSource.fixed(Path(splat)) if splat else None)
+        if splat:
+            print(f"room call  photoreal room from {splat} (new snapshots swap in live)")
         sock = bind_socket(host, port)
         shown = "localhost" if host in {"0.0.0.0", "::", ""} else host
         url = f"http://{shown}:{sock.getsockname()[1]}/"
@@ -2019,6 +2095,7 @@ def run(args, *, modal_env: str | None = None) -> int:
                      modal_env=modal_env or getattr(args, "modal_env", None),
                      uploads=getattr(args, "uploads", None) or default_uploads(args),
                      fake_objects=bool(getattr(args, "fake_objects", False)),
-                     articulated=getattr(args, "articulated", None) is True)
+                     articulated=getattr(args, "articulated", None) is True,
+                     splat=Path(args.splat).expanduser() if getattr(args, "splat", None) else None)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc

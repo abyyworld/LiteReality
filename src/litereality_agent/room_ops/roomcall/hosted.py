@@ -490,9 +490,14 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
                        scratch=Path(scan_scratch or SCAN_SCRATCH))
     watch = VolumeWatch(root, reload=reload, poll_seconds=poll_seconds, scratch=scratch)
     ref = served_ref(root) or watch.demo()
+    from litereality_agent.room_ops.roomcall.splats import SPLATS_DIR, SplatSource
+
+    # The photoreal rooms (`litereality splatroom --publish`): read after the version watcher's
+    # Volume reload, so a snapshot is live within POLL_SECONDS of its upload.
+    splats = SplatSource.per_room(Path(root) / SPLATS_DIR, poll_seconds=poll_seconds)
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
                      prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies,
-                     scans=scans)
+                     scans=scans, splats=splats)
     if freeze:
         freeze_startup_objects()
     return app

@@ -108,10 +108,56 @@ passes, a fast preview and then a full-quality final, and each new version swaps
   what you bump into, and mass and joints are unchanged, so tucked chairs still fit under the table.
 - **Shortcuts:** identical objects share one mesh. An object seen too little (e.g. a table only seen
   from above) keeps its template.
-- **Expected time and cost (estimates, not measured yet):** first previews about 2.5 min after
-  start (including the GPU start-up), all finals about 5 min, roughly $2 of H100 time for tea_room.
+- **Measured time and cost (tea_room, 2026-11-13):** the first preview arrived 2 min after
+  generation started (including the GPU start-up) and the last final at 7.2 min, for $2.24 of
+  Modal time. Details: [`results/tea_room/realistic_run.md`](../results/tea_room/realistic_run.md).
 - **Offline test:** `--fake` uses a stand-in generator (textured boxes), so the whole flow can be
   tried without Modal.
+
+## The real room, photoreal: Gaussian splats (needs Modal for the sharp version)
+
+```bash
+uv run modal deploy --env main deploy/modal/splat/app.py          # once: the gsplat trainer
+uv run litereality splatroom my_room                              # instant splat, then trained on Modal
+uv run litereality roomcall run/my_room/objects/scene.xml --splat run/my_room/splat
+uv run litereality splatroom my_room --publish                    # onto the deployed link, live
+uv run litereality splatroom my_room --instant-only               # no GPU, free
+```
+
+The room is drawn as Gaussian splats made from the scan's own photos. You see the real room,
+not reconstructed meshes. It grows live:
+
+1. **Instant (no GPU, ~10 s):** every LiDAR depth pixel of every photo becomes a small flat disc,
+   coloured from the photo and fused on a voxel grid (`models/splat/rgbd.py`). tea_room comes to
+   640k splats, a 6 MB SPZ file.
+2. **Trained (Modal H100):** gsplat 1.5.3's own trainer (`examples/simple_trainer.py`, unchanged)
+   runs on a training set written straight from the scan, with no COLMAP run
+   (`models/splat/dataset.py`):
+   - ARKit poses and intrinsics as cameras;
+   - LiDAR points to start from and to supervise depth;
+   - a per-photo bilateral grid for the phone's exposure changes;
+   - MCMC densification capped at 800k splats.
+   A snapshot streams back every few hundred to thousand steps, and each swaps into the call.
+   Every 8th photo is held out, so each room also gets PSNR/SSIM/LPIPS.
+
+**Objects you can grab are real too.** Each bundle is cut against the room's MuJoCo scene
+(`pipeline/splatroom/split.py`):
+- each movable body gets the splats on its geometry, in its own frame;
+- the browser hangs those under the body's node, so grabbing the real chair moves the real chair.
+
+RoomPlan often boxes chairs 20–30 cm off, so each free body's box is first **snapped** to the
+splat (±40 cm, ±10°) and the correction is reported for the physics.
+
+**In the call:**
+- The **Photo** button (or **P**) switches between the splats and the meshes. The meshes still
+  pick and collide either way.
+- The server watches the bundle folder and tells every room when a newer snapshot lands
+  (`{"t": "splat"}`). Browsers load the new files beside the old ones, then swap.
+
+**Gaps:**
+- Where a moved object stood there is a hole: nothing was ever captured behind it.
+- Objects tucked under a table are hard to separate with boxes alone; per-photo masks (SAM 2) are
+  the next step.
 
 ### Opening cabinets, doors and drawers (Infinigen)
 

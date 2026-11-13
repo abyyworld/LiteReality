@@ -678,6 +678,73 @@ def _realroom(args) -> int:
     return 0
 
 
+def _splatroom(args) -> int:
+    """`litereality splatroom <scan>`: the photoreal room — the instant splat in seconds, then
+    gsplat on Modal, each snapshot cut to the room's physics and written (and with `--publish`
+    put on the hosted link) the moment it lands."""
+    import contextlib
+
+    from litereality_agent.pipeline import splatroom
+    from litereality_agent.room_ops.roomcall.hosted import SCENES_VOLUME, scene_name
+
+    found = _quick_target(args.target, args.output_root)
+    if found is None:
+        raise SystemExit(f"{args.target}: no RoomPlan room.usdz found (a scan folder holding "
+                         "room.usdz or roomplan/room.usdz, or a scan name under $LR_SCANS_DIR)")
+    scan_dir, context = found
+    if args.scene:
+        scene = Path(args.scene).expanduser()
+    else:
+        scene = next((p for p in (context.scene_dir / "objects" / "scene.xml",
+                                  context.scene_dir / "quick" / "scene.xml") if p.is_file()), None)
+    if scene is None or not scene.is_file():
+        raise SystemExit(f"no physics scene for {context.scan}: run `litereality quickroom "
+                         f"{args.target}` first, or pass --scene")
+    out = Path(args.out).expanduser() if args.out else context.scene_dir / splatroom.DEFAULT_DIR
+    settings = load_settings()
+    modal = _modal_kwargs(settings)
+    trainer = None
+    if not args.instant_only:
+        from litereality_agent.models.splat.remote import ModalSplatTrainer
+
+        trainer = ModalSplatTrainer(environment_name=modal["environment"] or "main",
+                                    profile=modal["profile"], credentials=modal["credentials"])
+    options = {"steps": args.steps} if args.steps else {}
+    if args.no_holdout:
+        options["test_every"] = 100000
+    on_bundle = None
+    with contextlib.ExitStack() as stack:
+        if args.publish:
+            import modal as modal_sdk
+
+            from litereality_agent.room_ops.roomcall.hosted import _modal_credentials
+
+            stack.enter_context(_modal_credentials(modal["credentials"], modal["profile"]))
+            volume = modal_sdk.Volume.from_name(SCENES_VOLUME,
+                                                environment_name=modal["environment"] or "main",
+                                                create_if_missing=True)
+            name = scene_name(args.label or context.scan)
+
+            def on_bundle(bundle: dict) -> None:
+                sent = splatroom.upload_bundle(volume, name, out, bundle)
+                print(f"    published to the room call ({sent / 1e6:.1f} MB): live within ~10 s")
+        if args.upload_only:
+            bundle = splatroom.read_bundle(out)
+            if not args.publish or bundle is None:
+                raise SystemExit(f"--upload-only needs --publish and a bundle in {out}")
+            on_bundle(bundle)
+            return 0
+        print(f"splatroom  {context.scan}: {scan_dir} -> {console.short(out)}  "
+              f"(physics: {console.short(scene)})")
+        report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,
+                                 instant_only=args.instant_only, on_bundle=on_bundle)
+    print(f"  done in {report['total_s']} s; report: {console.short(out / splatroom.REPORT)}")
+    if not args.publish:
+        print(f"  {console.colour('dim')}walk it:{console.colour('off')} "
+              f"uv run litereality roomcall {console.short(scene)} --splat {console.short(out)}")
+    return 1 if report.get("error") else 0
+
+
 def _realistic_roomcall(args) -> int:
     """`litereality roomcall <scan> --realistic`: the quick room on the call at once, then every
     object generated (preview, then final) and swapped in live as it lands.
@@ -936,6 +1003,33 @@ def _parser() -> argparse.ArgumentParser:
                       help="flat colours only; skip the wall/floor/ceiling photos")
     _add_articulated_options(real)
     real.set_defaults(handler=_realroom, fake_delay=0.0)
+
+    splat = commands.add_parser(
+        "splatroom",
+        help="a scan as a photoreal room: Gaussian splats in seconds, then trained on Modal, cut "
+             "to the room's physics so every movable object's splat moves with it",
+    )
+    splat.add_argument("target", metavar="SCAN",
+                       help="a scan folder (room.usdz or roomplan/room.usdz), or a scan name "
+                            "under $LR_SCANS_DIR")
+    splat.add_argument("--scene", metavar="XML",
+                       help="the physics scene to cut against (default: run/<scan>/objects, "
+                            "else run/<scan>/quick)")
+    splat.add_argument("--out", metavar="DIR", help="where to write it (default: run/<scan>/splat)")
+    splat.add_argument("--output-root")
+    splat.add_argument("--label", help="the room's name on the hosted link (default: the scan's)")
+    splat.add_argument("--instant-only", action="store_true",
+                       help="only the instant splat from the photos and LiDAR (no GPU, free)")
+    splat.add_argument("--steps", type=int, default=None,
+                       help="training steps on the GPU (default 7000)")
+    splat.add_argument("--no-holdout", action="store_true",
+                       help="train on every photo (no held-out PSNR/SSIM/LPIPS)")
+    splat.add_argument("--publish", action="store_true",
+                       help="put every snapshot on the deployed room call link as it lands")
+    splat.add_argument("--upload-only", action="store_true",
+                       help="with --publish: put the bundle already in --out on the link, build "
+                            "nothing")
+    splat.set_defaults(handler=_splatroom)
 
     quick = commands.add_parser(
         "quickroom",

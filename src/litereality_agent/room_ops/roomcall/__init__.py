@@ -104,6 +104,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
              "configured (or with --fake-objects), else quick. The hosted link uses realistic",
     )
     parser.add_argument(
+        "--splat", metavar="DIR", default=None,
+        help="the photoreal room: a splat bundle folder (`litereality splatroom` writes "
+             "run/<scan>/splat); everyone sees the real room as Gaussian splats, each movable "
+             "object's splat moving with it, and every new snapshot swaps in live. Default: "
+             "run/<scan>/splat when serving a scan that has one",
+    )
+    parser.add_argument(
         "--fake-objects", action="store_true",
         help="with --uploads realistic: stand-in textured boxes instead of TRELLIS (offline, "
              "free), to try the whole flow on this machine",
