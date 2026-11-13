@@ -64,8 +64,20 @@ physics-perception project.
   - Measured on tea_room (2026-11-13): final room at 184 s; held-out PSNR 19.2 dB (21.6 dB
     colour-corrected), SSIM 0.78, LPIPS 0.36; about $0.30 per room. Details:
     [`results/tea_room/splat_run.md`](results/tea_room/splat_run.md).
-  - Gaps: chairs near tables are cut by boxes (SAM 2 masks next); a hole where a moved object
-    stood.
+  - Objects are cut out by SAM 2 masks voted onto the splats (`deploy/modal/segment`, L4/A10G,
+    about 15 s per room, under $0.01). Bodies are moved to where the photos show them, never into
+    a wall, and the floor under them is patched. On tea_room the black chairs, a blue chair and
+    the door come out right; the most deeply tucked chair is still mostly table.
+  - Rooms scanned during a call get their splat too: photoreal at 17 s locally, 22 s on the
+    deployed link.
+  - `litereality evaluate` scores the splat like the other stages (stage "splat").
+- **Physics study started** (`doc/physics_study.md`, `scripts/physics_study/llm_estimates.py`):
+  gpt-5-mini's per-object mass, friction and restitution from each object's photo, beside
+  LiteReality's, with a bench protocol for the measured values (tea_room: under $0.02).
+- **Infinigen local env works** (2026-11-13): tea_room's 7 openable assets in 91 s, 12/17 parts
+  interactable ([`results/tea_room/articulated_run.md`](results/tea_room/articulated_run.md)).
+- **Paper draft and study protocol:** `paper/` (UIST 2027 draft with measured numbers; references
+  still to verify).
 - **First real `--realistic` run done** (2026-11-13): tea_room, last object final at 7.2 min, $2.24
   ([`results/tea_room/realistic_run.md`](results/tea_room/realistic_run.md)).
 - **Opening furniture** (`models/articulated/`, `--articulated`): Infinigen-Articulated (BSD-3) builds

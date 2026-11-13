@@ -158,8 +158,10 @@ image = (
     })
     # 2. OS packages: git for the clones, a compiler toolchain and ninja for the CUDA extensions,
     #    the GL/X libraries opencv, open3d and pyrender load at import, ffmpeg for decord/imageio.
+    # clang: torch's extension builder asks for clang++ here (Modal's Python reports it as the
+    # compiler), so without it pointops and the other CUDA ops cannot build.
     .apt_install(
-        "git", "curl", "ca-certificates", "build-essential", "ninja-build", "libgl1",
+        "git", "curl", "ca-certificates", "build-essential", "clang", "ninja-build", "libgl1",
         "libglib2.0-0", "libsm6", "libxext6", "libxrender1", "libgomp1", "ffmpeg",
     )
     # 3. PyTorch 2.3.0 for CUDA 12.1 and the matching xformers, from PyTorch's own index.

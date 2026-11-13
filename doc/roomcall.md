@@ -145,8 +145,33 @@ not reconstructed meshes. It grows live:
 - each movable body gets the splats on its geometry, in its own frame;
 - the browser hangs those under the body's node, so grabbing the real chair moves the real chair.
 
-RoomPlan often boxes chairs 20–30 cm off, so each free body's box is first **snapped** to the
-splat (±40 cm, ±10°) and the correction is reported for the physics.
+**How objects are cut out** (`pipeline/splatroom/masks.py`, `deploy/modal/segment`):
+1. Each body's box is projected into the photos that see it best, grown by 30% because RoomPlan
+   boxes chairs 20–30 cm off.
+2. SAM 2.1 returns three candidate outlines per box. The best one not lying mostly on static
+   furniture is kept, so a chair tucked under a table doesn't come back as the table.
+3. Every nearby splat votes by projection, with a LiDAR visibility test.
+4. The body is moved to the median of its own splats, measured on the LiDAR room, but never
+   deeper into a wall than it was. The moved physics is written as `scene_splat.xml` and
+   published with `--publish`.
+5. The floor under each object, never photographed, is patched from the floor around it.
+
+Without Modal (`--no-masks`), boxes are used, snapped to where they hold the most splats.
+
+- `--recut` cuts the last trained snapshot again (new masks, new rules) without training.
+- `--keep-physics` never moves a body: for a room already live.
+
+**Scanned during a call:** when someone uses **Add room**, the server also builds that room's
+splat beside the quick room and the objects.
+- Locally, measured on tea_room: quick room at 4.6 s after the upload, photoreal at 16.7 s.
+- On the deployed link: quick room at 10 s, photoreal at 22 s, the first trained snapshot at 96 s.
+
+**Tools:**
+- `scripts/roomcall/remote_grab.py` carries an object through the shared physics as a scripted
+  participant.
+- `scripts/roomcall/upload_scan.py` sends a scan into a room and prints the build timeline.
+- `?debug=1` in the page exposes `window.__roomcall` (what's shown, and a camera you can place
+  exactly) for checks and figures.
 
 **In the call:**
 - The **Photo** button (or **P**) switches between the splats and the meshes. The meshes still
