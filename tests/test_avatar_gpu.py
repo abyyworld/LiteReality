@@ -737,9 +737,21 @@ def _fake_hubs(monkeypatch, app, *, hf_works: bool = True):
         lay_out(repo, local_dir)
         return local_dir
 
+    def ms_file(repo, name, local_dir=None):            # one file by name (the model's path)
+        if ("ms", repo) not in calls:
+            calls.append(("ms", repo))
+        (Path(local_dir) / name).write_bytes(b"{}" if name.endswith(".json") else b"x")
+        return str(Path(local_dir) / name)
+
     scope.snapshot_download = ms_download
+    scope_hub = ModuleType("modelscope.hub")
+    scope_files = ModuleType("modelscope.hub.file_download")
+    scope_files.model_file_download = ms_file
+    scope.hub, scope_hub.file_download = scope_hub, scope_files
     monkeypatch.setitem(sys.modules, "huggingface_hub", hub)
     monkeypatch.setitem(sys.modules, "modelscope", scope)
+    monkeypatch.setitem(sys.modules, "modelscope.hub", scope_hub)
+    monkeypatch.setitem(sys.modules, "modelscope.hub.file_download", scope_files)
     return calls
 
 

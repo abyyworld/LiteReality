@@ -61,6 +61,9 @@ MODEL_ID = "3DAIGC/LHMPP-700M-SMPLX-FREE"      # Hugging Face; ModelScope fallba
 PRIOR_ID = "3DAIGC/LHMPP-Prior"
 MS_MODEL_ID = "Damo_XR_Lab/LHMPP-700M-SMPLX-FREE"
 MS_PRIOR_ID = "Damo_XR_Lab/LHMPP-Prior"
+# The SMPLX-FREE checkpoint is not public on Hugging Face (401, 2026-11-13); on ModelScope it is
+# these files at the repo root (as LHMPP-700M's are on Hugging Face).
+MODEL_FILES = ("config.json", "configuration.json", "model.safetensors")
 MODEL_REVISION = PRIOR_REVISION = None         # unknown from here: populate logs the resolved
                                                # commit; pin it after the first real run
 GPU = "L4"
@@ -210,7 +213,7 @@ image = (
         " assert tuple(sd['register_tokens'].shape) == (1, 4, 1024), 'not ViT-L/14 reg4'\"",
     )
     # 11. ModelScope, the weights' second source (used by `populate` only).
-    .pip_install("modelscope==1.20.1")
+    .pip_install("modelscope==1.40.3")      # 1.20 needs a login even for public files
     # The pins above must have survived every later step.
     .run_commands(
         "python -c \"import numpy, torch; assert numpy.__version__ == '1.23.0', numpy.__version__;"
@@ -353,7 +356,8 @@ def _populated() -> bool:
             and _model_dir(MODEL_DIR) is not None)
 
 
-def _download(hf_id: str, ms_id: str, dest: Path, revision: str | None) -> str:
+def _download(hf_id: str, ms_id: str, dest: Path, revision: str | None,
+              files: tuple[str, ...] | None = None) -> str:
     """One repo into `dest` (plain files, no cache symlinks): Hugging Face at `revision`, else
     ModelScope (LHM++ publishes both). Returns where it came from, with the commit when known."""
     dest.mkdir(parents=True, exist_ok=True)
@@ -366,10 +370,26 @@ def _download(hf_id: str, ms_id: str, dest: Path, revision: str | None) -> str:
     except Exception as exc:  # noqa: BLE001 - any Hub failure: try the mirror
         print(f"[avatar] Hugging Face {hf_id} failed ({type(exc).__name__}: {exc}); "
               f"trying ModelScope {ms_id}")
-    from modelscope import snapshot_download as modelscope_download
+    if files is None:
+        from modelscope import snapshot_download as modelscope_download
 
-    modelscope_download(ms_id, local_dir=str(dest))
-    return f"modelscope:{ms_id}@master"
+        modelscope_download(ms_id, local_dir=str(dest))
+        return f"modelscope:{ms_id}@master"
+    # By name: ModelScope throttles its anonymous file LISTING (403 "too frequent", seen
+    # 2026-11-13) but serves single files, and the old 1.20 client wanted a login for both.
+    from modelscope.hub.file_download import model_file_download
+
+    for name in files:
+        for attempt in range(4):
+            try:
+                model_file_download(ms_id, name, local_dir=str(dest))
+                break
+            except Exception as exc:  # noqa: BLE001 - throttled: wait and try again
+                if attempt == 3:
+                    raise
+                print(f"[avatar] ModelScope {ms_id}/{name}: {type(exc).__name__}; retrying")
+                time.sleep(20 * (attempt + 1))
+    return f"modelscope:{ms_id}@master ({', '.join(files)})"
 
 
 @app.function(
@@ -391,7 +411,8 @@ def populate(force: bool = False) -> dict:
         return {"status": "present", "revisions": json.loads(POPULATED_MARKER.read_text())}
     started = time.monotonic()
     revisions = {"prior": _download(PRIOR_ID, MS_PRIOR_ID, PRIOR_DIR, PRIOR_REVISION),
-                 "model": _download(MODEL_ID, MS_MODEL_ID, MODEL_DIR, MODEL_REVISION)}
+                 "model": _download(MODEL_ID, MS_MODEL_ID, MODEL_DIR, MODEL_REVISION,
+                                    files=MODEL_FILES)}
     missing = _missing_prior(PRIOR_DIR)
     if missing:
         present = sorted(p.name for p in PRIOR_DIR.iterdir())
