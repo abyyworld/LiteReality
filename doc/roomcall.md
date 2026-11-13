@@ -57,6 +57,37 @@ finishes for the same scan, publish its scene and the link switches to it live:
 uv run litereality roomcall run/my_room --publish   # serves mujoco_seed/ once it exists
 ```
 
+## Scan straight into the call (no laptop)
+
+During a call, open the room link on the phone you scanned with, tap **Add room** and pick the scan:
+a zip of the scan folder (in Files, long-press the folder → Compress), or a bare `room.usdz`
+(flat colours, no photos).
+1. **Seconds later, the quick room:** everyone in that room id is standing in the scanned room, with
+   the photos on its walls and floor. A local test took ~6–8 s from upload to the room being
+   offered. Other rooms are not affected.
+2. **Then, realistic objects:** with `--uploads realistic` (the default when Modal credentials are
+   set), objects stream in as TRELLIS finishes them, with progress shown to everyone ("objects
+   3/9…").
+
+```bash
+uv run litereality roomcall --demo                          # uploads on; realistic if Modal is set up
+uv run litereality roomcall --demo --uploads quick          # quick rooms only, no GPU
+uv run litereality roomcall --demo --fake-objects           # try the whole flow without Modal
+```
+
+Safety and limits:
+- **Before the upload is read:** the server checks the person's key, cooldowns, a per-room build
+  slot, per-address and server-wide caps, and a daily cap on realistic builds (6 by default,
+  hosted). Over the cap, people still get the quick room.
+- **Zip checks:** at most 200 MB uploaded and 1 GB unpacked; no `..`, absolute paths, symlinks or
+  >100× compression; only the scanner's file types. Prim names in the usdz must be identifiers.
+- **Builds:** they run as niced child processes with timeouts. A newer upload replaces an older
+  build, and a room that stays empty for 60 s drops its scan.
+- **Hosted:** each room's latest scan is kept on the Volume, so a container restart restores it.
+
+Not tried yet: a real iPhone upload, the hosted path on Modal (including whether long uploads are
+cut off), and real TRELLIS timing.
+
 ## Realistic objects, streaming in (needs Modal)
 
 ```bash

@@ -520,6 +520,13 @@ def _modal_kwargs(settings) -> dict:
             "profile": settings.modal_profile, "environment": settings.modal_environment}
 
 
+def _in_modal_container() -> bool:
+    """Whether this process runs inside a Modal container (the hosted room call building a scan
+    sent into a room): there the container's own workspace credentials are ambient, and no token
+    is configured — nor needed."""
+    return os.environ.get("MODAL_IS_REMOTE") == "1"
+
+
 def _object_generator(args, settings=None):
     """TRELLIS on the `.env`'s Modal workspace — or, with `--fake`, the offline stand-in."""
     from litereality_agent.pipeline import realroom
@@ -527,6 +534,19 @@ def _object_generator(args, settings=None):
     if getattr(args, "fake", False):
         return realroom.FakeGenerator(delay=float(getattr(args, "fake_delay", 0.0) or 0.0))
     settings = settings or load_settings()
+    if not settings.modal_configured() and _in_modal_container():
+        # The hosted room call's own container: the function is looked up with its credentials,
+        # in its own environment (no `.env` there, and the client refuses to guess one).
+        import modal
+
+        from litereality_agent.models.trellis import modal as trellis_modal
+        from litereality_agent.runtimes.modal import ModalClient
+
+        app, name = settings.modal_trellis_app, settings.modal_trellis_function
+        client = ModalClient(app, name, function=modal.Function.from_name(app, name))
+        return realroom.ModalTrellisGenerator(
+            service=trellis_modal.ModalTrellisService(app_name=app, function_name=name,
+                                                      client=client))
     if not settings.modal_configured():
         raise SystemExit("generating objects needs TRELLIS on Modal: set MODAL_TOKEN_ID and "
                          "MODAL_TOKEN_SECRET (or MODAL_PROFILE) in .env and deploy it once with "
@@ -636,16 +656,22 @@ def _realroom(args) -> int:
     scan_dir, context = found
     out = Path(args.out).expanduser() if args.out else context.scene_dir / realroom.DEFAULT_DIR
     generator = _object_generator(args)
+    passes = list(realroom.PASSES) if args.pass_name == "both" else [args.pass_name]
+    # `--interval`: a version every so often as objects land, for a room call watching `--out`
+    # (it serves the quick room already, so none is written here before the first object).
+    interval = getattr(args, "interval", None)
     room = realroom.RealRoom(scan_dir, out, label=args.label or context.scan,
                              colours=args.colours, textures=args.textures, rebuild=True)
-    room.write(check=False)
+    if interval is None:
+        room.write(check=False)
     extras = _plan_articulated(room, _articulated_source(args))
     room.make_crops()
     print(f"realroom  {context.scan}: {len(room.generated_handles())} objects, pass "
-          f"{args.pass_name} — {_estimate_line(generator, len(room.crops), [args.pass_name])}")
-    progress = realroom.generate_room(room, generator, passes=[args.pass_name],
-                                      min_interval=float("inf"), reuse=not args.fresh,
-                                      extras=extras)
+          f"{args.pass_name} — {_estimate_line(generator, len(room.crops), passes)}")
+    progress = realroom.generate_room(room, generator, passes=passes,
+                                      min_interval=float("inf") if interval is None
+                                      else max(0.0, interval),
+                                      reuse=not args.fresh, extras=extras)
     _report_objects(room, progress)
     print(f"  {console.colour('dim')}walk it with others:{console.colour('off')} "
           f"uv run litereality roomcall {console.short(room.scene_path)}")
@@ -720,10 +746,28 @@ def _realistic_roomcall(args) -> int:
     return roomcall.run(args)
 
 
+def _default_uploads(args) -> None:
+    """`--uploads` not given: a scan sent into a room during the call gets realistic objects
+    where they can be made here — Modal credentials in `.env`, or the stand-in with
+    `--fake-objects` — else its quick room only."""
+    if getattr(args, "uploads", None) is not None or getattr(args, "deploy", False):
+        return
+    from litereality_agent.room_ops.roomcall import server
+
+    modal = False
+    if not getattr(args, "fake_objects", False):
+        try:
+            modal = load_settings().modal_configured()
+        except Exception:  # noqa: BLE001 — an unreadable .env: the quick room it is
+            modal = False
+    args.uploads = server.default_uploads(args, modal=modal)
+
+
 def _roomcall(args) -> int:
     """Share a simulated room with the people on a video call. Takes a scene file or folder, not a
     run: the room call is a room operation and knows nothing about run layout. A scan is the one
     exception, resolved HERE (this layer knows run layout): its quick room is built first."""
+    _default_uploads(args)
     if getattr(args, "realistic", False):
         return _realistic_roomcall(args)
     _quick_room_for_scan(args)
@@ -873,8 +917,15 @@ def _parser() -> argparse.ArgumentParser:
                       help="where to write it (default: run/<scan>/objects)")
     real.add_argument("--output-root")
     real.add_argument("--label", help="the room's name (default: the scan's)")
-    real.add_argument("--pass", dest="pass_name", choices=["preview", "final"], default="final",
-                      help="preview: TRELLIS at 512 (fast); final: 1024 cascade (default)")
+    real.add_argument("--pass", dest="pass_name", choices=["preview", "final", "both"],
+                      default="final",
+                      help="preview: TRELLIS at 512 (fast); final: 1024 cascade (default); both: "
+                           "every preview first, then the finals")
+    real.add_argument("--interval", type=float, metavar="S", default=None,
+                      help="write a version of the scene every S seconds while objects land, for "
+                           "a room call watching --out (default: one version, at the end)")
+    real.add_argument("--fake-delay", type=float, default=0.0, metavar="S",
+                      help=argparse.SUPPRESS)
     real.add_argument("--fake", action="store_true",
                       help="stand-in textured boxes instead of TRELLIS: offline, free")
     real.add_argument("--fresh", action="store_true",

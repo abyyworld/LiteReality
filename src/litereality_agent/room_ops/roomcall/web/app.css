@@ -134,11 +134,17 @@ input[type=text]{font:inherit;font-size:16px;color:var(--text);background:var(--
 /* body: a whole standing person */
 .ico-body{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='4.5' r='2.5'/%3E%3Cpath d='M5 10l7-2 7 2M12 8v7M12 15l-3 7M12 15l3 7'/%3E%3C/svg%3E")}
 .btn.tool[data-state=building] .tool-ico{animation:holo-wait 1.4s ease-in-out infinite}
+/* add room: a box (a room in 3D) with a plus */
+.ico-scan{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12V7l-8-4-8 4v10l8 4 2-1'/%3E%3Cpath d='M4 7l8 4 8-4M12 11v10M19 15v6M16 18h6'/%3E%3C/svg%3E")}
+/* first visit: a soft ring says "this is new" until it is pressed or a little while has passed */
+.btn.tool.hint{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent);animation:hint-ring 1.6s ease-out 6}
+@keyframes hint-ring{70%{box-shadow:0 0 0 9px transparent}100%{box-shadow:0 0 0 0 transparent}}
 .ico-help{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.5'/%3E%3C/svg%3E")}
 
 /* ---- panels ---- */
-.panel{position:absolute;right:calc(12px + var(--safe-r));top:calc(76px + var(--safe-t));width:min(340px,calc(100vw - 24px));
-  padding:14px 16px;max-height:calc(100vh - 110px);overflow:auto}
+/* --panel-top: under the toolbar, however many rows it wraps to (app.js measures it) */
+.panel{position:absolute;right:calc(12px + var(--safe-r));top:var(--panel-top,calc(76px + var(--safe-t)));width:min(340px,calc(100vw - 24px));
+  padding:14px 16px;max-height:calc(100vh - var(--panel-top,calc(76px + var(--safe-t))) - 34px);overflow:auto}
 .panel h2{font-size:14px;margin:0 0 10px;font-weight:650}
 .people-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .people-list li{display:flex;align-items:center;gap:10px;font-size:14px}
@@ -158,6 +164,38 @@ kbd{font:600 11.5px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(-
 .body-actions{display:flex;flex-direction:column;gap:8px;margin:4px 0 10px}
 .body-status{font-size:13.5px;min-height:1.2em;margin:0}
 .body-status:empty{display:none}
+.scan-panel p{margin:0 0 10px}
+.scan-steps{margin:0 0 10px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.scan-status{font-size:13.5px;min-height:1.2em;margin:0}
+.scan-status:empty{display:none}
+.scan-status.error{color:var(--err)}
+
+/* ---- a scanned room on its way: one card under the room chip, for everyone in the room ----
+   Out of the top row's flow, under its taller side, so the toolbar keeps its place beside the
+   chip whether the card is there or not (phones stack it in the column below). */
+.scan-card{position:absolute;top:calc(100% + 8px);left:0;width:min(360px,100%);padding:9px 10px 10px 12px;
+  display:flex;flex-direction:column;gap:8px;pointer-events:auto}
+.scan-row{display:flex;align-items:center;gap:10px;min-width:0}
+.scan-ico{color:var(--accent)}
+.scan-card.failed .scan-ico{color:var(--err)}
+.scan-card.done .scan-ico{color:var(--ok)}
+.scan-card[data-status=uploading] .scan-ico,.scan-card[data-status=building] .scan-ico,
+.scan-card[data-status=objects] .scan-ico{animation:holo-wait 1.4s ease-in-out infinite}
+.scan-text{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:1}
+.scan-text b{font-size:13.5px;overflow-wrap:anywhere}
+.scan-text small{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.scan-text small:empty{display:none}
+.scan-card.failed .scan-text small{color:var(--err)}
+.btn.tool.scan-act{min-height:30px;padding:3px 8px;font-size:12.5px;flex:none}
+.scan-progress{height:5px}
+.scan-card.done .progress-bar{background:var(--ok)}
+/* building, with no number to show: a sweep instead of a bar that never moves */
+.scan-progress.sweep .progress-bar{width:35%!important;animation:scan-sweep 1.3s ease-in-out infinite}
+@keyframes scan-sweep{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
+.scan-drop{position:fixed;inset:0;z-index:58;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  background:color-mix(in srgb,var(--accent) 14%,transparent);border:3px dashed var(--accent)}
+.scan-drop-card{padding:16px 20px;font-size:15px;display:flex;gap:10px;align-items:center;max-width:min(460px,calc(100vw - 32px))}
+.scan-drop-card .tool-ico{color:var(--accent);width:22px;height:22px}
 
 /* ---- turnaround capture: the camera full-screen, a big count, guidance below ---- */
 .capture{position:fixed;inset:0;z-index:55;background:#000;display:flex;align-items:center;justify-content:center}
@@ -195,10 +233,15 @@ kbd{font:600 11.5px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(-
 @media (max-width: 720px){
   .tool-txt{display:none}
   .btn.tool{padding:6px 8px}
-  .hud-top{flex-direction:column;align-items:stretch}
-  .toolbar{justify-content:space-between}
+  .hud-top{flex-direction:column;align-items:stretch;gap:8px}
+  .scan-card{position:static;width:auto}
+  .toolbar{justify-content:space-between;gap:2px}
+  /* ten tools on a 360-390 px phone: the people count rides on its icon instead of beside it */
+  .btn.tool{position:relative}
+  .btn.tool .count{position:absolute;top:1px;right:-1px;min-width:16px;padding:0 4px;font-size:10px;line-height:15px;
+    background:var(--surface-solid);box-shadow:inset 0 0 0 1px var(--line)}
   .room-chip{align-self:flex-start}
-  .panel{top:calc(118px + var(--safe-t))}
+  .panel{top:var(--panel-top,calc(118px + var(--safe-t)));max-height:calc(100vh - var(--panel-top,calc(118px + var(--safe-t))) - 34px)}
   .self-view{width:104px}
 }
 @media (prefers-reduced-motion: reduce){

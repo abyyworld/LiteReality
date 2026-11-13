@@ -27,6 +27,14 @@ What runs where:
   call in seconds, without a `modal deploy` and without anyone leaving; `--deploy` (publish AND
   deploy) is for the first time and for code changes.
 
+- A scan sent into a room during the call (POST /scan, `scans`) is unpacked and built in the
+  container itself, by the CLI in child processes: the quick room, then realistic objects from
+  TRELLIS, called from inside the container with the workspace's own (ambient) credentials. The
+  upload and the builds live on the container's own disk (`SCAN_SCRATCH`), never the Volume; each
+  version a room gets is also kept on the Volume under `ROOMS_DIR` (`scans.DirRoomStore`), so a
+  container restart mid-call puts that room back on its scan. Realistic builds are capped per UTC
+  day in a Modal Dict (`SCAN_BUDGET_DICT`), like the GPU bodies.
+
 This module is what both halves share: the upload (run on the laptop) and the app factory (run in
 the container). It imports MuJoCo, FastAPI and Modal only inside the functions that need them, so
 the deploy file can read its constants without either.
@@ -45,7 +53,7 @@ import secrets
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -66,6 +74,12 @@ DEPLOY_FILE = "deploy/modal/roomcall/app.py"
 # checks that every third-party module the hosted app imports is covered by this list or by what
 # these packages themselves require, so an import added to the server cannot silently break only
 # the hosted copy.
+#
+# The second group is what the container's child builds need (`scans`: `litereality quickroom`
+# and `realroom` on a scan sent into a room): the CLI's settings, and OpenCV for the object
+# cut-outs. Checked by building a clean venv with exactly these packages and running both
+# commands on the tea_room scan. OpenCV's wheel links the system's libGL and GLib, which the slim
+# image lacks: `IMAGE_APT` adds them.
 IMAGE_PACKAGES = (
     "mujoco==3.12.0",
     "numpy==2.4.6",
@@ -76,7 +90,27 @@ IMAGE_PACKAGES = (
     "python-fcl==0.7.0.11",
     "fastapi==0.138.2",
     "pydantic==2.13.4",
+    # the child builds
+    "pydantic-settings==2.14.2",
+    "python-dotenv==1.2.2",
+    "opencv-python==4.13.0.92",
 )
+IMAGE_APT = ("libgl1", "libglib2.0-0")
+# Imports the hosted app and its child builds never reach in the container, with why — every
+# other third-party import must be covered by `IMAGE_PACKAGES` (tests/test_roomcall_hosted.py).
+NOT_IN_IMAGE = {
+    "modal": "the Modal runtime provides its own client in every container",
+    "uvicorn": "`server.serve` only; Modal serves the ASGI app itself",
+    "open3d": "`realroom.fit.decimate`, only for a mesh over 150k faces; TRELLIS's passes ask for "
+              "20k and 50k",
+    "coacd": "the full pipeline's convex decomposition (`sim.properties`), not the quick room",
+}
+# Where the container unpacks and builds scans sent into rooms: its own disk, not the Volume.
+SCAN_SCRATCH = "/tmp/roomcall-scans"
+# The Volume folder keeping each room's scanned version across a container restart. A dot name:
+# never a version folder (`_VERSION`), never pruned by a publish.
+ROOMS_DIR = ".rooms"
+SCAN_BUDGET_DICT = "litereality-roomcall-scan-budget"
 
 _NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 # A version folder: the room's name (cut to leave room for the suffix inside `_NAME`'s 64) and the
@@ -400,7 +434,9 @@ class VolumeWatch:
 
 def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None = None,
               reload=None, poll_seconds: float = POLL_SECONDS, freeze: bool = False,
-              avatars: str = "modal"):
+              avatars: str = "modal", uploads: str = "realistic", commit=None,
+              scan_scratch: Path | None = None, keep_rooms: bool = True,
+              realistic_per_day: int | None = None, scan_budget=None):
     """The room call app the container serves: the Volume's current version, else the demo room,
     watching the Volume (`VolumeWatch`; `reload` is the Volume's own `reload`) for the next one.
     `freeze` (the container: the app is the process) exempts startup objects from the garbage
@@ -408,11 +444,24 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
 
     Full bodies are built on the GPU function in the container's own Modal environment, at most
     `avatars.GPU_DAILY_CAP` a day across restarts (`ModalDictBudget`), the stand-in otherwise.
-    Nothing here touches Modal: the budget and the function are looked up by the first build."""
+    Nothing here touches Modal: the budget and the function are looked up by the first build.
+
+    Scans sent into a room (`uploads`, see `scans`) are built under `scan_scratch` (default
+    `SCAN_SCRATCH`), at most `realistic_per_day` (default `scans.REALISTIC_PER_DAY`) realistic
+    builds a UTC day across restarts (`scan_budget`, default a Modal Dict). With `keep_rooms`
+    each room's scanned version is also kept under `ROOMS_DIR` on the Volume (`commit` is the
+    Volume's own, run under one lock with `reload`)."""
+    import threading
+
     from litereality_agent.room_ops.roomcall.avatars import (
         GPU_DAILY_CAP,
         AvatarConfig,
         ModalDictBudget,
+    )
+    from litereality_agent.room_ops.roomcall.scans import (
+        REALISTIC_PER_DAY,
+        DirRoomStore,
+        ScanConfig,
     )
     from litereality_agent.room_ops.roomcall.server import create_app, freeze_startup_objects
 
@@ -421,10 +470,29 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
                               budget=ModalDictBudget(GPU_DAILY_CAP))
     else:
         bodies = AvatarConfig(mode=avatars)
+    # One lock for the Volume: a reload refuses to run while files are open, and the room store
+    # writes files there.
+    volume_lock = threading.Lock()
+    if reload is not None:
+        volume_reload = reload
+
+        def reload():
+            with volume_lock:
+                volume_reload()
+    store = None
+    if keep_rooms and uploads != "off":
+        store = DirRoomStore(Path(root) / ROOMS_DIR, commit=commit, lock=volume_lock)
+        with suppress(OSError):
+            store.sweep()
+    cap = REALISTIC_PER_DAY if realistic_per_day is None else realistic_per_day
+    budget = scan_budget if scan_budget is not None else ModalDictBudget(cap, name=SCAN_BUDGET_DICT)
+    scans = ScanConfig(mode=uploads, realistic_per_day=cap, budget=budget, store=store,
+                       scratch=Path(scan_scratch or SCAN_SCRATCH))
     watch = VolumeWatch(root, reload=reload, poll_seconds=poll_seconds, scratch=scratch)
     ref = served_ref(root) or watch.demo()
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
-                     prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies)
+                     prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies,
+                     scans=scans)
     if freeze:
         freeze_startup_objects()
     return app

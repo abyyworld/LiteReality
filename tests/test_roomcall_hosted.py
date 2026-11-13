@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import importlib.metadata
 import importlib.util
+import inspect
 import io
 import json
 import re
@@ -556,3 +557,157 @@ def test_publish_without_redeploying(export, monkeypatch, tmp_path, capsys):
     Function.from_name = staticmethod(not_deployed)
     assert hosted.deploy(export, label="tea_room", repo_root=tmp_path, redeploy=False) == 1
     assert "--deploy" in capsys.readouterr().err
+
+
+# -- what the container runs: the server, and the CLI building scans sent into rooms ---------------
+
+PACKAGE = REPO / "src" / "litereality_agent"
+# The container imports these, and runs `litereality quickroom` / `realroom` on scans sent into
+# rooms (`scans`): their imports anywhere in these modules count, lazy ones included — a lazy
+# import is exactly the one that breaks only in the container.
+HOSTED_ENTRIES = ("room_ops.roomcall.hosted", "room_ops.roomcall.server", "room_ops.roomcall.scans",
+                  "cli", "pipeline.quickroom", "pipeline.realroom",
+                  "pipeline.realroom.articulated", "models.trellis.modal", "runtimes.modal")
+DEEP = ("room_ops.roomcall", "pipeline.quickroom", "pipeline.realroom", "models.trellis",
+        "runtimes", "models.object_generation.sim.properties")
+
+
+def _module_file(module: str) -> Path | None:
+    path = PACKAGE.joinpath(*module.split(".")[1:])
+    if (path / "__init__.py").is_file():
+        return path / "__init__.py"
+    return path.with_suffix(".py") if path.with_suffix(".py").is_file() else None
+
+
+def _imports(path: Path, module: str, deep: bool) -> list[str]:
+    """Modules `path` imports: at module level, or (`deep`) anywhere in it. `if TYPE_CHECKING`
+    blocks never run."""
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = module if path.name == "__init__.py" else module.rsplit(".", 1)[0]
+    found: list[str] = []
+
+    def visit(nodes) -> None:
+        for node in nodes:
+            if isinstance(node, ast.If) and "TYPE_CHECKING" in ast.unparse(node.test):
+                visit(node.orelse)
+                continue
+            if isinstance(node, ast.Import):
+                found.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                base = node.module or ""
+                if node.level:
+                    parts = package.split(".")[:len(package.split(".")) - node.level + 1]
+                    base = ".".join(parts + ([base] if base else []))
+                found.append(base)
+                found.extend(f"{base}.{alias.name}" for alias in node.names)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not deep:
+                continue
+            body = [child for child in ast.iter_child_nodes(node) if isinstance(child, ast.stmt)]
+            for handler in getattr(node, "handlers", ()):
+                body.extend(handler.body)
+            visit(body)
+
+    visit(tree.body)
+    return found
+
+
+def _third_party_imports() -> dict[str, set[str]]:
+    seen: dict[str, bool] = {}
+    third: dict[str, set[str]] = {}
+    todo = [(f"litereality_agent.{entry}", True) for entry in HOSTED_ENTRIES]
+    while todo:
+        module, deep = todo.pop()
+        deep = deep or module.removeprefix("litereality_agent.").startswith(DEEP)
+        if module in seen and (seen[module] or not deep):
+            continue
+        seen[module] = deep
+        path = _module_file(module)
+        if path is None:
+            continue
+        parts = module.split(".")
+        todo.extend((".".join(parts[:i]), False) for i in range(2, len(parts)))
+        for name in _imports(path, module, deep):
+            if name.startswith("litereality_agent"):
+                todo.append((name, False))
+            elif name and name.split(".")[0] not in sys.stdlib_module_names:
+                third.setdefault(name.split(".")[0], set()).add(module)
+    return third
+
+
+def _packages_distributions() -> dict[str, list[str]]:
+    """`importlib.metadata.packages_distributions` as Python 3.11+ has it. 3.10's reads only
+    `top_level.txt`, which most modern wheels (fastapi, numpy, pydantic...) no longer ship, so
+    there they map to no distribution; 3.11 falls back to the names of the files installed."""
+    found: dict[str, list[str]] = {}
+    for dist in importlib.metadata.distributions():
+        tops = (dist.read_text("top_level.txt") or "").split()
+        if not tops:
+            names = {f.parts[0] if len(f.parts) > 1 else (inspect.getmodulename(str(f)) or str(f))
+                     for f in dist.files or ()}
+            tops = [n for n in names if "." not in n]
+        for top in tops:
+            found.setdefault(top, []).append(dist.metadata["Name"])
+    return found
+
+
+def _normal(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def test_the_image_covers_every_import_of_the_server_and_its_child_builds():
+    """Every third-party module the hosted app or the builds it runs in child processes can
+    import is installed in the image: by `IMAGE_PACKAGES`, by what they require, or named in
+    `NOT_IN_IMAGE` with why it is never reached there. (Checked for real too: a clean venv with
+    exactly the image's packages ran `quickroom` and `realroom --fake` on tea_room.)"""
+    covered: set[str] = set()
+    todo = [_normal(pin.split("==")[0]) for pin in hosted.IMAGE_PACKAGES]
+    while todo:
+        name = todo.pop()
+        if name in covered:
+            continue
+        covered.add(name)
+        try:
+            requires = importlib.metadata.requires(name) or []
+        except importlib.metadata.PackageNotFoundError:
+            continue
+        for requirement in requires:
+            if "extra ==" in requirement:
+                continue
+            todo.append(_normal(re.split(r"[\s;<>=!~\[(]", requirement, maxsplit=1)[0]))
+    providers = _packages_distributions()
+    missing = []
+    for top, importers in sorted(_third_party_imports().items()):
+        if top in hosted.NOT_IN_IMAGE:
+            continue
+        dists = {_normal(d) for d in providers.get(top, ())}
+        if not dists & covered:
+            missing.append(f"{top} ({', '.join(sorted(dists)) or 'no distribution'}) imported "
+                           f"by {', '.join(sorted(importers)[:3])}")
+    assert not missing, "the hosted image lacks:\n  " + "\n  ".join(missing)
+    assert {"cv2", "pydantic_settings", "mujoco", "trimesh"} <= set(_third_party_imports())
+
+
+def test_the_hosted_app_takes_scans_and_keeps_rooms_on_the_volume(tmp_path):
+    root = tmp_path / "volume"
+    root.mkdir()
+    (root / hosted.ROOMS_DIR / ".r.half-saved").mkdir(parents=True)   # an interrupted save
+    from litereality_agent.room_ops.roomcall.avatars import MemoryBudget
+
+    app = hosted.build_app(root, scratch=tmp_path / "demo", scan_scratch=tmp_path / "scans",
+                           scan_budget=MemoryBudget(1), commit=lambda: None)
+    hub = app.state.roomcall
+    config = hub.scans.config
+    assert config.mode == "realistic" and not config.fake and config.realistic_per_day == 6
+    assert config.store.root == root / hosted.ROOMS_DIR
+    assert not (root / hosted.ROOMS_DIR / ".r.half-saved").exists()
+    with TestClient(app) as client, client.websocket_connect("/ws?room=call") as ws:
+        ws.send_json({"t": "hello", "name": "Ada"})
+        welcome = _recv(ws)
+        assert welcome["scans"]["mode"] == "realistic" and welcome["scans"]["enabled"]
+        assert client.get("/healthz").json()["scans"]["mode"] == "realistic"
+    off = hosted.build_app(root, scratch=tmp_path / "demo2", uploads="off")
+    assert off.state.roomcall.scans.config.store is None
+    # Never a version folder (a publish never prunes it) and never what CURRENT can name.
+    assert not hosted._VERSION.match(hosted.ROOMS_DIR) and not hosted._NAME.match(hosted.ROOMS_DIR)

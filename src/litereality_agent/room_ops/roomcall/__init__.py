@@ -11,6 +11,10 @@ voice; this adds the shared room. It can also run inside the Zoom client as a Zo
     litereality roomcall [SCENE] --publish     # a new version of that link, live, no redeploy
     python -m litereality_agent.room_ops.roomcall [SCENE] [--demo] [--port 8790]
 
+Someone on the call can also send a scan straight into their room from the phone that made it
+(Add room in the page): its quick room is built in seconds and swapped into that room alone, then,
+where `--uploads realistic`, the realistic objects follow version by version (`scans`).
+
 A room's scene can improve during the call — the quick RoomPlan room seconds after the scan, the
 full pipeline's room later. Each is a new VERSION of the same link, swapped into every room live
 with what people did carried over: `--watch` does it here whenever the scene's files change,
@@ -19,7 +23,8 @@ with what people did carried over: `--watch` does it here whenever the scene's f
 Parts: `sim` (the shared physics), `geometry` (scene -> glb + manifest for the browser),
 `server` (HTTP + WebSocket), `web/` (the client), `demo` (the built-in room), `hosted` (the same
 server on Modal, so a call needs no tunnel), `avatars` and `avatar_format` (full-body people:
-each person's body, built from their photos, drawn with Spark and driven live).
+each person's body, built from their photos, drawn with Spark and driven live), `scans` (a scan
+sent into a room during the call, built by the CLI in child processes).
 
 Under `room_ops` because it reads a scene file and knows nothing about run layout. This module
 stays import-light — only argparse wiring — so building the `litereality` parser never pulls in
@@ -36,6 +41,8 @@ DEFAULT_PORT = 8790
 STAGES = ("quick", "objects", "full", "scene", "demo")
 # How full bodies are made (`avatars.MODES`, repeated here so the parser needs no numpy).
 AVATAR_MODES = ("off", "standin", "modal")
+# What a scan sent into a room becomes (`scans.MODES`, repeated for the same reason).
+UPLOAD_MODES = ("off", "quick", "realistic")
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -87,6 +94,19 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
              "with LHM++ on your Modal GPU (deploy deploy/modal/avatar/app.py; the stand-in "
              "whenever that fails); 'off' keeps everyone a capsule or hologram. The hosted link "
              "always uses 'modal'",
+    )
+    parser.add_argument(
+        "--uploads", choices=UPLOAD_MODES, default=None,
+        help="what a scan someone sends into their room during the call (Add room: a .zip of "
+             "the scan's folder, or its room.usdz) becomes, in that room only: 'quick' its quick "
+             "room in seconds; 'realistic' then realistic objects from TRELLIS on Modal, swapped "
+             "in as they land; 'off' no uploads. Default: realistic when Modal credentials are "
+             "configured (or with --fake-objects), else quick. The hosted link uses realistic",
+    )
+    parser.add_argument(
+        "--fake-objects", action="store_true",
+        help="with --uploads realistic: stand-in textured boxes instead of TRELLIS (offline, "
+             "free), to try the whole flow on this machine",
     )
 
 

@@ -49,6 +49,11 @@ physics-perception project.
   (preview, then final). TRELLIS now runs up to 4 GPUs safely: weights are downloaded once by a CPU
   function and loaded offline. Built and tested offline with a fake generator; **the real Modal run
   is not done yet.**
+- **Scan straight into the call** (`roomcall/scans.py`, Add room button): a phone uploads the scan zip
+  into a running call. The server builds the quick room in a child process (~6–8 s locally) and
+  swaps it into that room only, then streams realistic-object versions as they finish. Uploads are
+  checked hard (zip-slip, bombs, prim-name injection) and rate- and cost-limited. Tested locally
+  with fake objects and headless browsers; not run on Modal or a real iPhone yet.
 - **Opening furniture** (`models/articulated/`, `--articulated`): Infinigen-Articulated (BSD-3) builds
   doors, windows, cabinets, drawers and appliances sized to the scanned boxes on the CPU (8–45 s
   each), with our masses and joint settings. Validated on tea_room with a local Infinigen env: every

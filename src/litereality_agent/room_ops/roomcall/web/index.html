@@ -96,6 +96,8 @@
         <span class="tool-ico ico-mic" aria-hidden="true"></span><span class="tool-txt">Mic</span></button>
       <button class="btn tool" id="inviteBtn" type="button" title="Copy a link to paste in the call chat">
         <span class="tool-ico ico-link" aria-hidden="true"></span><span class="tool-txt">Invite</span></button>
+      <button class="btn tool" id="scanBtn" type="button" aria-expanded="false" aria-controls="scanPanel" title="Add a room you scanned" hidden>
+        <span class="tool-ico ico-scan" aria-hidden="true"></span><span class="tool-txt">Add room</span></button>
       <button class="btn tool" id="peopleBtn" type="button" aria-expanded="false" aria-controls="people" title="People in the room">
         <span class="tool-ico ico-people" aria-hidden="true"></span><span class="tool-txt">People</span>
         <span class="count" id="peopleCount">1</span></button>
@@ -104,6 +106,17 @@
       <button class="btn tool" id="helpBtn" type="button" aria-expanded="false" aria-controls="help" title="Controls">
         <span class="tool-ico ico-help" aria-hidden="true"></span><span class="tool-txt">Help</span></button>
     </div>
+    <!-- a scanned room on its way into this room, for everyone in it (the "scan" messages). Not a
+         live region: its title counts percent; the milestones are announced by the toasts. -->
+    <section id="scanCard" class="card scan-card" hidden aria-label="A room being added">
+      <div class="scan-row">
+        <span class="tool-ico ico-scan scan-ico" aria-hidden="true"></span>
+        <span class="scan-text"><b id="scanTitle"></b><small id="scanDetail"></small></span>
+        <button class="btn tool scan-act" id="scanCancel" type="button" hidden>Cancel</button>
+        <button class="btn tool scan-act" id="scanClose" type="button" aria-label="Hide this" title="Hide this">✕</button>
+      </div>
+      <div class="progress scan-progress" id="scanProgress" aria-hidden="true"><div class="progress-bar" id="scanBar"></div></div>
+    </section>
   </div>
 
   <section id="people" class="card panel people" hidden aria-label="People in the room">
@@ -122,6 +135,8 @@
       <dt>Phone</dt><dd>Drag to look · press and hold an object to grab · stick or two fingers to walk</dd>
       <dt>Hologram</dt><dd>With your camera on, others see you life-size, cut out of your background on
         your own device · <b>Hologram</b> switches to plain video</dd>
+      <dt id="helpScanTerm" hidden>New room</dt><dd id="helpScan" hidden>Scanned a room with the LiteReality
+        Scanner app? <b>Add room</b> sends the scan here, and everyone in this room moves into it</dd>
     </dl>
     <p class="muted small">Voice comes from your Zoom, Meet or Teams call. Changes here are virtual
       only — nothing in the real room moves.</p>
@@ -142,6 +157,28 @@
       photos (head to toe, facing the camera, a plain background helps).</p>
     <p class="body-status" id="bodyStatus" role="status" aria-live="polite"></p>
     <input id="bodyFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+  </section>
+
+  <section id="scanPanel" class="card panel scan-panel" hidden aria-label="Add a room you scanned">
+    <h2>Bring a room you scanned into this call</h2>
+    <p class="muted small">Send a scan from the LiteReality Scanner app, and everyone in this room
+      moves into it: a quick version within seconds<span id="scanRealNote">, then realistic objects
+      as they are made (a few minutes)</span>. Objects people moved stay where they are.</p>
+    <ol class="scan-steps small">
+      <li id="scanStepZip">On the phone you scanned with: in <b>Files</b>, press and hold the scan's
+        folder and choose <b>Compress</b>.</li>
+      <li>Press <b>Choose the scan</b> and pick that <code>.zip</code>. Its <code>room.usdz</code> on
+        its own works too, in plain colours (no photos).</li>
+      <li id="scanStepDrop" hidden>On a computer, you can also drop the <code>.zip</code> on this page.</li>
+    </ol>
+    <p class="notice warn small" id="scanRoomNote" hidden></p>
+    <div class="body-actions">
+      <button class="btn primary" id="scanPickBtn" type="button">Choose the scan</button>
+    </div>
+    <p class="muted small" id="scanWhere">The scan goes to this room's server, which builds the room
+      from it. Everyone in this room sees it; other rooms on this link keep theirs.</p>
+    <p class="scan-status" id="scanStatus" role="status" aria-live="polite"></p>
+    <input id="scanFile" type="file" accept=".zip,.usdz" hidden>
   </section>
 
   <div id="invitePop" class="card panel invite-pop" hidden>
@@ -166,6 +203,12 @@
     <p class="capture-progress" id="bodyProgress" aria-live="polite"></p>
     <button class="btn" id="bodyCancelBtn" type="button">Cancel</button>
   </div>
+</div>
+
+<!-- a file dragged over the page (a computer): drop a scan to add it -->
+<div id="scanDrop" class="scan-drop" hidden aria-hidden="true">
+  <div class="card scan-drop-card"><span class="tool-ico ico-scan" aria-hidden="true"></span>
+    Drop the scan (<code>.zip</code> or <code>room.usdz</code>) to bring it into this room</div>
 </div>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>

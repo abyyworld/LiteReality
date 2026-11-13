@@ -49,6 +49,14 @@ background — on the Modal GPU function, or the stand-in — and tells the room
 and every browser fetches it from GET /avatars/<id>.bin. Bodies live in memory only. A tracked
 sender's pose message carries "j" (its arms and head), which rides on its row of the state frames.
 
+Scans sent into a call (`scans`). Someone who has just scanned a room POSTs it to /scan (a zip
+of the scan's folder, or a bare room.usdz; who is asking in headers with the welcome's key, as for
+/avatar). The quick room is built from it by the CLI in a child process and swapped into THAT room
+only (`RoomHub.offer_room`): a room may run its own version, not the live one — joiners get the
+room's, and a version offered to every room passes it by — until a newer scan, or until the room
+has been empty for a while. The realistic objects follow the same way, version by version. The
+room hears how it goes ({"t": "scan"}); GET /scan/<job> says the same.
+
 Every HTTP response carries the OWASP headers the Zoom client checks before it will render a Zoom
 App at all (Strict-Transport-Security, X-Content-Type-Options, Content-Security-Policy,
 Referrer-Policy — developers.zoom.us/docs/zoom-apps/security/owasp/). The CSP admits the page's one
@@ -93,6 +101,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from litereality_agent.room_ops.roomcall import DEFAULT_PORT, add_arguments
 from litereality_agent.room_ops.roomcall import avatars as bodies
+from litereality_agent.room_ops.roomcall import scans as scanning
 from litereality_agent.room_ops.roomcall.avatars import (
     AvatarConfig,
     AvatarRequestError,
@@ -101,6 +110,7 @@ from litereality_agent.room_ops.roomcall.avatars import (
 from litereality_agent.room_ops.roomcall.geometry import build_scene_assets
 from litereality_agent.room_ops.roomcall.hosted import scene_digest, scene_files, version_name
 from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
+from litereality_agent.room_ops.roomcall.scans import ScanConfig, ScanRequestError, ScanService
 from litereality_agent.room_ops.roomcall.sim import RoomSim, load_model
 
 log = logging.getLogger(__name__)
@@ -159,6 +169,10 @@ CLOSE_TOO_SLOW = 1013
 # the first state frame carrying the new "v"; a client that has not finished loading by then keeps
 # drawing the old room (its bodies frozen) until it has, so this only has to cover most people.
 PREFETCH_SECONDS = 5.0
+# A scan's versions are offered to its room at least the prefetch window plus this apart, so each
+# one is swapped in (one offered sooner would replace the one still pending) — the room skips to
+# the newest when they come faster (`scans.ScanService.offer_gap`).
+OFFER_SLACK = 1.0
 # How often `--watch` looks at the scene's files (seconds). A change is loaded once it has looked
 # the same twice in a row, so a scene caught halfway through being written is not served.
 WATCH_SECONDS = 0.5
@@ -863,11 +877,14 @@ class RoomHub:
 
     def __init__(self, version: SceneVersion | mujoco.MjModel, *, settle_seconds: float = 1.0,
                  prefetch_seconds: float | None = None, watch: Any = None,
-                 avatars: AvatarConfig | None = None) -> None:
+                 avatars: AvatarConfig | None = None, scans: ScanConfig | None = None) -> None:
         if isinstance(version, mujoco.MjModel):  # a bare model: a version with nothing to draw
             version = SceneVersion("scene", "room", "scene", version, b"", {})
         self.version = version
         self.versions: dict[str, SceneVersion] = {version.id: version}
+        # Rooms on a version of their own (a scan sent into them), not the live one: by room id,
+        # kept while the room is empty too, until `scans` lets it go (`release_room_version`).
+        self.room_versions: dict[str, SceneVersion] = {}
         self.settle_seconds = settle_seconds
         self.prefetch_seconds = PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds
         # Anything with `poll_seconds` and `async check() -> SceneRef | None`: `LocalWatch` for
@@ -886,6 +903,12 @@ class RoomHub:
         self.avatars = AvatarService(avatars or AvatarConfig(), find_peer=self._find_peer,
                                      broadcast=self._broadcast_room,
                                      tell=lambda peer, message: peer.push(dumps(message)))
+        # Scans sent into a room: one service, one set of limits for every room of this server.
+        self.scans = ScanService(scans or ScanConfig(), find_peer=self._find_peer,
+                                 broadcast=self._broadcast_room,
+                                 install=self.install_room_version,
+                                 release=self.release_room_version,
+                                 offer_gap=self.prefetch_seconds + OFFER_SLACK)
 
     def _find_peer(self, room_id: str, peer_id: str) -> Peer | None:
         room = self.rooms.get(room_id)
@@ -924,6 +947,7 @@ class RoomHub:
                         peer.sender.cancel()
             self.rooms.clear()
             self.avatars.close()
+            self.scans.close()
             if self._settler is not None:
                 self._settler.shutdown(wait=False, cancel_futures=True)
                 self._settler = None
@@ -954,11 +978,48 @@ class RoomHub:
         if room is None:
             if len(self.rooms) >= MAX_ROOMS:
                 return None
-            version = self.version
+            self.scans.room_back(room_id)
+            version = self.room_versions.get(room_id)
+            store = self.scans.config.store
+            if version is None and store is not None:
+                # Hosted: this room may have been on a scan when the container restarted.
+                room = self.rooms[room_id] = Room(room_id, asyncio.get_running_loop()
+                                                  .create_future(), version=self.version)
+                room.ready = asyncio.ensure_future(self._start_restoring(room, store))
+                return room
+            version = version or self.version
             settling = asyncio.get_running_loop().run_in_executor(
                 self._settle_pool(), functools.partial(version.new_sim, self.settle_seconds))
             room = self.rooms[room_id] = Room(room_id, settling, version=version)
         return room
+
+    async def _start_restoring(self, room: Room, store: Any) -> RoomSim:
+        """A new room, on the scanned version the store kept for its id if there is one (a
+        container restart during a call), else on the live version like any other."""
+        version = None
+        try:
+            ref = await asyncio.to_thread(store.load, room.id)
+            if ref is not None:
+                version = self.versions.get(ref.id) or await load_version(ref)
+                self.versions.setdefault(version.id, version)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — the live room it is, then
+            log.warning("roomcall: room %s: its kept scan could not be loaded: %s", room.id, exc)
+            with contextlib.suppress(Exception):
+                await asyncio.to_thread(store.forget, room.id)
+            version = None
+        if version is not None and self.rooms.get(room.id) is room:
+            log.info("roomcall: room %s is back on its scan %s", room.id, version.id)
+            self.room_versions.setdefault(room.id, version)
+            version = self.room_versions[room.id]
+            self.scans.scanned(room.id)
+            room.version = version
+            if room.pending is not None and room.pending is not version:
+                room.pending = None       # a live version offered meanwhile is not this room's
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._settle_pool(), functools.partial(room.version.new_sim, self.settle_seconds))
 
     # -- versions -------------------------------------------------------------------------------
 
@@ -1062,23 +1123,64 @@ class RoomHub:
         anything pending there; a newer offer replaces an older one still pending, so a room may
         skip versions but never goes backwards."""
         version = self.versions.setdefault(version.id, version)
+        following = [room for room in self.rooms.values() if room.id not in self.room_versions]
         if version is self.version and all(room.version is version and room.pending is None
-                                           for room in self.rooms.values()):
+                                           for room in following):
             return
         self.version = version
         self._failed = None
         self._load_error = None
-        loop = asyncio.get_running_loop()
-        if version.settling is None:
-            version.settling = loop.run_in_executor(
-                self._settle_pool(), functools.partial(version.settle, self.settle_seconds))
-            version.settling.add_done_callback(functools.partial(self._settled, version))
-        now = loop.time()
+        self._start_settling(version)
+        now = asyncio.get_running_loop().time()
         message = version.message()
-        for room in self.rooms.values():
+        for room in following:
             room.pending = None if room.version is version else version
             room.offered_at = now
             room.broadcast(message)
+        self._prune()
+
+    def _start_settling(self, version: SceneVersion) -> None:
+        if version.settling is None:
+            version.settling = asyncio.get_running_loop().run_in_executor(
+                self._settle_pool(), functools.partial(version.settle, self.settle_seconds))
+            version.settling.add_done_callback(functools.partial(self._settled, version))
+
+    def offer_room(self, room_id: str, version: SceneVersion) -> None:
+        """Give one room a version of its own (a scan sent into it): that room alone is told
+        {"t": "scene"} and swaps after the prefetch window, exactly as for `offer`; every other
+        room, and the live version, stay as they are. The room keeps it — joiners get it, a version
+        offered to every room passes it by — until another one replaces it here or
+        `release_room_version` lets it go. Works for a room that is empty right now too: whoever
+        comes back gets it."""
+        version = self.versions.setdefault(version.id, version)
+        self.room_versions[room_id] = version
+        self._start_settling(version)
+        room = self.rooms.get(room_id)
+        if room is not None:
+            room.pending = None if room.version is version else version
+            room.offered_at = asyncio.get_running_loop().time()
+            if room.pending is not None:
+                room.broadcast(version.message())
+        self._prune()
+
+    async def install_room_version(self, room_id: str, ref: SceneRef) -> str:
+        """Load `ref` off the event loop (`load_version`; a version some room already has is
+        reused) and offer it to `room_id` alone. Returns its id; raises if it cannot be loaded."""
+        version = self.versions.get(ref.id)
+        if version is None:
+            version = await load_version(ref)
+        self.offer_room(room_id, version)
+        return version.id
+
+    def release_room_version(self, room_id: str) -> None:
+        """`room_id`'s own version is over (it stayed empty): it follows the live one again."""
+        if self.room_versions.pop(room_id, None) is None:
+            return
+        room = self.rooms.get(room_id)
+        if room is not None and room.version is not self.version:
+            room.pending = self.version
+            room.offered_at = asyncio.get_running_loop().time()
+            room.broadcast(self.version.message())
         self._prune()
 
     def _settled(self, version: SceneVersion, future: asyncio.Future) -> None:
@@ -1092,9 +1194,17 @@ class RoomHub:
         for room in self.rooms.values():
             if room.pending is version:
                 room.pending = None
+        for room_id, own in list(self.room_versions.items()):
+            if own is version:            # back to what that room runs, if anything else
+                room = self.rooms.get(room_id)
+                if room is not None and room.version is not None and room.version is not version:
+                    self.room_versions[room_id] = room.version
+                else:
+                    del self.room_versions[room_id]
         if self.version is version:
             fallback = next((room.version for room in self.rooms.values()
-                             if room.version is not None and room.version is not version), None)
+                             if room.version is not None and room.version is not version
+                             and room.id not in self.room_versions), None)
             if fallback is not None:
                 self.version = fallback
         self._prune()
@@ -1102,6 +1212,7 @@ class RoomHub:
     def _prune(self) -> None:
         """Forget versions nothing needs any more (a model and its glb can be hundreds of MB)."""
         keep = {self.version.id}
+        keep.update(v.id for v in self.room_versions.values())
         for room in self.rooms.values():
             keep.update(v.id for v in (room.version, room.pending) if v is not None)
         for vid in [vid for vid in self.versions if vid not in keep]:
@@ -1150,6 +1261,8 @@ class RoomHub:
                 # Another room's swap may have pruned it meanwhile (this one's "v" had already
                 # moved on): served again, or this room's browsers could not fetch what it runs.
                 self.versions.setdefault(old_version.id, old_version)
+                if self.room_versions.get(room.id) is version:
+                    self.room_versions[room.id] = old_version   # a rejoin gets what works
             self._load_error = f"{version.id}: swap failed: {exc}"[:500]
             self._prune()
             return False
@@ -1173,6 +1286,7 @@ class RoomHub:
             room.task = None
         if self.rooms.get(room.id) is room:
             del self.rooms[room.id]
+            self.scans.room_emptied(room.id)
         self._prune()
 
     def _new_id(self, room: Room) -> str:
@@ -1251,7 +1365,11 @@ class RoomHub:
         welcome = {"t": "welcome", "id": peer.id, "room": room.id, "name": peer.name,
                    "color": peer.color, "v": room.v,
                    "peers": [p.info() for p in room.peers.values()],
-                   "key": peer.key, "avatars": self.avatars.welcome_info()}
+                   "key": peer.key, "avatars": self.avatars.welcome_info(),
+                   "scans": self.scans.welcome_info()}
+        latest = self.scans.latest(room.id)
+        if latest is not None:
+            welcome["scan"] = latest       # joined during (or just after) a scan's build
         room.peers[peer.id] = peer
         try:
             peer.sender = asyncio.create_task(self._send_loop(peer))
@@ -1488,7 +1606,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                settle_seconds: float = 1.0, stage: str = "scene", version: str | None = None,
                prebuilt: Path | None = None, watch: Any = None,
                prefetch_seconds: float | None = None,
-               avatars: AvatarConfig | None = None) -> FastAPI:
+               avatars: AvatarConfig | None = None,
+               scans: ScanConfig | None = None) -> FastAPI:
     """The room call app for one scene: its first version's geometry built here, once (or read
     from `prebuilt`, see `read_prebuilt`); rooms made on demand.
 
@@ -1498,6 +1617,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     `prefetch_seconds` (default `PREFETCH_SECONDS`). `web_dir` exists for tests (a stand-in client) and for working on the
     client from a checkout; `settle_seconds` is passed to every version's `RoomSim`.
     `avatars` says how full bodies are made (default: off — everyone a capsule or hologram).
+    `scans` says whether, and how far, a scan sent into a room is built (default: off).
     """
     if model is None:
         if scene_xml is None:
@@ -1509,7 +1629,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     first = SceneVersion.build(model, label=label, stage=stage, id=version, prebuilt=prebuilt)
     hub = RoomHub(first, settle_seconds=settle_seconds, watch=watch,
                   prefetch_seconds=PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds,
-                  avatars=avatars)
+                  avatars=avatars, scans=scans)
 
     # No /docs, /redoc or /openapi.json: nothing to document for a browser, and less surface.
     app = FastAPI(title="LiteReality room call", docs_url=None, redoc_url=None,
@@ -1625,6 +1745,41 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
         return Response(data, media_type=BINARY,
                         headers={"Cache-Control": AVATAR_CACHE, "ETag": f'"{name[:-4]}"'})
 
+    def scan_error(status: int, message: str, retry: int | None = None) -> Response:
+        body: dict = {"detail": message}
+        headers = {"Cache-Control": "no-store"}
+        if retry is not None:
+            body["retry"] = retry
+            headers["Retry-After"] = str(retry)
+        return JSONResponse(body, status_code=status, headers=headers)
+
+    @app.post("/scan")
+    async def scan_upload(request: Request) -> Response:
+        """A scan sent into the caller's room (a zip of the scan's folder, or a room.usdz, as
+        the body) -> 202 {"job": id}; the room is built in the background and everyone in it
+        hears how it goes ({"t": "scan"}). Who is asking comes in headers (`scans.ROOM_HEADER`,
+        `PEER_HEADER`, `KEY_HEADER`), so a stranger or someone over a limit is refused before the
+        body is read; the body then goes to disk with a hard cap (`ScanService.upload`)."""
+        headers = request.headers
+        try:
+            result = await hub.scans.upload(
+                request.stream, room=headers.get(scanning.ROOM_HEADER),
+                peer=headers.get(scanning.PEER_HEADER), key=headers.get(scanning.KEY_HEADER),
+                client=request.client.host if request.client else None,
+                content_type=headers.get("content-type"),
+                length=headers.get("content-length"))
+        except ScanRequestError as exc:
+            return scan_error(exc.status, exc.message, exc.retry_after)
+        return JSONResponse(result, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @app.get("/scan/{job}")
+    async def scan_status(job: str) -> Response:
+        """How a scan's build is going: {"job", "status", "stage", "progress", "detail"}."""
+        found = hub.scans.status(job)
+        if found is None:
+            return scan_error(404, "no such scan (it ended a while ago, or the server restarted)")
+        return JSONResponse(found, headers={"Cache-Control": "no-store"})
+
     @app.get("/scene.json")
     async def scene_manifest(request: Request) -> Response:
         """The live version's manifest, or with ?v= that version's (404 once nothing needs it)."""
@@ -1661,7 +1816,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     async def healthz() -> Response:
         hub.ensure_watching()
         return JSONResponse({"ok": True, "label": hub.version.label, **hub.stats(),
-                             **hub.status(), "avatars": hub.avatars.stats()},
+                             **hub.status(), "avatars": hub.avatars.stats(),
+                             "scans": hub.scans.stats()},
                             headers={"Cache-Control": "no-store"})
 
     @app.websocket("/ws")
@@ -1737,11 +1893,15 @@ def _open_when_up(server, url: str) -> None:
 def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAULT_PORT,
           label: str | None = None, demo: bool = False, open_browser: bool = True,
           watch: bool = False, stage: str | None = None, avatars: str = "standin",
-          modal_env: str | None = None) -> int:
+          modal_env: str | None = None, uploads: str = "quick", fake_objects: bool = False,
+          articulated: bool = False) -> int:
     """Serve one scene (or the demo room, with `demo` or no scene) until interrupted. With
     `watch`, every change to the scene's files is a new version, swapped into the rooms live.
     `avatars` is how full bodies are made: "standin" here, "modal" on the GPU function in the
-    Modal environment `modal_env` (the stand-in when that fails), "off" not at all."""
+    Modal environment `modal_env` (the stand-in when that fails), "off" not at all. `uploads` is
+    what a scan sent into a room becomes: "off", "quick" (its quick room), "realistic" (then
+    TRELLIS objects too — the stand-in boxes with `fake_objects`; Infinigen's openable furniture
+    as well with `articulated`)."""
     import uvicorn
 
     with tempfile.TemporaryDirectory(prefix="roomcall-demo-") as scratch:
@@ -1766,7 +1926,9 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
         model = load_model(scene)
         app = create_app(scene, model=model, label=label, stage=stage or scene_stage(scene),
                          version=version, watch=watcher,
-                         avatars=AvatarConfig(mode=avatars, environment=modal_env or "main"))
+                         avatars=AvatarConfig(mode=avatars, environment=modal_env or "main"),
+                         scans=ScanConfig(mode=uploads, fake=fake_objects,
+                                          articulated=articulated))
         sock = bind_socket(host, port)
         shown = "localhost" if host in {"0.0.0.0", "::", ""} else host
         url = f"http://{shown}:{sock.getsockname()[1]}/"
@@ -1780,6 +1942,9 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
         print(f"  share  expose it over https (e.g. `cloudflared tunnel --url {url.rstrip('/')}`) "
               "and paste the link in the Zoom/Meet/Teams chat · ctrl-c to stop")
         print(f"  bodies {_BODIES[avatars]}")
+        print(f"  scans  {_SCANS[uploads]}"
+              + (" (stand-in objects: --fake-objects)" if fake_objects and uploads == "realistic"
+                 else ""))
         if watcher is not None:
             print(f"  watch  {watched}: a change to the scene is swapped in live, nobody leaves "
                   f"(version {app.state.roomcall.version.id})")
@@ -1802,6 +1967,15 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
                 signal.signal(signal.SIGTERM, previous)
     print("stopped")
     return 0
+
+
+_SCANS = {
+    "off": "off: nobody can send a scan into a room",
+    "quick": "Add room in the page sends a scan into that room: its quick room in seconds "
+             "(--uploads realistic for TRELLIS objects too)",
+    "realistic": "Add room in the page sends a scan into that room: its quick room in seconds, "
+                 "then realistic objects from TRELLIS on Modal, swapped in as they land",
+}
 
 
 def _exit_quietly(_signum, _frame) -> None:
@@ -1827,6 +2001,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     return run(args)
 
 
+def default_uploads(args, *, modal: bool = False) -> str:
+    """What a scan sent into a room becomes when `--uploads` is not given: realistic objects
+    where they can be made — Modal credentials configured (`modal`, from `litereality roomcall`),
+    or the stand-in generator (`--fake-objects`) — else the quick room."""
+    return "realistic" if modal or getattr(args, "fake_objects", False) else "quick"
+
+
 def run(args, *, modal_env: str | None = None) -> int:
     """Run from parsed `add_arguments` arguments — shared by `litereality roomcall` and
     `python -m litereality_agent.room_ops.roomcall` so the two can never drift apart."""
@@ -1835,6 +2016,9 @@ def run(args, *, modal_env: str | None = None) -> int:
                      label=args.label, demo=args.demo, open_browser=args.open_browser,
                      watch=getattr(args, "watch", False), stage=getattr(args, "stage", None),
                      avatars=getattr(args, "avatars", "standin"),
-                     modal_env=modal_env or getattr(args, "modal_env", None))
+                     modal_env=modal_env or getattr(args, "modal_env", None),
+                     uploads=getattr(args, "uploads", None) or default_uploads(args),
+                     fake_objects=bool(getattr(args, "fake_objects", False)),
+                     articulated=getattr(args, "articulated", None) is True)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc

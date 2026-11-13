@@ -22,6 +22,8 @@ WEB = Path(hosted.__file__).resolve().parent / "web"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
+    # OpenCV (the object cut-outs of a scan sent into a room) links the system's libGL and GLib.
+    .apt_install(*hosted.IMAGE_APT)
     .uv_pip_install(*hosted.IMAGE_PACKAGES)
     # `add_local_python_source` carries .py files only; the browser client is html/js/css.
     .add_local_dir(WEB, hosted.WEB_IN_CONTAINER)
@@ -36,13 +38,16 @@ app = modal.App(hosted.APP_NAME)
 # once instead (each WebSocket is one Modal input, held for as long as the person stays — up to
 # `timeout`). Two CPUs: the event loop and one room's physics each get a core. It scales to zero
 # `scaledown_window` after the last person leaves, so a link nobody is using costs nothing.
-# 4 GB: during a live swap the old and the new version are both in memory (a real room's model is
-# ~0.7 GB), and a version published without prebuilt geometry is built in a child process.
+# 6 GB: during a live swap the old and the new version are both in memory (a real room's model is
+# ~0.7 GB), a version published without prebuilt geometry is built in a child process, and a scan
+# sent into a room is built by child processes too (~0.2 GB for a quick room, ~0.5 GB for the
+# realistic objects; at most `scans.MAX_JOBS` and `scans.MAX_REALISTIC` at once, each held to its
+# share and all of them to `scans.CHILDREN_MEMORY`, so no upload can take the container down).
 @app.function(
     image=image,
     volumes={hosted.SCENES_MOUNT: scenes},
     cpu=2.0,
-    memory=4096,
+    memory=6144,
     max_containers=1,
     scaledown_window=15 * 60,
     timeout=6 * 60 * 60,
@@ -52,5 +57,9 @@ app = modal.App(hosted.APP_NAME)
 def web():
     # `reload` lets the app see versions `--publish` uploads while it runs (`hosted.VolumeWatch`):
     # a mounted Volume otherwise shows only what was committed when the container started.
+    # `commit` keeps each room's scanned version on the Volume (`hosted.ROOMS_DIR`) for a restart.
+    # Scans sent into rooms get realistic objects from TRELLIS (the `litereality` app's function in
+    # this environment, called with the container's own credentials), a few a day.
     return hosted.build_app(Path(hosted.SCENES_MOUNT), web_dir=Path(hosted.WEB_IN_CONTAINER),
-                            reload=scenes.reload, poll_seconds=hosted.POLL_SECONDS, freeze=True)
+                            reload=scenes.reload, commit=scenes.commit,
+                            poll_seconds=hosted.POLL_SECONDS, freeze=True, uploads="realistic")

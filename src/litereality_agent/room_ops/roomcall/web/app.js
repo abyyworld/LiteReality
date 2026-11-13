@@ -153,6 +153,7 @@ const me = {
   name: String(store.get('name', '')).slice(0, 40),
   color: COLORS.includes(store.get('color', '')) ? store.get('color', '') : COLORS[Math.floor(Math.random() * COLORS.length)],
   media: { camera: false, mic: false },
+  key: null,                                       // this connection's upload key (the welcome's)
 };
 const peers = new Map();                           // id -> peer record (see addPeer)
 const canMedia = !!(window.isSecureContext && navigator.mediaDevices?.getUserMedia);
@@ -224,6 +225,7 @@ const ver = {
   frame: null,          // the latest state frame for a version not on screen
   gone: new Set(),      // versions the server answered 404 for (until it names them again)
   fails: 0, failedV: undefined, retryAt: 0,
+  quiet: undefined,     // a version to install without the "updated" toast: the room just joined
 };
 // A version the server announced but the room has not reached by then failed there (the server
 // keeps the old one): stop waiting for it and follow the frames.
@@ -493,7 +495,18 @@ async function swapLowMemory(job) {
  *  body of that name; the newest frame for this version is applied at once, snapping. */
 function installVersion(next) {
   const old = shown, first = !old;
+  // Not for the room someone has just joined into (the page had the link's live version up while
+  // they chose a name, and the room they joined runs another); a scan on its way says more.
+  const quiet = ver.quiet === next.v;
+  ver.quiet = undefined;
+  // Another room altogether (a scan someone added, the room someone just joined into): everyone
+  // starts it at its spawn point, holding nothing. Later stages of one room keep people put.
+  const scanJob = scanJobOf(next.v);
+  const fresh = first || quiet || !!scanJob || otherWalls(old?.manifest, next.manifest);
+  // A scan's first room, with more of it still to come: a preview again (the stage tag).
+  if (scanJob && !SCAN_ENDED.has(scanJob.status)) scans.complete = false;
   setHover(null);
+  if (grab && fresh) endGrab(true);
   if (grab) {
     const name = old?.bodies.get(grab.body)?.name;
     const id = name ? next.byName.get(name) : undefined;
@@ -504,24 +517,32 @@ function installVersion(next) {
   world.add(next.root);
   shown = next; bodies = next.bodies; sceneRoot = next.root;
   sceneReady = true;
-  applyManifest(next.manifest, first);
+  applyManifest(next.manifest, fresh);
   if (grab) setHighlight(grab.body, true);
   const f = ver.frame;
   ver.frame = null;
   if (f && versionOf(f) === next.v) applyBodies(f);
   setLoad(1, `${bodies.size} object${bodies.size === 1 ? '' : 's'} you can move`);
   $('loadProgress').classList.add('done');
-  if (!first) toast('The room was updated');
+  if (!first && !quiet) { const msg = scanSwapToast(next); if (msg) toast(msg); }
+  onScanVersion();
+}
+
+/** Two versions whose walls are this far apart are two rooms, not two stages of one. */
+function otherWalls(a, b) {
+  const p = a?.bounds, q = b?.bounds;
+  if (!finite(p?.min) || !finite(p?.max) || !finite(q?.min) || !finite(q?.max)) return false;
+  return [0, 1].some((i) => Math.abs(p.min[i] - q.min[i]) > 1 || Math.abs(p.max[i] - q.max[i]) > 1);
 }
 
 /** Label, stage, walk limits and eye height from a version's manifest. The spawn point only for
- *  the first room: later versions of the same room keep everyone where they are. */
-function applyManifest(man, first) {
+ *  a room new to this page: later versions of the same room keep everyone where they are. */
+function applyManifest(man, spawn) {
   const label = String(man.label || 'Room');
   $('sceneLabel').textContent = label;
   $('hudLabel').textContent = label;
   document.title = label + ' · Room call';
-  const tag = STAGE_TAGS[man.stage] || '';
+  const tag = stageTag(man.stage);
   $('hudStage').textContent = tag;
   $('hudStage').hidden = !tag;
   const bmin = man.bounds?.min, bmax = man.bounds?.max;
@@ -534,7 +555,7 @@ function applyManifest(man, first) {
   }
   floorY = Number.isFinite(man.floor_z) ? man.floor_z : 0;
   eyeY = floorY + EYE;
-  if (first) placeSpawn(man); else clampWalker();
+  if (spawn) placeSpawn(man); else clampWalker();
 }
 
 /** The spawn point from the manifest (MuJoCo frame) into three space. */
@@ -1460,7 +1481,7 @@ function bodyTag(peer) {
 function renderPeople() {
   const list = $('peopleList');
   list.replaceChildren();
-  const row = (name, color, media, you, rtcFailed = false, cutOut = false, body = '') => {
+  const row = (name, color, media, you, rtcFailed = false, cutOut = false, body = '', scan = '') => {
     const li = document.createElement('li');
     const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = color;
     const who = document.createElement('span'); who.className = 'who'; who.textContent = name + (you ? ' (you)' : '');
@@ -1481,12 +1502,21 @@ function renderPeople() {
       t.textContent = body;
       tags.appendChild(t);
     }
+    if (scan) {
+      const t = document.createElement('span');
+      t.className = 'tag on'; t.textContent = scan;
+      tags.appendChild(t);
+    }
     li.append(dot, who, tags);
     list.appendChild(li);
   };
   const myTag = { building: 'building body…', ready: 'body', failed: 'body failed' }[mine.status] || '';
-  row(me.name || 'You', me.color, me.media, true, false, holo.state === 'live', myTag);
-  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed, p.avatar.cut.visible, bodyTag(p));
+  // Who is adding a room right now (the card says how far it is).
+  const sj = scans.job && SCAN_ACTIVE.has(scans.job.status) ? scans.job : null;
+  const sending = !!scans.up && scans.up.phase !== 'checking';
+  const adding = (id) => ((id === me.id ? sending || sj?.mine : sj && !sj.mine && sj.by === id) ? 'adding a room' : '');
+  row(me.name || 'You', me.color, me.media, true, false, holo.state === 'live', myTag, adding(me.id));
+  for (const p of peers.values()) row(p.name, p.color, p.media, false, !!p.rtc?.failed, p.avatar.cut.visible, bodyTag(p), adding(p.id));
   $('peopleCount').textContent = String(peers.size + 1);
 }
 
@@ -2357,6 +2387,743 @@ $('bodySkipBtn').addEventListener('click', () => {
 });
 $('bodyCancelBtn').addEventListener('click', () => { if (capture) capture.cancelled = true; });
 
+/* ------------------------------------------------------------------ adding a room: a scan, sent into the call */
+// Someone who has just scanned a room with the LiteReality Scanner app sends it straight into the
+// call, usually from that phone with the room link opened there: Add room, pick the scan (iOS
+// Files compresses the scan's folder into a .zip; a bare room.usdz works too, in flat colours),
+// and it goes to this room's server as one POST /scan. The server builds the QUICK room from it in
+// seconds and swaps THIS room to it (other rooms on the link keep theirs), then, where it can, has
+// realistic objects made, each batch one more version. The rooms themselves come in through the
+// version machinery above like any other version. What this section adds is the upload, and the
+// progress the server tells the whole room ("scan" messages, one job per room at a time) on a card
+// under the room chip. Who is asking goes in headers with the welcome's key, as for bodies, so a
+// refusal (a limit, a stranger) comes before the scan is read. No dialogs or file-system pickers
+// beyond <input type=file>: this has to work in iPhone Safari and inside Zoom.
+const SCAN = {
+  maxBytes: 200 * 1024 * 1024,                     // the server's default cap, until its welcome says its own
+  maxFiles: 3000,                                  // members in a scan zip, as the server counts them
+  cooldown: 60,                                    // s between one person's uploads (the server's default)
+  pollMs: 5000, quietMs: 8000,                     // my job: ask GET /scan/<job> once its messages go quiet
+  doneHideMs: 9000, failHideMs: 16000, stoppedHideMs: 3000, staleMs: 20 * 60 * 1000,
+  timeoutMs: 30 * 60 * 1000,                       // one upload, however slow the phone's network
+  // A busy server's short Retry-After is waited out and the scan sent again, at most this often,
+  // and only for a scan this small: a browser hears "busy" only once it has sent all of it.
+  retries: 2, retryBytes: 8 * 1024 * 1024,
+  busyAskMs: 5000,                                 // a build this quiet may have ended unheard: ask before refusing
+  rivalMs: 2500,                                   // see checkRival
+  swapWaitMs: 15000,                               // "done" waits at most this long for its version to go in
+  keepJobs: 12,                                    // jobs remembered (the room's latest is always kept)
+};
+const SCAN_TYPES = { zip: 'application/zip', usdz: 'model/vnd.usdz+zip' };
+const SCAN_ORDER = { uploading: 0, building: 1, quick: 2, objects: 3, done: 4, failed: 4 };
+const SCAN_ACTIVE = new Set(['uploading', 'building', 'quick', 'objects']);
+const SCAN_BUSY = new Set(['uploading', 'building']);   // the server takes no other upload for the room meanwhile
+const SCAN_ENDED = new Set(['done', 'failed']);
+const SCAN_JOB = /^[A-Za-z0-9_.:-]{1,80}$/;
+const scans = {
+  enabled: true,      // this server takes scans: assumed until its welcome or a refusal says otherwise
+  realistic: null,    // whether it goes on to realistic objects (null: it has not said)
+  maxBytes: SCAN.maxBytes, cooldown: SCAN.cooldown,
+  // My upload, from the pick until the server answers: {xhr, name, size, progress, phase, job,
+  // opened, ended, cancelled, said, rival, dropped, wake}. phase: checking (the file is looked at
+  // here) -> sending -> sent (all of it is out: the server is checking it), or waiting (a busy
+  // server: sent again in a moment). job: the server's id for it, once it is heard.
+  up: null,
+  last: null,         // the latest upload, also after it ended here: its job can still be heard of
+  note: null,         // how my upload ended, when no job of the room's says it: {key, title, detail, up}
+  ids: new Set(),     // my peer ids on this page (a reconnect is a new one): "by" me
+  mine: new Set(),    // the jobs this page started
+  jobs: new Map(),    // every job heard of here, by id: {id, status, detail, progress, by, mine, at, reached}
+  job: null,          // the room's job: the newest heard of. The card follows it (after my upload)
+  complete: false,    // this room's scan is all in: its versions are the room, not a preview (until the next scan's room)
+  closed: '',         // the card was put away at this view's key; the next one brings it back
+  nextAt: 0,          // my cooldown ends (performance.now() ms)
+  held: null,         // the "done" toast, until the version it is about is on screen: {j, text, timer}
+  hideTimer: 0, noteTimer: 0, pollTimer: 0, hinted: false,
+};
+
+// Where the scan goes, said in the panel before anyone sends one (by what the server does with it).
+const SCAN_WHERE = {
+  quick: "The scan goes to this room's server, which builds the room from it. Everyone in this room sees the new "
+    + 'room; other rooms on this link keep theirs.',
+  realistic: "The scan goes to this room's server, which builds the room from it; for the realistic objects, a "
+    + 'cut-out photo of each object goes on to a GPU service (TRELLIS, on Modal). Everyone in this room sees the '
+    + 'new room; other rooms on this link keep theirs.',
+};
+// The server's details are whole sentences ("Quick room ready — realistic objects are next",
+// "Failed: …"); the card's title already says the first half, so the detail keeps the rest.
+const SCAN_SAID = /^(uploading the scan…(\s*\d+(\.\d+)?\s*(%|MB))?|building the quick room…|quick room ready|the room is ready|making realistic objects(…|:)|realistic objects stopped:|done:|done\s*—|failed:|stopped:)\s*/i;
+function scanDetail(text) {
+  let t = String(text ?? '').trim().slice(0, 300);
+  for (let i = 0; i < 2; i++) {
+    t = t.replace(SCAN_SAID, '').trim();
+    if (/^\(.*\)$/.test(t)) t = t.slice(1, -1).trim();
+    t = t.replace(/^[—–:,;-]\s*/, '');
+  }
+  return t ? t[0].toUpperCase() + t.slice(1) : '';
+}
+/** A detail made a sentence, for when another one follows it. */
+const sentence = (t) => (t && !/[.!?…]$/.test(t) ? t + '.' : t);
+const sizeMB = (n) => (n < 1048576 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(n < 10 * 1048576 ? 1 : 0)} MB`);
+const blobBytes = (b) => (b.arrayBuffer ? b.arrayBuffer() : new Response(b).arrayBuffer());
+const isMe = (id) => !!id && (id === me.id || scans.ids.has(id));
+const scanName = (id) => (isMe(id) ? 'You' : peers.get(id)?.name || 'Someone');
+
+/** What the welcome says about scans, if this server says anything: {enabled, mode, max_bytes,
+ *  cooldown}, and the room's latest "scan" message for someone joining in the middle of one. */
+function onScanWelcome(m) {
+  if (me.id) scans.ids.add(me.id);
+  const info = m.scans && typeof m.scans === 'object' ? m.scans : null;
+  if (info) {
+    const mode = typeof info.mode === 'string' ? info.mode : '';
+    scans.enabled = info.enabled !== false && mode !== 'off';
+    scans.realistic = mode ? mode === 'realistic' : typeof info.realistic === 'boolean' ? info.realistic : null;
+    if (Number(info.max_bytes) > 0) scans.maxBytes = Number(info.max_bytes);
+    if (Number(info.cooldown) > 0) scans.cooldown = Number(info.cooldown);
+  }
+  // Someone joining mid-build sees it like everyone else; one joining after it ended only gets
+  // its outcome (the stage tag), not an old toast or card. A reconnect of mine hears it all.
+  if (m.scan && typeof m.scan === 'object') onScan(m.scan, { quiet: !welcomed });
+  // My job, after a reconnect: what the server said while this socket was away.
+  if (scans.job?.mine && SCAN_ACTIVE.has(scans.job.status) && !scans.up) pollScan(true);
+  syncScanUi();
+}
+
+/** The Add room button, the help row and the panel, for what is possible right now. */
+function syncScanUi() {
+  $('scanBtn').hidden = !scans.enabled;
+  $('helpScan').hidden = $('helpScanTerm').hidden = !scans.enabled;
+  const wait = Math.ceil((scans.nextAt - performance.now()) / 1000), up = scans.up;
+  const pick = $('scanPickBtn');
+  pick.disabled = !!up || wait > 0 || !me.id;
+  pick.textContent = up ? (up.phase === 'checking' ? 'Checking…' : 'Sending…') : wait > 0 ? `Choose the scan (in ${wait} s)` : 'Choose the scan';
+  $('scanBtn').dataset.state = up ? 'building' : '';
+  $('scanRealNote').hidden = scans.realistic === false;
+  $('scanStepDrop').hidden = IS_TOUCH;             // a computer can take the zip by drag and drop
+  $('scanWhere').textContent = scans.realistic ? SCAN_WHERE.realistic : SCAN_WHERE.quick;
+  // What adding a room would do to the one being added here (before anyone picks a file).
+  const j = scans.job;
+  let note = '';
+  if (j && !up && SCAN_BUSY.has(j.status)) {
+    note = j.mine ? 'Your last scan is still being built: you can add another once it is in.'
+      : `${scanName(j.by)} is adding a room here right now: you can add yours once it is in.`;
+  } else if (j && !up && SCAN_ACTIVE.has(j.status)) {
+    note = 'Realistic objects are still being made for this room: adding another room stops them.';
+  }
+  $('scanRoomNote').textContent = note;
+  $('scanRoomNote').hidden = !note;
+}
+
+function setScanStatus(text, error = false) {
+  const el = $('scanStatus');
+  el.textContent = text || '';
+  el.classList.toggle('error', !!error);
+}
+
+/** A refusal before anything was sent: said in the panel, or as a toast when the panel is closed. */
+function scanRefused(text) {
+  setScanStatus(text, true);
+  if ($('scanPanel').hidden) toast(text, 'error');
+}
+
+function openScanPanel() {
+  $('scanBtn').classList.remove('hint');
+  syncScanUi();
+  togglePanel('scanPanel', true);
+}
+
+/** .zip or .usdz, by name (iOS hands over real names), else by type. */
+function scanKind(file) {
+  const name = String(file?.name || '').toLowerCase();
+  if (name.endsWith('.zip')) return 'zip';
+  if (name.endsWith('.usdz')) return 'usdz';
+  if (/^application\/(x-)?zip(-compressed)?$/.test(file?.type || '')) return 'zip';
+  if (file?.type === SCAN_TYPES.usdz) return 'usdz';
+  return null;
+}
+
+/** The names in a zip, from its central directory at the end of the file (so a 150 MB scan costs
+ *  two small reads, not a load). null when it cannot tell — zip64, a prefixed archive, anything
+ *  odd: the server reads it properly either way. */
+async function zipNames(file) {
+  try {
+    const tailLen = Math.min(file.size, 22 + 65535);
+    const tail = new DataView(await blobBytes(file.slice(file.size - tailLen)));
+    let eocd = -1;
+    for (let i = tailLen - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) return null;
+    const count = tail.getUint16(eocd + 10, true), size = tail.getUint32(eocd + 12, true), at = tail.getUint32(eocd + 16, true);
+    if (count === 0xffff || size === 0xffffffff || at === 0xffffffff || size > 8e6 || at + size > file.size) return null;
+    const cd = new DataView(await blobBytes(file.slice(at, at + size)));
+    const utf8 = new TextDecoder(), names = [];
+    let links = false;
+    for (let p = 0; p + 46 <= cd.byteLength && names.length < count;) {
+      if (cd.getUint32(p, true) !== 0x02014b50) return null;
+      const n = cd.getUint16(p + 28, true), extra = cd.getUint16(p + 30, true), note = cd.getUint16(p + 32, true);
+      // made on unix (high byte of "version made by" = 3) with a symlink's file mode
+      if (cd.getUint8(p + 5) === 3 && ((cd.getUint32(p + 38, true) >>> 16) & 0o170000) === 0o120000) links = true;
+      names.push(utf8.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, n)));
+      p += 46 + n + extra + note;
+    }
+    return { count: Math.max(count, names.length), names, links };
+  } catch { return null; }
+}
+
+/** The .usdz files a zip holds, as the server finds the room in it: not folders, and not a Mac's
+ *  or Windows' own copies (__MACOSX/…, ._room.usdz). */
+function zipUsdz(names) {
+  return names.filter((raw) => {
+    if (raw.endsWith('/') || raw.endsWith('\\')) return false;
+    const parts = raw.replace(/\\/g, '/').split('/').filter((p) => p && p !== '.');
+    const leaf = parts[parts.length - 1] || '';
+    return leaf.toLowerCase().endsWith('.usdz') && !leaf.startsWith('._') && !parts.some((p) => p.toLowerCase() === '__macosx');
+  }).map((raw) => raw.replace(/\\/g, '/').split('/').pop().toLowerCase());
+}
+
+/** A first look before sending: a phone on a slow network should not spend a minute uploading
+ *  something the server will only refuse. '' when it looks like a scan (or cannot be told). */
+async function checkScan(file, kind) {
+  if (!file.size) return 'That file is empty.';
+  if (file.size > scans.maxBytes) return `That scan is ${sizeMB(file.size)}; this room takes up to ${sizeMB(scans.maxBytes)}.`;
+  const head = new Uint8Array(await blobBytes(file.slice(0, 4)));
+  if (head[0] !== 0x50 || head[1] !== 0x4b) {        // "PK": a usdz is a zip too
+    return kind === 'zip' ? 'That file is not a zip archive.' : 'That file is not a RoomPlan room.usdz.';
+  }
+  if (kind !== 'zip') return '';
+  const zip = await zipNames(file);
+  if (!zip) return '';
+  if (zip.count > SCAN.maxFiles) return `That zip holds ${zip.count} files; a scan has at most ${SCAN.maxFiles}.`;
+  if (zip.links) return 'That zip holds links (symlinks), which a scan never has.';
+  // The server takes room.usdz (in any folder of the zip), else the one .usdz there is, whatever
+  // its name: the scanner's own export can be MyRoom.usdz.
+  const usdz = zipUsdz(zip.names);
+  if (!usdz.length) return "There is no room.usdz in that zip. Compress the scan's own folder: the one holding room.usdz and the frame_… photos.";
+  if (usdz.length > 1 && !usdz.includes('room.usdz')) return "That zip holds several .usdz files and none is room.usdz. Compress the scan's own folder.";
+  return '';
+}
+
+/** Whether this room is taking a scan already. The server builds one at a time per room, and it
+ *  turns a second down before reading it, but a browser hears that only once it has sent all of
+ *  it: minutes, from a phone. '' when the room is free (or this page cannot tell: the server
+ *  decides then). A build quiet for a while may have ended unheard: the server is asked first. */
+async function roomBusy() {
+  let j = scans.job;
+  if (!j || !SCAN_BUSY.has(j.status)) return '';
+  if (performance.now() - j.at > SCAN.busyAskMs) {
+    if ((await askScan(j)) === 'gone') setScanJob(j.id, 'failed', { quiet: true, detail: 'The server no longer has it.' });
+    j = scans.job;
+    if (!j || !SCAN_BUSY.has(j.status)) return '';
+  }
+  return j.mine ? 'Your last scan is still being built. Wait for it, then add another.'
+    : `${scanName(j.by)} is adding a room here right now. Wait for it, then try again.`;
+}
+
+/** One POST /scan with the file as the body, streamed from disk. XMLHttpRequest rather than fetch:
+ *  only it reports upload progress (in Safari too). Resolves {status, body, retry}; status 0 is a
+ *  network failure, -1 an abort (a cancel, or see checkRival). */
+function sendScan(file, kind, up) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    up.xhr = xhr;
+    xhr.open('POST', 'scan');
+    xhr.timeout = SCAN.timeoutMs;
+    xhr.setRequestHeader('Content-Type', SCAN_TYPES[kind]);
+    xhr.setRequestHeader('X-Roomcall-Room', roomId);
+    xhr.setRequestHeader('X-Roomcall-Peer', me.id || '');
+    xhr.setRequestHeader('X-Roomcall-Key', me.key || '');
+    // All of it sent: the server is checking it now (seconds, for a big scan). Cancel is no
+    // longer offered: the server may already have it, and its messages say what it does with it.
+    const sent = () => { if (up.phase === 'sending') { up.phase = 'sent'; renderScanCard(); } };
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable || !e.total) return;
+      up.progress = clamp(e.loaded / e.total, 0, 1);
+      if (e.loaded >= e.total) sent(); else renderScanCard();
+      checkRival();
+    });
+    xhr.upload.addEventListener('load', sent);
+    const end = (status) => {
+      let body = {};
+      try { body = JSON.parse(xhr.responseText || '{}') || {}; } catch { /* not JSON: a proxy's error page */ }
+      resolve({ status, body, retry: Number(xhr.getResponseHeader('Retry-After')) || 0 });
+    };
+    xhr.addEventListener('load', () => end(xhr.status));
+    xhr.addEventListener('error', () => end(0));
+    xhr.addEventListener('timeout', () => end(0));
+    xhr.addEventListener('abort', () => end(-1));
+    up.phase = 'sending';
+    up.progress = 0;
+    up.opened = performance.now();
+    renderScanCard();
+    xhr.send(file);
+  });
+}
+
+/** Someone else's upload into this room was taken while mine has not been heard of (the server
+ *  names an upload it takes at once, in a message to the room): the server will turn mine down,
+ *  but only once all of it has been sent. Stop sending now. A moment's grace first, for my own
+ *  "uploading" message to arrive. */
+function checkRival() {
+  const up = scans.up;
+  if (!up?.rival || up.job || up.phase !== 'sending' || performance.now() - up.opened < SCAN.rivalMs) return;
+  up.xhr?.abort();
+}
+
+/** Add room: check the file, send it, and say how that went. The rest is the server's messages. */
+async function addRoom(file) {
+  if (scans.up) { toast(scans.up.phase === 'checking' ? 'Still looking at the scan you picked' : 'Your scan is still being sent'); return; }
+  if (!me.id) { scanRefused('Not connected to the room right now — try again in a moment.'); return; }
+  const kind = scanKind(file);
+  if (!kind) { scanRefused("That is not a scan: pick the scan folder's .zip, or its room.usdz."); return; }
+  const wait = Math.ceil((scans.nextAt - performance.now()) / 1000);
+  if (wait > 0) { scanRefused(`You can add another room in ${wait} s.`); return; }
+  const up = { xhr: null, name: String(file.name || 'scan').slice(0, 80), size: file.size, progress: 0, phase: 'checking', job: null,
+               opened: 0, ended: 0, cancelled: false, said: false, rival: '', dropped: false, wake: null };
+  scans.up = scans.last = up;
+  clearNote();
+  addEventListener('beforeunload', guardUnload);
+  syncScanUi();
+  setScanStatus('Checking the scan…');
+  let res = null;
+  try {
+    const why = (await checkScan(file, kind)) || (await roomBusy());
+    if (why) { scanRefused(why); return; }
+    setScanStatus('');
+    togglePanel('scanPanel', false);               // the card shows the progress, for everyone
+    renderPeople();
+    for (let attempt = 0; ; attempt++) {
+      res = await sendScan(file, kind, up);
+      if (up.cancelled || up.dropped) break;
+      // Busy (other uploads on this server): it says when to come back, soon.
+      if (res.status !== 503 || !(res.retry > 0 && res.retry <= 10) || attempt >= SCAN.retries || file.size > SCAN.retryBytes) break;
+      up.phase = 'waiting';
+      renderScanCard();
+      await new Promise((resolve) => {
+        const t = setTimeout(resolve, res.retry * 1000);
+        up.wake = () => { clearTimeout(t); resolve(); };   // Cancel, while it waits
+      });
+      up.wake = null;
+      if (up.cancelled) break;
+    }
+  } finally {
+    up.ended = performance.now();
+    if (scans.up === up) { scans.up = null; removeEventListener('beforeunload', guardUnload); }
+    syncScanUi();
+    renderScanCard();
+    renderPeople();
+  }
+  if (!res) return;
+  const { status, body } = res;
+  if (status === 202 && typeof body.job === 'string' && SCAN_JOB.test(body.job)) {   // taken, even if Cancel came too late
+    scans.mine.add(body.job);
+    up.job = body.job;
+    scans.nextAt = performance.now() + scans.cooldown * 1000;
+    syncScanUi();
+    // The server's own messages take it from here; until the first one, it is building.
+    const j = scans.jobs.get(body.job);
+    if (!j || j.status === 'uploading') setScanJob(body.job, 'building', { by: me.id });
+    schedulePoll();
+    return;
+  }
+  up.said = true;
+  if (up.cancelled) {                               // no error: the card says so, briefly
+    showNote(up, 'Upload stopped', 'You stopped sending it.', SCAN.stoppedHideMs);
+    return;
+  }
+  const j = up.job ? scans.jobs.get(up.job) : null;
+  if (up.dropped || j?.status === 'failed') {       // the server has told the room why already
+    setScanStatus(j?.detail || 'The server turned the scan down.', true);
+    return;
+  }
+  const detail = scanDetail(typeof body.detail === 'string' ? body.detail : typeof body.error === 'string' ? body.error : '');
+  let text;
+  if (up.rival) text = `${scanName(up.rival)} started adding a room here just before you. Wait for it, then try again.`;
+  else if (status === 0 || status === -1) {
+    text = up.progress < 1
+      ? 'The upload stopped part-way (the connection dropped, or the server turned it down). Keep this page open while it sends, and try again.'
+      : 'The connection dropped just as the scan arrived. If the room does not change in a moment, try again.';
+  } else if (status === 404 || status === 405) {
+    scans.enabled = false;                         // an older server: no scans here
+    text = 'This room server does not take scans.';
+  } else if (status === 413) text = detail || `That scan is too big for this server (at most ${sizeMB(scans.maxBytes)}).`;
+  else if (status === 429) {
+    const s = res.retry || Number(body.retry) || 0;
+    if (s > 0) scans.nextAt = Math.max(scans.nextAt, performance.now() + s * 1000);
+    const said = /\d+\s*(s|secs?|seconds?|min|minutes?|h|hours?)\b/i.test(detail);   // it already said when
+    text = sentence(detail || 'Too many rooms added just now') + (s > 0 && !said ? ` Try again in ${Math.ceil(s)} s.` : '');
+  } else if (status === 401 || status === 403) text = detail || 'The server did not recognise this page — reload it and try again.';
+  else if (status === 503) text = detail || 'The server cannot build rooms right now — try again in a minute.';
+  else text = detail || `The server could not use that scan (HTTP ${status}).`;
+  // The card showed this upload: it says what happened, with a toast; the panel has it too, for
+  // the next try. A server job of it stays the server's to end (its messages are the truth).
+  showNote(up, 'Your scan could not be added', text, SCAN.failHideMs);
+  toast(`Your scan could not be added: ${text}`, 'error');
+  setScanStatus(text, true);
+  syncScanUi();
+}
+
+/** How my upload ended, on the card ahead of the room's job, for a little while. */
+function showNote(up, title, detail, ms) {
+  clearTimeout(scans.noteTimer);
+  scans.note = { key: `note ${performance.now()}`, title, detail, up };
+  scans.noteTimer = setTimeout(clearNote, ms);
+  renderScanCard();
+}
+function clearNote() {
+  clearTimeout(scans.noteTimer);
+  if (!scans.note) return;
+  scans.note = null;
+  renderScanCard();
+}
+
+/** My upload's server job, named in its first messages (before the 202): a job this page has not
+ *  heard of, "uploading", by me, after this upload went out. An upload that ended here before it
+ *  heard (cancelled, turned down, cut off) can still hear it, for a minute: its echo is no news. */
+function adoptJob(id, status) {
+  const up = scans.last;
+  if (!up || up.job || !up.opened || scans.jobs.has(id) || scans.mine.has(id)) return;
+  if (status !== 'uploading' && !(up.ended && status === 'failed')) return;
+  if (up.ended && performance.now() - up.ended > 60000) return;
+  up.job = id;
+}
+const uploadOf = (id) => (scans.last?.job === id ? scans.last : null);
+
+/** A "scan" message from the server (or what GET /scan/<job> says about one). */
+function onScan(m, { quiet = false } = {}) {
+  const id = typeof m?.job === 'string' && SCAN_JOB.test(m.job) ? m.job : null;
+  const status = typeof m?.status === 'string' && m.status in SCAN_ORDER ? m.status : null;
+  if (!id || !status) return;
+  const by = typeof m.by === 'string' ? m.by.slice(0, 32) : '';
+  if (isMe(by)) { adoptJob(id, status); scans.mine.add(id); }
+  const opts = { progress: m.progress, detail: scanDetail(m.detail), by };
+  if (quiet && SCAN_ENDED.has(status)) {
+    if (status === 'done') scans.complete = true;
+    opts.quiet = true;
+  }
+  setScanJob(id, status, opts);
+  const up = scans.up;
+  if (up && !up.job && up.opened && !up.rival && by && !isMe(by) && SCAN_BUSY.has(status) && !scans.mine.has(id)) {
+    up.rival = by;
+    checkRival();
+  }
+}
+
+/** A job moves on (never back: a late poll or message is ignored; an ended job stays ended). The
+ *  card follows the room's newest job: the end of an older one (stopped for a newer upload) is
+ *  old news while the new one runs. */
+function setScanJob(id, status, { progress, detail, by, quiet = false } = {}) {
+  const now = performance.now();
+  let j = scans.jobs.get(id);
+  if (j && (SCAN_ORDER[status] < SCAN_ORDER[j.status] || SCAN_ENDED.has(j.status))) return;
+  if (!j) {
+    j = { id, status: '', detail: '', progress: 0, by: by || '', at: now, reached: new Set(), mine: false };
+    scans.jobs.set(id, j);
+    for (const old of scans.jobs.values()) {
+      if (scans.jobs.size <= SCAN.keepJobs) break;
+      if (old !== scans.job && old !== j) scans.jobs.delete(old.id);
+    }
+  }
+  const was = j.status, cur = scans.job;
+  j.by = by || j.by;
+  j.mine = scans.mine.has(id) || isMe(j.by);
+  j.status = status;
+  j.detail = typeof detail === 'string' ? detail.slice(0, 300) : was === status ? j.detail : '';
+  j.progress = Number.isFinite(Number(progress)) ? clamp(Number(progress), 0, 1) : was === status ? j.progress : 0;
+  j.at = now;
+  j.reached.add(status);
+  // My upload of this job ended here (cancelled, turned down, cut off), and the page said so: the
+  // server's echo of it is no news. Anything more it does with the scan is: the note gives way.
+  const up = uploadOf(id);
+  if (up?.ended && up.said) {
+    if (status === 'uploading' || (status === 'failed' && !j.reached.has('building'))) quiet = true;
+    else if (scans.note?.up === up) clearNote();
+  }
+  // The server ended the upload I am still sending (too big, a bad zip): stop sending it.
+  if (status === 'failed' && scans.up?.job === id && scans.up.phase !== 'checking' && !scans.up.ended) {
+    scans.up.dropped = true;
+    scans.up.xhr?.abort();
+  }
+  if (cur && cur !== j && SCAN_ACTIVE.has(cur.status) && !SCAN_ACTIVE.has(status)) return;
+  scans.job = j;
+  if (quiet) scans.closed = `${j.id} ${j.status}`;
+  else if (status !== was) scanMilestone(j, was);
+  renderScanCard();
+  if (status !== was || cur !== j) syncScanUi();
+  schedulePoll();
+}
+
+/** Toasts at the moments that matter to everyone; the card carries the rest. */
+function scanMilestone(j, was) {
+  clearTimeout(scans.hideTimer);
+  if (j.status === 'uploading' || j.status === 'building') {
+    if (!was && !j.mine) toast(`${scanName(j.by)} is adding a room they scanned`);
+  } else if (j.status === 'done') {
+    scans.complete = true;                         // no more versions: the room's version is the room now
+    showStageTag();
+    if (scans.held) flushHeld();
+    const text = j.reached.has('objects') && !/\bno object/i.test(j.detail) ? 'All the realistic objects are in' : j.detail;
+    // The server says so as it offers the last version; it goes in a few seconds later.
+    if (versionPending()) scans.held = { j, text, timer: setTimeout(flushHeld, SCAN.swapWaitMs) };
+    else { if (text) toast(text); hideDone(j); }
+  } else if (j.status === 'failed') {
+    // Someone sent another room: not an error, and not news to the one sending it.
+    const replaced = /newer scan/i.test(j.detail);
+    if (!(replaced && scans.up)) toast(`${scanTitle(j)}${j.detail ? ': ' + j.detail : ''}`, replaced ? '' : 'error');
+    scans.hideTimer = setTimeout(() => { if (scans.job === j) { scans.closed = `${j.id} ${j.status}`; renderScanCard(); } }, SCAN.failHideMs);
+  }
+  renderPeople();
+}
+function hideDone(j) {
+  clearTimeout(scans.hideTimer);
+  scans.hideTimer = setTimeout(() => { if (scans.job === j) { scans.closed = `${j.id} ${j.status}`; renderScanCard(); } }, SCAN.doneHideMs);
+}
+function flushHeld() {
+  const h = scans.held;
+  if (!h) return;
+  scans.held = null;
+  clearTimeout(h.timer);
+  if (h.text) toast(h.text);
+  hideDone(h.j);
+}
+/** A version the room is going to (or already on) is not on screen yet. */
+const versionPending = () => !!shown?.root && [ver.next, ver.room].some((v) => v != null && v !== shown.v);
+
+/** A version went in: the "done" said once it is the room, and the card's wording. */
+function onScanVersion() {
+  if (scans.held && !versionPending()) flushHeld();
+  renderScanCard();
+}
+
+/** A quick version offered while this room's scan is being built is that scan's room: its walls
+ *  are not the old room's, so everyone starts it at its spawn point. */
+function onScanOffer(m) {
+  const j = scans.job;
+  if (j && SCAN_BUSY.has(j.status) && m.stage === 'quick' && !j.firstV) j.firstV = versionOf(m);
+}
+const scanJobOf = (v) => [...scans.jobs.values()].find((j) => j.firstV === v) || null;
+
+function scanTitle(j) {
+  const pct = `${Math.round(j.progress * 100)}%`;
+  const got = j.reached.has('quick') || j.reached.has('objects');
+  switch (j.status) {
+    case 'uploading': return j.mine ? `Sending your scan… ${pct}` : `${scanName(j.by)} is sending a room scan… ${pct}`;
+    case 'building': return j.mine ? 'Building the room from your scan…' : `Building the room ${scanName(j.by)} scanned…`;
+    // The server says so as it offers the room; everyone moves in a few seconds later.
+    case 'quick': return versionPending() ? 'The quick room is ready — moving in…' : 'The quick room is here';
+    case 'objects': return 'Making realistic objects…';
+    case 'done':
+      if (j.reached.has('objects')) return 'The new room is complete';
+      return versionPending() ? 'The new room is ready — moving in…' : 'The new room is ready';
+    case 'failed':
+      if (got) return 'Realistic objects stopped';
+      return j.mine ? 'Your scan could not be added' : 'The scan could not be added';
+    default: return '';
+  }
+}
+
+/** What the card shows: my upload while it is on its way (as this browser counts it), then how it
+ *  ended if no job of the room's says that, else the room's job. null: nothing. */
+function scanView() {
+  const up = scans.up;
+  if (up && up.phase !== 'checking') {
+    const j = up.job ? scans.jobs.get(up.job) : null;
+    if (!j || j.status === 'uploading') {
+      const v = { key: `up ${up.phase}`, status: 'uploading', title: 'Sending your scan…', detail: `${up.name} · ${sizeMB(up.size)}`,
+                  frac: null, sweep: false, cancel: true };
+      if (up.phase === 'sending') { v.title = `Sending your scan… ${Math.round(up.progress * 100)}%`; v.frac = up.progress; }
+      else if (up.phase === 'waiting') v.detail = 'The server is busy — sending again in a moment…';
+      else if (up.phase === 'sent') Object.assign(v, { status: 'building', title: 'Sent — the server is checking your scan…', sweep: true, cancel: false });
+      return v;
+    }
+  }
+  const n = scans.note;
+  if (n) return { key: n.key, status: 'failed', title: n.title, detail: n.detail, frac: null, sweep: false, cancel: false };
+  const j = scans.job;
+  if (!j) return null;
+  const v = { key: `${j.id} ${j.status}`, status: j.status, title: scanTitle(j), detail: j.detail, frac: null, sweep: false, cancel: false };
+  switch (j.status) {
+    case 'uploading': v.frac = j.progress; break;
+    case 'building': v.detail ||= 'A quick version first, in a few seconds'; if (j.progress > 0) v.frac = j.progress; else v.sweep = true; break;
+    case 'quick':
+      if (scans.realistic !== false) { v.detail ||= 'Realistic objects are on their way (a few minutes)…'; v.sweep = true; }
+      break;
+    case 'objects': if (j.progress > 0) v.frac = j.progress; else v.sweep = true; break;
+    case 'done': v.frac = 1; break;
+    case 'failed':
+      if ((j.reached.has('quick') || j.reached.has('objects')) && !/stays/i.test(v.detail)) v.detail = (v.detail ? v.detail + ' — ' : '') + 'the room you have stays';
+      break;
+    default: break;
+  }
+  return v;
+}
+
+function renderScanCard() {
+  const card = $('scanCard'), v = joined ? scanView() : null;
+  if (!v || scans.closed === v.key) { card.hidden = true; return; }
+  card.hidden = false;
+  card.dataset.status = v.status;
+  card.classList.toggle('failed', v.status === 'failed');
+  card.classList.toggle('done', v.status === 'done');
+  $('scanTitle').textContent = v.title;
+  $('scanDetail').textContent = v.detail || '';
+  const bar = $('scanProgress');
+  bar.hidden = v.frac === null && !v.sweep;
+  bar.classList.toggle('sweep', v.sweep);
+  $('scanBar').style.width = v.sweep ? '' : `${Math.round((v.frac ?? 0) * 100)}%`;
+  $('scanCancel').hidden = !v.cancel;
+}
+
+/** The room chip's stage tag. A scan's version is a preview while more of it is still being made;
+ *  once the room's scan says it is done, that version is the room, and the tag goes. */
+function stageTag(stage) {
+  if (scans.complete && (stage === 'objects' || stage === 'quick')) return '';
+  return STAGE_TAGS[stage] || '';
+}
+function showStageTag() {
+  const tag = stageTag(shown?.manifest?.stage);
+  $('hudStage').textContent = tag;
+  $('hudStage').hidden = !tag;
+}
+
+/** What to say when a version goes in while a scan is on its way: the new room by name (and what
+ *  is still to come), then the first realistic objects; later batches only move the card along,
+ *  and the last one is the "done" toast's. '' says nothing. */
+function scanSwapToast(next) {
+  const j = scans.job, stage = next.manifest?.stage;
+  if (!j || (!SCAN_ACTIVE.has(j.status) && performance.now() - j.at > 30000)) return 'The room was updated';
+  const label = String(next.manifest?.label || 'the new room').slice(0, 60);
+  const more = SCAN_ACTIVE.has(j.status) && scans.realistic !== false;   // realistic objects still to come
+  if (stage === 'quick') return more ? `Here is ${label} — a quick version; realistic objects follow` : `Here is ${label}`;
+  if (stage === 'objects') {
+    if (j.toastedObjects || j.status === 'done') return '';
+    j.toastedObjects = true;
+    return 'Realistic objects are arriving';
+  }
+  return 'The room was updated';
+}
+
+/** GET /scan/<job>: what the server says about a job now. 'ok', 'gone' (404) or '' (no answer). */
+async function askScan(j) {
+  try {
+    const res = await fetch('scan/' + encodeURIComponent(j.id), { cache: 'no-store' });
+    if (res.status === 404) return 'gone';
+    if (!res.ok) return '';
+    const s = await res.json();
+    if (s && typeof s === 'object') onScan({ job: j.id, by: j.by, status: s.status, progress: s.progress, detail: s.detail });
+    return 'ok';
+  } catch { return ''; }                             // offline for now: the socket's reconnect asks again
+}
+
+/** My job, when its messages go quiet (a socket that was away, a message lost): ask the server. */
+function schedulePoll() {
+  clearTimeout(scans.pollTimer);
+  const j = scans.job;
+  if (!j || !j.mine || !SCAN_ACTIVE.has(j.status) || scans.up) return;
+  scans.pollTimer = setTimeout(() => pollScan(false), SCAN.pollMs);
+}
+
+async function pollScan(now) {
+  const j = scans.job;
+  if (!j || !j.mine || !SCAN_ACTIVE.has(j.status) || scans.up) return;
+  if (now || performance.now() - j.at >= SCAN.quietMs) {
+    if ((await askScan(j)) === 'gone' && scans.job === j) {
+      setScanJob(j.id, 'failed', { detail: 'The server no longer has this upload (it may have restarted). Add the room again.' });
+      return;
+    }
+  }
+  if (scans.job === j) schedulePoll();
+}
+
+/** Once a second: the cooldown on the panel's button, an upload a rival's beat, and a card nobody
+ *  has heard about for a long time (someone else's job, a message lost) put away. */
+setInterval(() => {
+  if (!joined) return;
+  if (!$('scanPanel').hidden && scans.nextAt > performance.now() - 1000) syncScanUi();
+  checkRival();
+  const j = scans.job;
+  if (j && SCAN_ACTIVE.has(j.status) && !j.mine && performance.now() - j.at > SCAN.staleMs && !$('scanCard').hidden) {
+    scans.closed = `${j.id} ${j.status}`;
+    renderScanCard();
+  }
+}, 1000);
+
+/** First visit to a room that takes scans: a ring on the button and one line about it. */
+function scanHint() {
+  if (!scans.enabled || scans.hinted || store.get('scanHintSeen', false)) return;
+  scans.hinted = true;
+  store.set('scanHintSeen', true);
+  $('scanBtn').classList.add('hint');
+  setTimeout(() => $('scanBtn').classList.remove('hint'), 10000);
+  setTimeout(() => toast('Scanned a room? Add room brings it into this call'), 1800);
+}
+
+$('scanBtn').addEventListener('click', () => ($('scanPanel').hidden ? openScanPanel() : togglePanel('scanPanel', false)));
+$('scanPickBtn').addEventListener('click', () => $('scanFile').click());
+$('scanFile').addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';                             // so picking the same file again is a change
+  if (file) addRoom(file);
+});
+// Cancel: while it is being sent, or while it waits to be sent again; not once all of it is out.
+$('scanCancel').addEventListener('click', () => {
+  const up = scans.up;
+  if (!up || (up.phase !== 'sending' && up.phase !== 'waiting')) return;
+  up.cancelled = true;
+  up.xhr?.abort();                                 // a finished one (waiting) fires nothing: the wake ends the wait
+  up.wake?.();
+});
+$('scanClose').addEventListener('click', () => {
+  const v = scanView();
+  if (v) scans.closed = v.key;
+  renderScanCard();
+});
+// Leaving the page mid-upload loses it: ask first (where the browser still asks). Only while one
+// is being sent: a page with an unload guard is kept out of the back-forward cache.
+function guardUnload(e) { e.preventDefault(); e.returnValue = ''; }
+
+// Panels open under the toolbar, however many rows it wraps to (a narrow window, an iPad in
+// portrait), so a panel never covers the button that opened it.
+{
+  const bar = document.querySelector('.toolbar');
+  const place = () => {
+    const r = bar.getBoundingClientRect();
+    if (r.height) document.documentElement.style.setProperty('--panel-top', `${Math.round(r.bottom + 8)}px`);
+  };
+  if (window.ResizeObserver) new ResizeObserver(place).observe(bar);
+  addEventListener('resize', place);
+}
+
+// A computer: drop the zip anywhere on the page. A file dropped anywhere else (the join screen, a
+// server without scans) is refused rather than opened in place of the room.
+{
+  let depth = 0;
+  const files = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  const can = () => joined && scans.enabled && !!me.id;
+  addEventListener('dragenter', (e) => {
+    if (!files(e)) return;
+    e.preventDefault();
+    depth++;
+    if (can()) $('scanDrop').hidden = false;
+  });
+  addEventListener('dragover', (e) => {
+    if (!files(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = can() ? 'copy' : 'none';
+  });
+  addEventListener('dragleave', (e) => {
+    if (!files(e)) return;
+    depth = Math.max(0, depth - 1);
+    if (!depth) $('scanDrop').hidden = true;
+  });
+  addEventListener('drop', (e) => {
+    if (!files(e)) return;
+    e.preventDefault();
+    depth = 0;
+    $('scanDrop').hidden = true;
+    const file = e.dataTransfer.files?.[0];
+    if (file && can()) addRoom(file);
+  });
+}
+
 /* ------------------------------------------------------------------ WebRTC mesh (perfect negotiation) */
 // polite = the lower id. The polite side yields on an offer collision, the impolite side ignores
 // the incoming offer; together that settles glare without either side tracking who started.
@@ -2563,7 +3330,11 @@ function handle(m) {
       // server restarted with a new scene, or swapped while we were away): it is loaded and
       // swapped in like any other, no page reload.
       const v = versionOf(m);
-      if (v !== undefined) { ver.gone.delete(v); ver.room = v; ver.frame = null; reconsider(); }
+      if (v !== undefined) {
+        // A room can run a version of its own (a scan someone added to it): joining it is not news.
+        if (!welcomed && shown?.v !== v) ver.quiet = v;
+        ver.gone.delete(v); ver.room = v; ver.frame = null; reconsider();
+      }
       clearPeers();
       for (const p of m.peers || []) {
         const peer = addPeer(p);
@@ -2575,6 +3346,7 @@ function handle(m) {
       mine.mode = String(m.avatars?.mode || '');
       mine.cooldown = Number(m.avatars?.cooldown) || 120;
       mine.key = typeof m.key === 'string' ? m.key : null;
+      me.key = mine.key;                           // the same key proves who sends a scan
       Object.assign(mine, { status: 'none', url: null, kind: '', claim: '' });
       $('bodyWhere').textContent = BODY_WHERE[mine.mode] || BODY_WHERE.standin;
       const held = mine.enabled ? session.get('rc.avatar') : null;
@@ -2584,6 +3356,7 @@ function handle(m) {
       }
       syncBodyUi();
       syncPoseTrack();
+      onScanWelcome(m);
       liveStatus(performance.now());
       if (!welcomed) { welcomed = true; enterRoom(); }
       renderPeople();
@@ -2606,6 +3379,7 @@ function handle(m) {
       break;
     }
     case 'state': onState(m); break;
+    case 'scan': onScan(m); break;
     case 'scene': {
       // A new version of the room: fetch it now; the room switches to it a few seconds later, at
       // the first state frame that carries it (or already has, if the server did not wait). The
@@ -2615,6 +3389,7 @@ function handle(m) {
       ver.gone.delete(v);
       ver.next = v === ver.room ? undefined : v;
       ver.nextAt = performance.now();
+      onScanOffer(m);
       reconsider();
       break;
     }
@@ -2718,6 +3493,8 @@ function enterRoom() {
   // A full body first (help follows when that panel is closed), unless there is nothing to ask.
   if (mine.enabled && mine.status === 'none' && !session.get('rc.avatar') && !bodySkipped()) openBodyPanel();
   else if (!store.get('helpSeen', false)) { togglePanel('help', true); store.set('helpSeen', true); }
+  scanHint();
+  renderScanCard();
 }
 
 /* ------------------------------------------------------------------ HUD buttons */
@@ -2729,14 +3506,16 @@ function togglePanel(id, force) {
   $('peopleBtn').setAttribute('aria-expanded', String(!$('people').hidden));
   $('helpBtn').setAttribute('aria-expanded', String(!$('help').hidden));
   $('bodyBtn').setAttribute('aria-expanded', String(!$('bodyPanel').hidden));
+  $('scanBtn').setAttribute('aria-expanded', String(!$('scanPanel').hidden));
 }
 function closePanels() {
   for (const id of PANELS) $(id).hidden = true;
   $('peopleBtn').setAttribute('aria-expanded', 'false');
   $('helpBtn').setAttribute('aria-expanded', 'false');
   $('bodyBtn').setAttribute('aria-expanded', 'false');
+  $('scanBtn').setAttribute('aria-expanded', 'false');
 }
-const PANELS = ['people', 'help', 'invitePop', 'bodyPanel'];
+const PANELS = ['people', 'help', 'invitePop', 'bodyPanel', 'scanPanel'];
 
 $('peopleBtn').addEventListener('click', () => togglePanel('people'));
 $('helpBtn').addEventListener('click', () => togglePanel('help'));
