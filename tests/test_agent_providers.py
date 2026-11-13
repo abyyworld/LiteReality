@@ -66,7 +66,9 @@ def test_settings_roles_inherit_the_global_provider(monkeypatch):
 
     monkeypatch.setenv("LR_AGENT_PROVIDER", "codex")
     monkeypatch.setenv("LR_AUTHOR_PROVIDER", "claude")
-    settings = load_settings()
+    unset = {f"{role}_provider": None   # unset, whatever the developer's own .env says
+             for role in ("materials", "quality", "refine", "procedural")}
+    settings = load_settings(**unset)
     assert settings.author_provider == "claude"
     assert settings.materials_provider == "codex"
     assert settings.as_environment()["LR_QUALITY_PROVIDER"] == "codex"

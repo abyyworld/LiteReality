@@ -605,10 +605,12 @@ def test_concurrency_sweeps_the_cpus_this_process_may_use(tmp_path, monkeypatch)
 
 
 def test_usable_cpus_honours_a_cgroup_quota(monkeypatch):
+    allowed = (len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity")   # not on macOS
+               else os.cpu_count() or 1)
     monkeypatch.setattr(physics, "_cgroup_cpus", lambda: 1.5)
-    assert physics.usable_cpus() == min(2, len(os.sched_getaffinity(0)))
+    assert physics.usable_cpus() == min(2, allowed)
     monkeypatch.setattr(physics, "_cgroup_cpus", lambda: None)
-    assert physics.usable_cpus() == len(os.sched_getaffinity(0))
+    assert physics.usable_cpus() == allowed
 
 
 def test_server_capacity_finds_the_largest_room_count_that_keeps_real_time(tmp_path,
