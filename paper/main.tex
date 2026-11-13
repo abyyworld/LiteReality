@@ -1,0 +1,198 @@
+% Draft for UIST 2027 (ACM acmart, sigconf). Build: latexmk -pdf main.tex
+% Numbers marked \measured{} come from results/ in this repository; \todo{} marks what is not done.
+\documentclass[sigconf,review,anonymous]{acmart}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\measured}[1]{#1}
+\newcommand{\sys}{RoomCall}
+
+\begin{document}
+
+\title{\sys: A Live, Photoreal, Physically Shared Copy of a Real Room for Ordinary Video Calls}
+
+\begin{abstract}
+Video calls show faces, not places. When one person wants others to see, and act in, the room
+they are in, today's options are a shaky camera tour or a headset-only telepresence system.
+We present \sys, which turns a phone LiDAR scan into a room that everyone on an ordinary Zoom,
+Meet or Teams call can open from a link in the chat. Everyone walks around in the browser, grabs,
+throws and rearranges the real furniture, and opens doors and drawers, with one physics
+simulation on a server so that all participants see the same room. The room is built
+progressively. A physics-ready sketch appears in \measured{2\,s}, and a photoreal Gaussian-splat
+room from the scan's own photos and LiDAR in \measured{10\,s}. A sharper, trained room streams
+in over the following \measured{3\,min}, while each object's generated mesh and articulation
+arrive in the background. To make the photoreal room interactive, we cut every movable object
+out of the splat with SAM~2 masks voted onto the splats, move its physics body to where the
+photos show it (but never into a wall), and patch the floor that no photo saw. We report build
+times and costs, visual fidelity on held-out photos, physics plausibility, and server capacity
+for real scans, and outline a study of presence and collaboration.
+\todo{study results}
+\end{abstract}
+
+\maketitle
+
+\section{Introduction}
+Scanning a room has become ordinary: LiDAR phones capture a room in a minute, and Apple's
+RoomPlan returns its walls, openings and furniture as labelled boxes. Sharing that room with
+the people on a call is not ordinary. Telepresence research has shown what shared spaces can do
+for remote collaboration \cite{virtualnexus,gaussiannexus,avatarpilot}. It assumes head-mounted
+displays and a client installed on every side, and it simulates physics, if at all, on each
+client separately, as social VR platforms do. \todo{cite Hubs, Croquet}.
+
+\sys{} takes the opposite stance: \emph{no new hardware and no install}. The room lives on a
+server and is shared by a link pasted into the call chat. Four design decisions follow:
+\begin{enumerate}
+  \item \textbf{One simulation, on the server.} A single MuJoCo simulation per room streams body
+        poses to every browser, so a chair one person throws lands in the same place for
+        everyone. Physics is the room's, not the client's.
+  \item \textbf{Progressive realism.} The room is usable within seconds of the scan and improves
+        live: a quick physics room, then an instant photoreal splat, then a trained splat, then
+        generated objects and articulated furniture. Every improvement is a version that swaps
+        in for everyone mid-call, carrying over what people have moved.
+  \item \textbf{Photoreal \emph{and} interactive.} A Gaussian splat looks like the real room but
+        is a single static cloud. We segment each movable object out of it with 2D foundation-model
+        masks voted onto the splats, and attach those splats to the object's physics body.
+  \item \textbf{Ordinary calls stay ordinary.} Voice and faces stay in Zoom/Meet/Teams. The room
+        adds a webcam hologram or full-body avatar of each person, and a Zoom App mode.
+\end{enumerate}
+
+\noindent Contributions:
+(1) the \sys{} system and its architecture of a server-side shared simulation for browser
+clients on existing video calls;
+(2) a progressive build pipeline from a phone scan to a photoreal, physically interactive room,
+including splat-object segmentation with physically valid pose correction and floor completion;
+(3) a technical evaluation on real scans of build time and cost, fidelity on held-out views,
+physics plausibility and capacity;
+(4) \todo{a user study comparing screen-shared video, a mesh room and a photoreal room}.
+
+\section{Related Work}
+\paragraph{Shared spaces for remote collaboration.}
+VirtualNexus \cite{virtualnexus} and GaussianNexus \cite{gaussiannexus} (UIST 2024, 2025) bring
+remote users into a captured space with head-mounted displays. GaussianNexus is the closest to our
+photoreal room, with room-scale splats and basic physics between a HoloLens and a Quest user.
+AvatarPilot \cite{avatarpilot} keeps pointing and grabbing aimed at the right objects across
+rooms. \todo{CrossGaussian (UIST'25 adjunct), Hubs/Croquet/Hyperfy (client-side physics)}.
+\sys{} differs in running on ordinary calls and browsers with one authoritative simulation.
+
+\paragraph{Scanned rooms as simulations.}
+LiteReality \cite{litereality} converts RGB-D scans into graphics- and simulation-ready
+indoor scenes. \sys{} builds on its pipeline and density-based physics estimates.
+DRAWER \cite{drawer} reconstructs articulated digital twins from video with splats; Splatting
+Physical Scenes \cite{splattingphysical} couples splats and meshes with MuJoCo; PhysTwin, SplatSim,
+Robo-GS and VR-GS \cite{phystwin,splatsim,robogs,vrgs} add physics to splats for robotics or VR.
+\todo{verify each citation; check ArtiTwinSplat, DREAM}.
+
+\paragraph{Fast and segmented Gaussian splatting.}
+We train with gsplat \cite{gsplat}, using MCMC densification. FastGS and the SIGGRAPH Asia 2025
+one-minute challenge \cite{fastgs,oneminute} suggest training can drop to about a minute.
+Online RGB-D mapping such as GSFusion \cite{gsfusion} grows splats as frames arrive. For objects
+we follow FlashSplat's \cite{flashsplat} idea of lifting 2D masks onto splats, by projection with
+a depth test, using SAM~2 \cite{sam2} prompted by the scanner's 3D boxes.
+
+\section{The \sys{} System}
+\todo{architecture figure: phone scan $\rightarrow$ builders (laptop/Modal) $\rightarrow$ versioned
+room on a volume $\rightarrow$ one server container (MuJoCo + FastAPI/WebSocket) $\rightarrow$
+browsers (three.js + Spark), with Zoom/Meet/Teams carrying audio.}
+
+\paragraph{Server.} One CPU container holds every room. A room's simulation steps at real time
+and broadcasts body poses. People grab with a spring to a hand target, and a throw keeps the
+body's velocity. Rooms are created on demand by link (\texttt{?room=\dots}) and dropped when empty.
+
+\paragraph{Versions.} Each build stage publishes a new version of the room. Browsers prefetch it
+and swap at a frame boundary, and the server carries object positions and active grabs across by
+body name. Splat bundles update on their own channel, since a training snapshot is not a new
+physics version.
+
+\paragraph{Clients.} three.js draws meshes and Spark~2.3 draws splats in the same scene. Each
+movable object's splat is a child of its body's node. Picking uses the (hidden) collision meshes,
+so grabbing the photoreal chair grabs the physical one. People appear as webcam holograms
+(MediaPipe segmentation on the sender's device) or as full-body splat avatars (LHM++ on a GPU).
+
+\section{From Scan to a Photoreal, Interactive Room}
+\begin{table}[t]
+\caption{Building the tea\_room scan (62 photos), measured from the start of each step. Costs are
+Modal list prices.}
+\label{tab:timeline}
+\begin{tabular}{lrr}
+\toprule
+Stage & Ready at & Cost \\
+\midrule
+Quick room (RoomPlan boxes $\rightarrow$ templates, photo walls, physics) & \measured{2.0\,s} & \$0 \\
+Instant splat (photos + LiDAR fused, no GPU) & \measured{10\,s} & \$0 \\
+Objects cut out by SAM~2 masks & \measured{+15\,s} & \measured{$<$\$0.01} \\
+First trained splat (gsplat, H100, step 2000) & \measured{81--102\,s} & \\
+Final trained splat (step 7000, 800k splats) & \measured{184\,s} & \measured{$\approx$\$0.30} \\
+Generated object meshes (TRELLIS, 4$\times$H100) & \measured{2.0--7.2\,min} & \measured{\$2.24} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Instant splat.} Every LiDAR depth sample of every photo becomes a flat disc, oriented
+along the surface normal and sized to the surface patch the pixel covers. Discs are fused on a
+voxel grid: per voxel, the sharpest view's geometry and the confidence-weighted mean colour.
+\measured{640k} splats, \measured{6\,MB}, \measured{10\,s} on a laptop CPU.
+
+\paragraph{Trained splat.} gsplat's trainer runs unchanged on a training set written directly
+from the scan. ARKit poses and intrinsics are the cameras, so no COLMAP is needed. Confident LiDAR
+samples initialise the splats and supervise depth, and a per-photo bilateral grid absorbs the
+phone's exposure changes. Snapshots stream to the call as they are produced.
+
+\paragraph{Interactive objects.} For each movable body:
+\begin{enumerate}
+  \item The body's box is projected into the photos that see it best, grown by 30\% because
+        RoomPlan places chairs 20--30\,cm off.
+  \item SAM~2 returns three candidate masks per box. We keep the best-scoring one that is not
+        mostly static furniture, judged by lifting its pixels with LiDAR depth, so a chair tucked
+        under a table is not mistaken for the table.
+  \item Every splat near the body votes, by projection into those photos with a LiDAR
+        visibility test. A splat inside the mask in at least two photos and half of the photos
+        that saw it belongs to the object.
+  \item The body is then moved to the median of its splats, measured on the instant splat whose
+        splats lie on surfaces. The move is scaled back if it would push the body deeper into
+        walls or static furniture than its scanned pose.
+  \item The floor under each object, never photographed, is patched with splats coloured from the
+        surrounding floor.
+\end{enumerate}
+
+\section{Evaluation}
+\subsection{Visual fidelity}
+We render each stage as the call draws it (headless Chromium, software WebGL), from every photo's
+own camera, and compare at 320$\times$240 (Table~\ref{tab:fidelity}). Object pixels come from
+LiDAR depth inside RoomPlan boxes. The splat is also scored separately on the trainer's held-out
+photos.
+\begin{table}[t]
+\caption{Fidelity against the scan's own photos (tea\_room, 62 views).}
+\label{tab:fidelity}
+\begin{tabular}{lrrrr}
+\toprule
+Stage & PSNR & SSIM & PSNR walls/floor & PSNR objects \\
+\midrule
+Flat mean colour (baseline) & \measured{13.81} & & & \\
+Mesh room: photo walls + TRELLIS objects & \measured{14.08} & \measured{0.690} & \measured{15.37} & \measured{11.73} \\
+Trained splat & \todo{} & \todo{} & \todo{} & \todo{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Physics and capacity}
+\todo{from litereality evaluate: grab/pull success per body, mass plausibility, overlaps, drift;
+step cost and rooms per CPU}.
+
+\subsection{Estimated physics}
+\todo{physics study: LiteReality vs an LLM vs measured mass, friction, restitution
+(doc/physics\_study.md)}.
+
+\section{User Study}
+\todo{protocol in paper/study\_protocol.md: 12--16 pairs; video vs mesh room vs photoreal room;
+spatial Q\&A, rearrangement, hand-over; IPQ, co-presence, NASA-TLX, logs, interviews.}
+
+\section{Limitations}
+Objects tucked deep under other furniture are seen too little to be segmented reliably (one of
+four chairs in tea\_room). Splats behind a moved object are missing, and only the floor is
+patched. View-dependent highlights on moved objects are not re-lit. MuJoCo ignores restitution.
+Webcam video is peer-to-peer without a TURN relay. Physics is estimated, not measured, unless the
+physics study's measurements are loaded.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+\end{document}

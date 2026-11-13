@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>litereality evaluate — render splats</title>
+<!-- The room call's own import map for splats (room_ops/roomcall/web/index.html): three.js 0.180
+     and Spark 2.3.1, the versions the call draws the photoreal room with. -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.min.js"
+}}</script>
+<style>html, body { margin: 0; background: transparent; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<script type="module">
+// render.html's job for a splat room: load one SPZ (the room's frame, MuJoCo Z up), draw it from
+// each camera it is given, hand back PNGs. Splats carry the photos' own light, so there are no
+// lights, environment or tone mapping here (as in the call, where Spark draws them unlit).
+// Spark sorts splats asynchronously, so each view is drawn a few times before it is read.
+import * as THREE from 'three';
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true,
+                                           preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+scene.add(new SparkRenderer({ renderer, maxStdDev: Math.sqrt(5) }));
+const world = new THREE.Group();
+world.rotation.x = -Math.PI / 2;
+scene.add(world);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+camera.matrixAutoUpdate = false;
+scene.add(camera);
+
+let loaded = null;
+const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+async function load(url) {
+  if (loaded && loaded.url === url) return;
+  const mesh = new SplatMesh({ url });
+  await mesh.initialized;
+  if (loaded) { world.remove(loaded.mesh); loaded.mesh.dispose?.(); }
+  world.add(mesh);
+  loaded = { url, mesh };
+}
+
+function place(view) {
+  camera.matrix.fromArray(view.matrixWorld);
+  camera.matrixWorld.copy(camera.matrix);
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  camera.projectionMatrix.fromArray(view.projection);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+window.renderViews = async (job) => {
+  await load(job.glb);
+  renderer.setSize(job.width, job.height, false);
+  const out = [];
+  for (const view of job.views) {
+    place(view);
+    for (let i = 0; i < 6; i++) { renderer.render(scene, camera); await frame(); }
+    renderer.render(scene, camera);
+    out.push(canvas.toDataURL('image/png'));
+  }
+  return out;
+};
+window.renderReady = true;
+</script>
+</body></html>

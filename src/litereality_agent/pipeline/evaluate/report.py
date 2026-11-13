@@ -48,7 +48,9 @@ from litereality_agent.pipeline.evaluate import holdout as held
 SCENE_NAME = "scene.xml"
 # Export folder -> stage, in the order a room goes through them.
 STAGE_FOLDERS = {"quick": "quick", "objects": "objects", "mujoco_seed": "full", "mujoco": "full"}
-STAGE_ORDER = ("demo", "quick", "objects", "full")
+STAGE_ORDER = ("demo", "quick", "objects", "splat", "full")
+# The photoreal room (`pipeline/splatroom`): its uncut trained snapshot, and the physics it rides on.
+SPLAT_RAW = Path("splat") / "raw.spz.bin"
 REPORT_JSON, REPORT_MD = "report.json", "report.md"
 COMPARISON = "comparison"
 
@@ -87,10 +89,23 @@ def find_scenes(target: Path | str) -> list[tuple[str, Path]]:
         if scene.is_file() and stage not in seen:
             seen.add(stage)
             found.append((stage, scene))
+    raw = target / SPLAT_RAW
+    if raw.is_file():
+        physics_scene = next((p for p in (target / "objects" / "scene_splat.xml",
+                                          target / "objects" / SCENE_NAME,
+                                          target / "quick" / SCENE_NAME) if p.is_file()), None)
+        if physics_scene is not None:
+            found.append(("splat", physics_scene))
     if not found:
         raise ValueError(f"{target}: no scene.xml, and none of "
                          f"{', '.join(f + '/scene.xml' for f in STAGE_FOLDERS)}")
     return found
+
+
+def _splat_raw(scene: Path) -> Path | None:
+    """The splat snapshot beside a run's physics scene (run/<scan>/objects/scene*.xml)."""
+    raw = Path(scene).parent.parent / SPLAT_RAW
+    return raw if raw.is_file() else None
 
 
 def _name(scene: Path) -> str:
@@ -203,7 +218,8 @@ def evaluate_scene(scene: Path | str, out_dir: Path | str, *, name: str | None =
     ``render``). Returns the report. Fidelity needs the scan (given, or `infer_scan`); without one,
     or when it cannot be measured, the report says why rather than losing the physics it did."""
     scene = Path(scene).expanduser().resolve()
-    stage = stage_of(scene)
+    splat_raw = _splat_raw(scene) if name == "splat" or (name or "").endswith("/splat") else None
+    stage = "splat" if splat_raw is not None else stage_of(scene)
     name = name or _name(scene)
     folder = Path(out_dir) / name
     folder.mkdir(parents=True, exist_ok=True)
@@ -226,11 +242,16 @@ def evaluate_scene(scene: Path | str, out_dir: Path | str, *, name: str | None =
                                           "build did not record one)")
         else:
             try:
-                report["fidelity"] = fidelity.evaluate_fidelity(
-                    scene, scan_dir, renderer=renderer, size=size, max_views=max_views,
-                    out_dir=folder, title=f"{scan_dir.name} · {name.split('/')[-1]}",
-                    holdout=holdout,
-                    holdout_split=holdout_split)
+                if splat_raw is not None:
+                    report["fidelity"] = fidelity.evaluate_splat_fidelity(
+                        splat_raw.read_bytes(), scan_dir, size=size, max_views=max_views,
+                        out_dir=folder, title=f"{scan_dir.name} · splat")
+                else:
+                    report["fidelity"] = fidelity.evaluate_fidelity(
+                        scene, scan_dir, renderer=renderer, size=size, max_views=max_views,
+                        out_dir=folder, title=f"{scan_dir.name} · {name.split('/')[-1]}",
+                        holdout=holdout,
+                        holdout_split=holdout_split)
             except FIDELITY_ERRORS as exc:
                 report["fidelity_skipped"] = f"fidelity failed: {type(exc).__name__}: {exc}"
             except Exception as exc:  # noqa: BLE001 — Playwright's errors are plain Exceptions

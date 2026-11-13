@@ -93,6 +93,7 @@ START_TIMEOUT_MS = 45_000     # the page loading three.js: an unreachable CDN fa
 THREE_VERSION = "0.168.0"
 CDN = f"https://cdn.jsdelivr.net/npm/three@{THREE_VERSION}/"
 RENDER_PAGE = Path(__file__).with_name("render.html")
+RENDER_SPLAT_PAGE = Path(__file__).with_name("render_splat.html")
 
 # (x, y, z) -> (x, z, -y): the client's `world.rotation.x = -PI/2`, as a matrix.
 Z_UP_TO_THREE = np.array([[1.0, 0.0, 0.0, 0.0],
@@ -592,21 +593,23 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def serve_page(glb: bytes):
-    """A throwaway HTTP server on 127.0.0.1 holding the render page and the glb, in memory; yields
-    its base URL. A file:// page cannot fetch a glb or use an import map in every browser."""
-    page = RENDER_PAGE.read_bytes()
+def serve_page(glb: bytes, *, page_file: Path = RENDER_PAGE, route_name: str = "/scene.glb",
+               kind: str = "model/gltf-binary"):
+    """A throwaway HTTP server on 127.0.0.1 holding the render page and the room (a glb, or an
+    SPZ for the splat page), in memory; yields its base URL. A file:// page cannot fetch a glb
+    or use an import map in every browser."""
+    page = page_file.read_bytes()
 
     class Handler(_Quiet):
         def do_GET(self) -> None:  # noqa: N802 — the http.server API
             route = self.path.split("?", 1)[0]
-            body, kind = {"/": (page, "text/html"), "/index.html": (page, "text/html"),
-                          "/scene.glb": (glb, "model/gltf-binary")}.get(route, (None, None))
+            body, ctype = {"/": (page, "text/html"), "/index.html": (page, "text/html"),
+                           route_name: (glb, kind)}.get(route, (None, None))
             if body is None:
                 self.send_error(404)
                 return
             self.send_response(200)
-            self.send_header("Content-Type", kind)
+            self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
@@ -631,6 +634,9 @@ class PlaywrightRenderer:
     and tests. Extra browser flags may come in ``$LR_EVAL_CHROMIUM_ARGS``."""
 
     name = "playwright-chromium"
+    page_file = RENDER_PAGE
+    asset = "scene.glb"
+    asset_kind = "model/gltf-binary"
 
     def __init__(self, *, executable: str | None = None, three_dir: str | None = None,
                  timeout_s: float = 120.0) -> None:
@@ -671,7 +677,8 @@ class PlaywrightRenderer:
 
         out: list[np.ndarray] = []
         errors: list[str] = []
-        with serve_page(glb) as base, sync_playwright() as pw:
+        with serve_page(glb, page_file=self.page_file, route_name="/" + self.asset,
+                        kind=self.asset_kind) as base, sync_playwright() as pw:
             try:
                 browser = pw.chromium.launch(executable_path=self.executable, args=self._args(),
                                              headless=True)
@@ -694,7 +701,7 @@ class PlaywrightRenderer:
                     raise RuntimeError(f"the render page did not start, loading {where}: "
                                        f"{errors or exc}") from exc
                 for i in range(0, len(cameras), BATCH):
-                    job = {"glb": "scene.glb", "width": size[0], "height": size[1],
+                    job = {"glb": self.asset, "width": size[0], "height": size[1],
                            "views": cameras[i:i + BATCH]}
                     urls = page.evaluate("job => window.renderViews(job)", job)
                     for url in urls:
@@ -706,9 +713,75 @@ class PlaywrightRenderer:
         return out
 
 
+class SplatRenderer(PlaywrightRenderer):
+    """`PlaywrightRenderer` for a splat room: `render_splat.html` draws an SPZ with Spark 2.3.1 on
+    three.js 0.180, in the same software WebGL, from the same cameras. Its ``render`` takes the
+    SPZ bytes where the glb renderer takes a glb. three.js and Spark come from the CDN."""
+
+    name = "playwright-chromium-spark"
+    page_file = RENDER_SPLAT_PAGE
+    asset = "scene.spz"
+    asset_kind = "application/octet-stream"
+
+    def _route_three(self, page) -> None:     # $LR_EVAL_THREE_DIR holds 0.168, not 0.180
+        return
+
+
 @functools.lru_cache(maxsize=1)
 def default_renderer() -> Renderer:
     return PlaywrightRenderer()
+
+
+def splat_training_frames(scan_dir: Path | str, test_every: int = 8) -> set[int]:
+    """The capture frames gsplat's trainer trained on: all but every `test_every`-th of them in
+    name order (its own held-out rule, `deploy/modal/splat`), by frame index."""
+    from litereality_agent.models.splat.rgbd import load_frames
+
+    frames = load_frames(scan_dir)
+    return {f.index for i, f in enumerate(frames) if i % test_every != 0}
+
+
+def evaluate_splat_fidelity(spz: bytes, scan_dir: Path | str, *,
+                            renderer: Renderer | None = None, size: tuple[int, int] = SIZE,
+                            max_views: int | None = None, out_dir: Path | str | None = None,
+                            contact_views: int = CONTACT_VIEWS, title: str = "",
+                            test_every: int = 8) -> dict:
+    """`evaluate_fidelity` for a trained splat room (`pipeline/splatroom`, the uncut snapshot):
+    the same cameras, masks and metrics, drawn by Spark. A view is "seen" when the trainer
+    trained on that photo, so ``splits`` puts the trainer's own held-out photos apart."""
+    started = time.perf_counter()
+    views = capture_views(scan_dir, max_views)
+    if not views:
+        raise ValueError(f"{scan_dir}: no frame_*.json with a matching frame_*.jpg to compare with")
+    plan = parse_room(scan_dir)
+    objects, openings = scan_boxes(plan)
+    renderer = renderer or SplatRenderer()
+    regions = {v.index: view_regions(v, plan, objects, openings, size) for v in views}
+    photos = {v.index: load_photo(v.image, size) for v in views}
+    sources = held.Sources(True, {"training": sorted(splat_training_frames(scan_dir,
+                                                                          test_every))})
+    per_view, sheet_rows, render_seconds = _score(renderer, spz, views, regions, photos, size,
+                                                  sources)
+    masks = [r["mask"] for r in per_view]
+    out: dict[str, Any] = {
+        "scan": str(scan_dir), "scene": "splat", "views": len(views), "size": list(size),
+        "render_scale": RENDER_SCALE, "renderer": renderer.name,
+        "renderer_version": getattr(renderer, "version", ""),
+        "object_mask": {"depth": masks.count("depth"), "box": masks.count("box")},
+        "sources": sources.summary(), "views_seen": _seen_counts(per_view),
+        "summary": _summarise(per_view), "splits": _splits(per_view), "per_view": per_view,
+        "seconds": {"render": round(render_seconds, 2),
+                    "total": round(time.perf_counter() - started, 2)},
+        "definitions": DEFINITIONS,
+    }
+    if out_dir is not None and contact_views > 0:
+        picks = np.linspace(0, len(sheet_rows) - 1, min(contact_views, len(sheet_rows)))
+        frames = [sheet_rows[i]["frame"] for i in sorted(set(picks.round().astype(int).tolist()))]
+        chosen = [r for r in sheet_rows if r["frame"] in frames]
+        sheet = contact_sheet(chosen, Path(out_dir) / "contact_sheet.jpg",
+                              title=f"{title} · splats" if title else "splats")
+        out["contact_sheet"] = sheet.name
+    return out
 
 
 # ── the evaluation ───────────────────────────────────────────────────────────────────────────────

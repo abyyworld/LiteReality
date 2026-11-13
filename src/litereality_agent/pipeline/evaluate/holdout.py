@@ -44,7 +44,7 @@ DEFAULT_SPLIT = "interleaved"
 # conf_00012.png. Leaving a frame out of a build means leaving out every one of them.
 FRAME_FILE = re.compile(r"^(?:frame|depth|conf)_(\d+)\.[A-Za-z0-9]+$")
 QUICK_REPORT, OBJECTS_REPORT = "quick.json", "objects.json"
-ROLES = ("textures", "colours", "crops")
+ROLES = ("textures", "colours", "crops", "training")
 
 
 def _read_json(path: Path) -> dict | None:

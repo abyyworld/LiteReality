@@ -335,3 +335,23 @@ def test_photo_masks_decide_what_is_the_object_and_move_its_body_there(tmp_path)
     body = parts.bodies["Box0"]
     assert len(body) >= 0.95 * len(top)                   # the masked top (edges may fall out) ...
     assert np.allclose(body.positions[:, 2], 0.25, atol=1e-4)    # ... and no floor; body frame
+
+
+def test_evaluate_finds_the_splat_stage_and_the_trainers_held_out_photos(tmp_path, scan):
+    from litereality_agent.pipeline.evaluate import fidelity
+    from litereality_agent.pipeline.evaluate.report import find_scenes
+
+    run = tmp_path / "run"
+    (run / "objects").mkdir(parents=True)
+    (run / "objects" / "scene.xml").write_text(SCENE.format(x=1.0))
+    assert [s for s, _ in find_scenes(run)] == ["objects"]
+    (run / "splat").mkdir()
+    (run / "splat" / "raw.spz.bin").write_bytes(spz.encode(random_splats(10)))
+    assert [s for s, _ in find_scenes(run)] == ["objects", "splat"]
+    (run / "objects" / "scene_splat.xml").write_text(SCENE.format(x=1.1))
+    assert dict(find_scenes(run))["splat"] == run / "objects" / "scene_splat.xml"
+
+    for i in range(1, 17):                                  # 17 frames: 0..16
+        _frame_looking_down(scan, index=i)
+    trained = fidelity.splat_training_frames(scan)
+    assert trained == set(range(17)) - {0, 8, 16}           # every 8th, in name order, held out
