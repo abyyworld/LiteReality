@@ -37,6 +37,7 @@ from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, s
 DEFAULT_DIR = "splat"
 BUNDLE = "splat.json"
 REPORT = "report.json"
+SPLAT_SCENE = "scene_splat.xml"  # the physics with the bodies moved, beside the scene cut against
 RAW = "raw.spz.bin"            # the latest snapshot uncut (not a bundle file: never served)
 INSTANT_VOXEL = 0.016          # ~640k splats, ~6 MB for tea_room: on screen in seconds
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -121,7 +122,12 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                       snap_bodies=not waiting, move_bodies=move_bodies)
         if state["corrections"] is None and not waiting:
             state["corrections"] = parts.corrections
-            fixed = corrected_scene(Path(scene_xml), parts.corrections or {})
+            # An earlier run's moved physics may still be the served one; with nothing moved
+            # this time the bodies are cut at the scanned poses, so serve those again.
+            earlier = Path(scene_xml).with_name(SPLAT_SCENE)
+            moved_before = earlier.is_file() and earlier.resolve() != Path(scene_xml).resolve()
+            fixed = corrected_scene(Path(scene_xml), parts.corrections or {},
+                                    out_name=SPLAT_SCENE)
             report["corrections"] = parts.corrections
             report["corrected_scene"] = str(fixed) if fixed else None
             if fixed:
@@ -129,6 +135,9 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                     f"{'photos' if state['masks'] is not None else 'splat'} show them: {fixed}")
                 if on_scene:
                     on_scene(fixed)
+            elif moved_before and on_scene:
+                log(f"  no object moved this time: the physics as scanned again ({scene_xml})")
+                on_scene(Path(scene_xml))
         bundle = write_bundle(out_dir, parts, stage=stage, step=step)
         if stage == "trained" and not extra.get("replayed"):
             # The trained snapshot, uncut, for evaluation and for cutting again (`SavedTrainer`).
@@ -162,10 +171,10 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         def fetch() -> None:
             t = time.perf_counter()
             try:
-                from litereality_agent.pipeline.splatroom.split import _geom_boxes
+                from litereality_agent.pipeline.splatroom.split import _static_boxes
 
-                static = _geom_boxes(model, data, [b for b in range(1, model.nbody)
-                                                   if b not in set(bodies.values())])
+                # Walls included: a SAM candidate lying mostly on the wall is not the object.
+                static = _static_boxes(model, data, set(bodies.values()))
                 got = object_masks.request(views, segment, static_boxes=static)
             except Exception as exc:  # noqa: BLE001 — the boxes still cut the room
                 report["masks_error"] = f"{type(exc).__name__}: {exc}"
@@ -183,6 +192,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         mask_thread.start()
         if trainer is None or instant_only:
             mask_thread.join()
+            mask_thread = None
             if state["masks"] is None:
                 segment = None                     # failed: snap by the boxes after all
             publish(instant, "instant", None, {})
@@ -226,6 +236,21 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                 report["error"] = event.get("error")
                 report["trainer_log"] = (event.get("log") or "")[-4000:]
                 log(f"  training failed: {event.get('error')}")
+    if mask_thread is not None:
+        # The trainer ended without a snapshot (it failed, or never started): the masks are still
+        # used, or the boxes snap the bodies, so the room left behind is never the unsnapped
+        # first cut; and the thread is done before it can touch the report being written.
+        mask_thread.join()
+        mask_thread = None
+        if state["masks"] is None:
+            segment = None
+        publish(instant, "instant", None, {})
+    if isinstance(trainer, SavedTrainer) and not instant_only:
+        # A re-cut trains nothing: the report keeps what the training run measured.
+        for key in ("dataset_s", "dataset_mb", "trainer_started_s", "gpu", "trainer_s"):
+            if key in trainer.report:
+                report[key] = trainer.report[key]
+        report["recut"] = True
     report["total_s"] = round(time.perf_counter() - t0, 2)
     (out_dir / REPORT).write_text(json.dumps(report, indent=1))
     return report
@@ -250,10 +275,11 @@ class SavedTrainer:
     def stream(self, _dataset_tar: bytes, _options: dict | None = None):
         trained = [b for b in self.report.get("bundles", []) if b.get("stage") == "trained"]
         step = trained[-1]["step"] if trained else 0
-        yield {"kind": "started", "seconds": 0.0, "gpu": None}
-        yield {"kind": "snapshot", "step": step, "seconds": 0.0, "splats": None,
-               "spz": self.data, "replayed": True}
-        yield {"kind": "done", "seconds": 0.0, "stats": self.report.get("stats") or {}}
+        yield {"kind": "started", "seconds": 0.0, "gpu": self.report.get("gpu")}
+        yield {"kind": "snapshot", "step": step, "splats": None, "spz": self.data, "replayed": True,
+               "seconds": (trained[-1].get("trainer_s") if trained else None) or 0.0}
+        yield {"kind": "done", "seconds": self.report.get("trainer_s") or 0.0,
+               "stats": self.report.get("stats") or {}}
 
 
 def upload_bundle(volume, name: str, out_dir: Path, bundle: dict) -> int:

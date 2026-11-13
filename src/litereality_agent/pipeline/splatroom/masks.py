@@ -186,7 +186,7 @@ def _choose(pngs: list[bytes], scores: list[float], view: View, static_boxes) ->
 def request(views: dict[str, View], call: Callable[[dict], dict], *,
             static_boxes=None) -> ObjectMasks:
     """Ask the segment function (`call`, e.g. a Modal Function's ``remote``) for every view's
-    masks. With `static_boxes` (`split._geom_boxes` of the static bodies) SAM's three candidates
+    masks. With `static_boxes` (`split._static_boxes`: static bodies and walls) SAM's three candidates
     are fetched and the best one that is not mostly static furniture is kept (`_choose`); a box
     whose every candidate is furniture gets no mask. Raises RuntimeError with the function's own
     message when it refuses."""

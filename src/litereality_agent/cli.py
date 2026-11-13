@@ -726,13 +726,15 @@ def _splatroom(args) -> int:
         options["test_every"] = 100000
     on_bundle = on_scene = None
     segment = None
-    if not args.no_masks and not args.upload_only and ambient:
+    # SAM 2 runs on a Modal GPU: an instant-only room ("no GPU, free") is cut by the boxes.
+    masks = not (args.no_masks or args.upload_only or args.instant_only)
+    if masks and ambient:
         import modal as modal_sdk
 
         from litereality_agent.models.splat.remote import SEGMENT_APP, SEGMENT_FUNCTION
 
         segment = modal_sdk.Function.from_name(SEGMENT_APP, SEGMENT_FUNCTION).remote
-    elif not args.no_masks and not args.upload_only:
+    elif masks:
         from litereality_agent.models.splat.remote import segment_call
 
         segment = segment_call(environment_name=modal["environment"] or "main",
@@ -758,7 +760,7 @@ def _splatroom(args) -> int:
 
                 done = hosted.publish(fixed, name=name, volume=volume, label=args.label or name,
                                       stage="objects")
-                print(f"    physics with the moved objects published: {done.version}")
+                print(f"    physics published ({fixed.name}): {done.version}")
         if args.upload_only:
             bundle = splatroom.read_bundle(out)
             if not args.publish or bundle is None:
@@ -1053,7 +1055,8 @@ def _parser() -> argparse.ArgumentParser:
     splat.add_argument("--output-root")
     splat.add_argument("--label", help="the room's name on the hosted link (default: the scan's)")
     splat.add_argument("--instant-only", action="store_true",
-                       help="only the instant splat from the photos and LiDAR (no GPU, free)")
+                       help="only the instant splat from the photos and LiDAR, cut by the boxes "
+                            "(no GPU, free)")
     splat.add_argument("--steps", type=int, default=None,
                        help="training steps on the GPU (default 7000)")
     splat.add_argument("--no-holdout", action="store_true",

@@ -60,9 +60,10 @@ INDEX = """<!doctype html><html><head><meta charset="utf-8"><title>t</title>
 # The stand-in CLI the builds run: `quickroom SCAN --out DIR --label=L` writes a scene with Chair0
 # (free) and Table0 (static); `realroom SCAN --out DIR ...` writes the base there first (no
 # objects.json, as the real one), then SCAN_FAKE_VERSIONS versions, each with objects.json and
-# the lines `realroom` prints. SCAN_FAKE_QUICK / SCAN_FAKE_REAL: ok | fail | hang (and for the
-# quick build, hog: it holds 200 MB and waits). Each run records its argv and pid under
-# SCAN_FAKE_LOG.
+# the lines `realroom` prints; `splatroom SCAN --out DIR ...` writes a one-file bundle there
+# (and with SCAN_FAKE_SPLAT=hang then waits). SCAN_FAKE_QUICK / SCAN_FAKE_REAL: ok | fail | hang
+# (and for the quick build, hog: it holds 200 MB and waits). Each run records its argv and pid
+# under SCAN_FAKE_LOG.
 FAKE_CLI = textwrap.dedent('''
     import json, os, sys, time
     from pathlib import Path
@@ -94,6 +95,15 @@ FAKE_CLI = textwrap.dedent('''
         tmp.write_text(text)
         os.replace(tmp, out / "scene.xml")
 
+    if cmd == "splatroom":
+        out.mkdir(parents=True, exist_ok=True)
+        spz = "room-0123456789abcdef.spz"
+        (out / spz).write_bytes(b"splats of " + label.encode())
+        (out / "splat.json").write_text(json.dumps({"room": spz, "bodies": {}, "stage": "instant",
+                                                    "step": None, "created": time.time()}))
+        if os.environ.get("SCAN_FAKE_SPLAT") == "hang":
+            time.sleep(600)
+        sys.exit(0)
     mode = os.environ.get("SCAN_FAKE_QUICK" if cmd == "quickroom" else "SCAN_FAKE_REAL", "ok")
     time.sleep(float(os.environ.get("SCAN_FAKE_SLEEP", "0")))
     if cmd == "quickroom":
@@ -560,7 +570,7 @@ def fake_cli(tmp_path, monkeypatch):
     log = tmp_path / "children"
     monkeypatch.setenv("SCAN_FAKE_LOG", str(log))
     for name in ("SCAN_FAKE_QUICK", "SCAN_FAKE_REAL", "SCAN_FAKE_SLEEP", "SCAN_FAKE_VERSIONS",
-                 "SCAN_FAKE_STEP"):
+                 "SCAN_FAKE_STEP", "SCAN_FAKE_SPLAT"):
         monkeypatch.delenv(name, raising=False)
     return SimpleNamespace(command=[sys.executable, str(path)], log=log)
 
@@ -881,32 +891,32 @@ def test_when_the_builds_together_hold_too_much_the_biggest_goes(tmp_path, monke
                                 install=None, release=lambda *a: None)
         small, big = (scans.ScanJob(j, "r", None, "c", tmp_path, "zip", created=0)
                       for j in ("small", "big"))
-        small.proc = SimpleNamespace(pid=101, returncode=None)
-        big.proc = SimpleNamespace(pid=102, returncode=None)
-        small.rss = 400 * mb
+        small.procs = [SimpleNamespace(pid=101, returncode=None)]
+        big.procs = [SimpleNamespace(pid=102, returncode=None)]
+        small.rss = {101: 400 * mb}
         svc.jobs = {"small": small, "big": big}
         killed = []
 
-        def kill(job):
-            killed.append(job.id)
-            job.proc.returncode = -9
+        def kill(proc):
+            killed.append(proc.pid)
+            proc.returncode = -9
 
-        monkeypatch.setattr(svc, "_kill", kill)
+        monkeypatch.setattr(svc, "_kill_proc", kill)
         said_big: list[str] = []
         said_small: list[str] = []
-        await asyncio.wait_for(svc._watch_memory(big, big.proc, "realroom", 0, said_big), 5)
-        big.proc, big.rss = None, 0                      # as `_child` leaves it
-        await asyncio.wait_for(svc._watch_memory(small, small.proc, "quickroom", 0,
+        await asyncio.wait_for(svc._watch_memory(big, big.procs[0], "realroom", 0, said_big), 5)
+        big.procs, big.rss = [], {}                      # as `_child` leaves it
+        await asyncio.wait_for(svc._watch_memory(small, small.procs[0], "quickroom", 0,
                                                  said_small), 5)
         held[101] = 600 * mb                            # over its own share now
         reads[101] = 0
         said_own: list[str] = []
-        await asyncio.wait_for(svc._watch_memory(small, small.proc, "quickroom", 500 * mb,
+        await asyncio.wait_for(svc._watch_memory(small, small.procs[0], "quickroom", 500 * mb,
                                                  said_own), 5)
         return killed, said_big, said_small, said_own
 
     killed, said_big, said_small, said_own = asyncio.run(main())
-    assert killed == ["big", "small"]
+    assert killed == [102, 101]
     assert said_big == ["the server ran short of memory for building rooms; try again later"]
     assert said_small == [] and said_own == ["quickroom needed more than 500 MB of memory"]
 
@@ -927,7 +937,7 @@ def test_a_stopped_build_leaves_nothing_for_asyncio_to_complain_about(tmp_path, 
         job = scans.ScanJob("s1", "r", None, "c", tmp_path, "zip", created=0)
         task = asyncio.ensure_future(svc._child(job, ["quickroom"], timeout=60))
         await asyncio.sleep(0.3)
-        pid = job.proc.pid
+        pid = job.procs[0].pid
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task

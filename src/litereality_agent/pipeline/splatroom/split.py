@@ -86,6 +86,43 @@ def _geom_boxes(model: mujoco.MjModel, data: mujoco.MjData, bodies: list[int]):
     return out
 
 
+SLAB_NORMAL_Z = 0.7    # a box whose thinnest side faces this close to up is a floor or ceiling slab
+
+
+def _shell_geoms(model: mujoco.MjModel, data: mujoco.MjData) -> list[int]:
+    """The room shell's upright parts (walls, window frames, doors): the worldbody's colliding
+    geoms whose thinnest side does not face up. The exporter puts the whole shell on the
+    worldbody, not on a body of its own. Floor and ceiling slabs are left out, or a chair's legs,
+    which stand on the floor slab, would be locked to the room; the floor is already kept by the
+    cut's `FLOOR` rule. Planes and visual-only geoms (the photo meshes) say nothing about where
+    the walls are."""
+    start, count = int(model.body_geomadr[0]), int(model.body_geomnum[0])
+    out = []
+    for g in range(start, start + count):
+        if int(model.geom_type[g]) == int(mujoco.mjtGeom.mjGEOM_PLANE):
+            continue
+        if not (int(model.geom_contype[g]) or int(model.geom_conaffinity[g])):
+            continue
+        half = np.asarray(model.geom_aabb[g][3:], dtype=np.float64)
+        R = np.asarray(data.geom_xmat[g], dtype=np.float64).reshape(3, 3)
+        if abs(R[2, int(np.argmin(half))]) >= SLAB_NORMAL_Z:
+            continue
+        out.append(g)
+    return out
+
+
+def _static_boxes(model: mujoco.MjModel, data: mujoco.MjData, movable) -> list:
+    """`_geom_boxes` of everything static: the bodies that never move and the room shell's walls
+    (`_shell_geoms`, as body 0), so a chair against a wall never takes a patch of the wall."""
+    movable = set(movable)
+    out = _geom_boxes(model, data, [b for b in range(1, model.nbody) if b not in movable])
+    for g in _shell_geoms(model, data):
+        aabb = np.asarray(model.geom_aabb[g], dtype=np.float64)
+        R = np.asarray(data.geom_xmat[g], dtype=np.float64).reshape(3, 3)
+        out.append((0, R, np.asarray(data.geom_xpos[g]) + R @ aabb[:3], aabb[3:]))
+    return out
+
+
 def _union_box(model: mujoco.MjModel, data: mujoco.MjData, body: int):
     """One box around all of a body's geoms (`_body_geoms`), in the body's own frame, as a
     `_geom_boxes` entry: the real object fills its scanned box, not only the template's parts."""
@@ -191,8 +228,17 @@ def corrected_scene(scene_xml: Path, corrections: dict[str, dict],
                     out_name: str = "scene_splat.xml") -> Path | None:
     """`scene_xml` with every snapped body moved to where the splat says it is: written beside it
     (so its relative mesh and texture paths still resolve) as `out_name`; None if nothing moved.
-    Only top-level bodies are moved (a free body's pos is then its room position)."""
+    Only top-level bodies are moved (a free body's pos is then its room position). When nothing
+    moves, an `out_name` left by an earlier run is removed: its bodies sit where this cut's do
+    not, and whatever picks it up first (the evaluation does) would pair them."""
+    out = Path(scene_xml).with_name(out_name)
+
+    def unchanged() -> None:
+        if out != Path(scene_xml):
+            out.unlink(missing_ok=True)
+
     if not corrections:
+        unchanged()
         return None
     import xml.etree.ElementTree as ET
 
@@ -214,8 +260,8 @@ def corrected_scene(scene_xml: Path, corrections: dict[str, dict],
         body.set("quat", " ".join(f"{v:.6g}" for v in q / np.linalg.norm(q)))
         moved += 1
     if not moved:
+        unchanged()
         return None
-    out = Path(scene_xml).with_name(out_name)
     tree.write(out, encoding="unicode")
     return out
 
@@ -386,25 +432,32 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
     """Cut `splats` (see the module docstring). `masks` (`masks.ObjectMasks`) makes the photos'
     object outlines decide wherever a photo saw a splat. `corrections` (from an earlier split of
     the same room) are applied instead of snapping again, so every snapshot of a room is cut with
-    the bodies where its first one put them. With `move_bodies` False nothing is moved (no snap,
-    no correction): for a room whose physics is already live and stays as it is."""
+    the bodies where its first one put them; an empty dict means the first one moved nothing, and
+    nothing moves. With masks, the photos place the bodies they outline (`_corrections_from_votes`)
+    and the free bodies they do not are snapped. With `move_bodies` False nothing is moved (no
+    snap, no correction): for a room whose physics is already live and stays as it is."""
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     movable = sorted(movable_body_ids(model))
-    if corrections is not None:
+    fixed = corrections is not None
+    corrections = dict(corrections) if fixed else {}        # never the caller's dict
+    if fixed:
         _apply(model, data, corrections)
-    else:
-        corrections = {}
-    snap_bodies = snap_bodies and move_bodies
-    from_votes = masks is not None and len(masks) > 0 and not corrections and snap_bodies
-    if snap_bodies and not corrections and not from_votes and len(splats):
-        static = [b for b in range(1, model.nbody) if b not in movable]
-        static_boxes = _geom_boxes(model, data, static)
+    snap_bodies = snap_bodies and move_bodies and not fixed
+    named: dict[str, int] = {}
+    if masks is not None and len(masks):
+        with_masks = {n for per in masks.masks.values() for n in per}
+        named = {body_name(model, b): b for b in movable if body_name(model, b) in with_masks}
+    from_votes = snap_bodies and bool(named)
+    if snap_bodies and len(splats):
+        static_boxes = _static_boxes(model, data, movable)
         pos64 = splats.positions.astype(np.float64)
         for b in movable:
             j = _free_joint(model, b)
             if j is None or int(model.body_parentid[b]) != 0:
                 continue
+            if from_votes and body_name(model, b) in named:
+                continue                                    # the photos place it
             dx, dy, dyaw, before, after = snap(pos64, model, data, b, static_boxes)
             if dx == dy == dyaw == 0.0:
                 continue
@@ -430,8 +483,7 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
     if not boxes or not len(splats):
         return Split(room=splats, corrections=corrections)
     boxes += [_union_box(model, data, b) for b in movable if _body_geoms(model, b)]
-    static_boxes = _geom_boxes(model, data, [b for b in range(1, model.nbody)
-                                             if b not in movable])
+    static_boxes = _static_boxes(model, data, movable)
 
     bottom: dict[int, float] = {}
     for b, R, c, half in boxes:
@@ -464,27 +516,28 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
             best_body[np.flatnonzero(taken)[locked]] = -1
         owner[lo:lo + CHUNK] = best_body
 
-    if masks is not None and len(masks):
+    if named:
         from litereality_agent.pipeline.splatroom.masks import vote
 
-        with_masks = {n for per in masks.masks.values() for n in per}
-        named = {body_name(model, b): b for b in movable if body_name(model, b) in with_masks}
-        if named:
-            voted = vote(pos, masks, model, data, named)
-            low = np.array([bottom.get(b, -np.inf) for b in range(model.nbody)])
-            say = voted >= 0
-            say &= pos[:, 2] > low[np.maximum(voted, 0)] + floor
-            if static_boxes and say.any():
-                say[np.flatnonzero(say)[_inside_any(pos[say], static_boxes, STATIC_KEEP)]] = False
-            owner = np.where(say, voted, owner)
-            # Seen by the photos and outside every mask: not one of the masked bodies after all.
-            masked_ids = np.array(sorted(named.values()))
-            drop = (voted == -1) & np.isin(owner, masked_ids)
-            owner[drop] = -1
-            if from_votes:
-                corrections.update(_physical(model, _corrections_from_votes(
-                    model, data, owner, pos, named)))
-                _apply(model, data, {n: corrections[n] for n in corrections})
+        voted = vote(pos, masks, model, data, named)
+        low = np.array([bottom.get(b, -np.inf) for b in range(model.nbody)])
+        say = voted >= 0
+        say &= pos[:, 2] > low[np.maximum(voted, 0)] + floor
+        if static_boxes and say.any():
+            say[np.flatnonzero(say)[_inside_any(pos[say], static_boxes, STATIC_KEEP)]] = False
+        owner = np.where(say, voted, owner)
+        # Seen by the photos and in no mask: not the body the boxes gave it, but only if that
+        # body's own photos saw it. -1 says some body's box saw it, and a neighbour's grown
+        # prompt box seeing it outside the neighbour's mask says nothing about this body.
+        for name, b in named.items():
+            idx = np.flatnonzero((voted == -1) & (owner == b))
+            if len(idx):
+                own = vote(pos[idx], masks, model, data, {name: b})
+                owner[idx[own == -1]] = -1
+        if from_votes:
+            moved = _physical(model, _corrections_from_votes(model, data, owner, pos, named))
+            corrections.update(moved)
+            _apply(model, data, moved)
     result = Split(room=splats.subset(owner < 0), corrections=corrections)
     for b in movable:
         mine = owner == b

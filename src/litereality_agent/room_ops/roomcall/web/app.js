@@ -517,7 +517,9 @@ function installVersion(next) {
   if (old?.root) { world.remove(old.root); disposeTree(old.root); }
   world.add(next.root);
   shown = next; bodies = next.bodies; sceneRoot = next.root;
-  attachBodySplats();
+  // Another room's splats would stand over this one's (its meshes hidden under them) until its
+  // own bundle had loaded, and for good if that failed: drop them, and its meshes are drawn.
+  if (fresh) clearSplat(); else attachBodySplats();
   refreshSplat();
   sceneReady = true;
   applyManifest(next.manifest, fresh);
@@ -621,7 +623,8 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.code === 'Escape') { if (capture) capture.cancelled = true; else closePanels(); return; }
   if (!joined) return;
-  if (e.code === 'KeyP' && photo.room) { togglePhoto(); return; }
+  // Once per press: a held key repeats, and every repeat would flip the room again.
+  if (e.code === 'KeyP' && photo.room) { if (!e.repeat) togglePhoto(); return; }
   keys.add(e.code);
   if (e.code.startsWith('Arrow')) e.preventDefault();
 });
@@ -1202,21 +1205,29 @@ function applyPhoto() {
 async function refreshSplat() {
   if (!shown?.v || spark.failed) return;
   const gen = ++photo.gen, v = shown.v;
+  // No bundle for this version, so none of another version's stays over its meshes (it may be
+  // another room's); what this version already shows stays, unless a 404 says it has none.
+  const failed = (none = false) => {
+    if (gen === photo.gen && photo.room && (none || photo.v !== v)) clearSplat();
+  };
   let man;
   try {
     const res = await fetch('splat.json?v=' + encodeURIComponent(v), { cache: 'no-cache' });
     if (gen !== photo.gen) return;
-    if (!res.ok) { if (res.status === 404 && photo.room) clearSplat(); return; }
+    if (!res.ok) { failed(res.status === 404); return; }
     man = await res.json();
-  } catch (err) { console.warn('splat manifest', err); return; }
-  if (gen !== photo.gen || !man || typeof man.room !== 'string' || !SPLAT_URL.test(man.room)) return;
+  } catch (err) { console.warn('splat manifest', err); failed(); return; }
+  if (gen !== photo.gen) return;
+  if (!man || typeof man.room !== 'string' || !SPLAT_URL.test(man.room)) { failed(); return; }
   if (photo.v === v && photo.created === man.created) return;
   const entries = Object.entries(man.bodies || {}).filter(([n, u]) => typeof n === 'string' && typeof u === 'string' && SPLAT_URL.test(u));
   let SPARK;
-  try { SPARK = await loadSpark(); } catch { return; }
+  try { SPARK = await loadSpark(); } catch { failed(); return; }
   const made = [];
   const load = async (url) => {
-    const mesh = new SPARK.SplatMesh({ url });
+    // Not raycastable: picking is the meshes' job, and Spark would test every splat of every body
+    // on each hover pick (opacity 0 or not) only for pick() to drop the hits.
+    const mesh = new SPARK.SplatMesh({ url, raycastable: false });
     made.push(mesh);
     mesh.opacity = 0;
     await mesh.initialized;
@@ -1237,6 +1248,7 @@ async function refreshSplat() {
   } catch (err) {
     made.forEach(disposeSplat);
     console.warn('the photoreal room could not be loaded:', err?.message || err);
+    failed();
   }
 }
 

@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import logging
 import math
@@ -795,8 +796,9 @@ class ScanConfig:
     scratch: Path | None = None              # where jobs unpack (default: a temp folder)
     command: Sequence[str] | None = None     # the child launcher before the CLI's arguments
     store: Any = None                        # rooms' scanned versions across restarts (`RoomStore`)
-    # Where each scanned room's photoreal splat bundle is written (`<root>/<room name>/`, read by
-    # the server's `splats.SplatSource.per_room`); None: no splats for scanned rooms.
+    # Where each scan's photoreal splat bundle is written (`<root>/<splats.scan_name(job id)>/`,
+    # read by the server's `splats.SplatSource.per_room`; deleted when the room's next scan goes
+    # in or the room is let go); None: no splats for scanned rooms.
     splats_root: Path | None = None
     splat_timeout: float = 1200.0
 
@@ -838,8 +840,11 @@ class ScanJob:
     ended: float | None = None
     cancelled: bool = False
     task: asyncio.Task | None = None
-    proc: Any = None            # the child running now
-    rss: int = 0                # ...and the memory it held when last looked at (bytes)
+    # The children running now: the splat child runs beside the objects one, so each is killed
+    # by its own handle, and both are when the job stops.
+    procs: list = field(default_factory=list)
+    rss: dict = field(default_factory=dict)   # ...and the memory each held when last looked at
+                                              # (bytes, by pid)
     offered: list[str] = field(default_factory=list)   # versions it gave the room, in order
     label: str = ""
     saving: list = field(default_factory=list)          # copies to the store, still being made
@@ -868,6 +873,7 @@ class _RoomScans:
     job: ScanJob | None = None
     latest: dict | None = None
     scanned: bool = False
+    splats: list[str] = field(default_factory=list)   # its scans' bundles on disk, by name
     drop: asyncio.TimerHandle | None = None
 
 
@@ -1062,6 +1068,31 @@ class ScanService:
             store = self.config.store
             if store is not None:
                 self._spawn(asyncio.to_thread(store.forget, room_id))
+        # Its photoreal rooms too, once its build has ended (its splat child writes there).
+        waits = [job.task] if job is not None and job.task is not None else []
+        for name in state.splats:
+            folder = self._splat_folder(name)
+            if folder is not None:
+                self._spawn(self._remove(folder, waits))
+
+    def _splat_folder(self, name: str) -> Path | None:
+        """Where the bundle `name` (`splats.scan_name`) is written (None: no splats here)."""
+        root = self.config.splats_root
+        return Path(root) / name if root is not None else None
+
+    @staticmethod
+    def _own(job: ScanJob, ref):
+        """`ref` as one of this job's versions: its photoreal room is the scan's own bundle
+        (`splats.scan_name`), and its id is the job's alone, so the same files sent into two
+        rooms are two versions, each finding its own room's bundle (a version is shared by every
+        room that has its id)."""
+        from dataclasses import replace
+
+        from litereality_agent.room_ops.roomcall.hosted import version_name
+        from litereality_agent.room_ops.roomcall.splats import scan_name
+
+        digest = hashlib.sha256(f"{ref.id}/{job.id}".encode()).hexdigest()
+        return replace(ref, id=version_name(ref.label, digest), splat=scan_name(job.id))
 
     def scanned(self, room_id: str) -> None:
         """`room_id` runs a scanned version (restored from the store, say): let it go like one."""
@@ -1305,6 +1336,7 @@ class ScanService:
         """Unpack, the quick room, then (where this server makes them) the realistic objects.
         Never raises into the loop; everything it started is stopped and deleted at the end."""
         realistic_slot = False
+        splats = None
         try:
             self._set(job, BUILDING, stage="quick", detail="Building the quick room…",
                       progress=0.0)
@@ -1320,7 +1352,9 @@ class ScanService:
             await self._child(job, ["quickroom", str(scan.root), "--out", str(quick_out),
                                     f"--label={scan.label}"], timeout=self.config.quick_timeout,
                               memory=self.config.quick_memory)
-            ref = await asyncio.to_thread(self._ref, quick_out / "scene.xml", scan.label, "quick")
+            ref = await asyncio.to_thread(self._ref, quick_out / "scene.xml", scan.label, "quick",
+                                          job)
+            await self._replace_splats(job)
             vid = await self.install(job.room, ref)
             job.offered.append(vid)
             job.offered_at = asyncio.get_running_loop().time()
@@ -1364,21 +1398,41 @@ class ScanService:
         finally:
             if realistic_slot:
                 self._realistic_running -= 1
+            # The splat child runs beside the objects: stopped too (with train, a GPU run that
+            # costs money) before the folder it reads goes, whatever ended the build.
+            if splats is not None:
+                splats.cancel()                   # a no-op once it has ended
+                with contextlib.suppress(BaseException):
+                    await splats
             self._kill(job)
             self._cleanup(job)
+
+    async def _replace_splats(self, job: ScanJob) -> None:
+        """The room's earlier scans' photoreal rooms are deleted as this scan's room goes in (their
+        builds were stopped when this one came); this one's is kept for when the room is let go."""
+        from litereality_agent.room_ops.roomcall.splats import scan_name
+
+        state = self.rooms.get(job.room)
+        if state is None or state.job is not job:
+            return
+        for name in state.splats:
+            folder = self._splat_folder(name)
+            if folder is not None:
+                await asyncio.to_thread(shutil.rmtree, folder, True)
+        state.splats = [scan_name(job.id)]
 
     def _splat_task(self, job: ScanJob, scan: Scan, scene: Path, *, train: bool):
         """The photoreal room for this scan, in a child beside the objects (`splatroom`): the
         instant splat from the photos and LiDAR in seconds, then, when `train`, the GPU's
-        snapshots. Written where the server's splat source reads this room's name, so browsers
-        swap each in by themselves. The physics in the call stays as it is (``--keep-physics``).
+        snapshots. Written where the server's splat source reads the scan's versions' bundle
+        (`splats.scan_name`, set by `_own`), so browsers swap each in by themselves. The physics
+        in the call stays as it is (``--keep-physics``).
         None when this server makes no splats or the upload has no photos."""
-        root = self.config.splats_root
-        if root is None or scan.frames == 0:
-            return None
-        from litereality_agent.room_ops.roomcall.hosted import NAME_CHARS, scene_name
+        from litereality_agent.room_ops.roomcall.splats import scan_name
 
-        out = Path(root) / scene_name(scan.label)[:NAME_CHARS]
+        out = self._splat_folder(scan_name(job.id))
+        if out is None or scan.frames == 0:
+            return None
         args = ["splatroom", str(scan.root), "--scene", str(scene), "--out", str(out),
                 "--keep-physics", f"--label={scan.label}"]
         if not train:
@@ -1398,14 +1452,14 @@ class ScanService:
         except Exception as exc:  # noqa: BLE001
             log.warning("roomcall: scan %s: the photoreal room failed: %s", job.id, exc)
 
-    def _ref(self, scene: Path, label: str, stage: str):
+    def _ref(self, scene: Path, label: str, stage: str, job: ScanJob):
         from litereality_agent.room_ops.roomcall.hosted import scene_digest, version_name
         from litereality_agent.room_ops.roomcall.server import SceneRef
 
         if not scene.is_file():
             raise ChildFailed("the build wrote no scene")
-        return SceneRef(scene=scene, id=version_name(label, scene_digest(scene)), label=label,
-                        stage=stage)
+        return self._own(job, SceneRef(scene=scene, id=version_name(label, scene_digest(scene)),
+                                       label=label, stage=stage))
 
     def _mark_scanned(self, job: ScanJob, scene: Path, vid: str, stage: str) -> None:
         state = self.rooms.get(job.room)
@@ -1487,7 +1541,7 @@ class ScanService:
             with contextlib.suppress(ChildFailed, ValueError, OSError):
                 if (out / "objects.json").is_file():
                     final = await asyncio.to_thread(self._ref, out / "scene.xml", scan.label,
-                                                    "objects")
+                                                    "objects", job)
                     if final.id not in job.offered:
                         waiting = final
             if waiting is not None:
@@ -1515,6 +1569,8 @@ class ScanService:
             ref = await watch.check()
         except (ValueError, OSError):
             return None               # nothing there yet, or caught mid-write: look again
+        if ref is not None:
+            ref = self._own(job, ref)
         if ref is None or ref.id in job.offered or not (out / "objects.json").is_file():
             return None
         return ref
@@ -1549,7 +1605,7 @@ class ScanService:
             *self.config.launcher(), *args, cwd=str(job.dir), env=env,
             stdin=asyncio.subprocess.DEVNULL, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, start_new_session=True, limit=1 << 20)
-        job.proc = proc
+        job.procs.append(proc)
         errors: deque[str] = deque(maxlen=60)
 
         async def pump(reader: asyncio.StreamReader, sink: Callable[[str], None]) -> None:
@@ -1582,17 +1638,17 @@ class ScanService:
         try:
             await asyncio.wait_for(work, timeout)
         except asyncio.TimeoutError:
-            self._kill(job)
+            self._kill_proc(proc)
             raise ChildFailed(f"{args[0]} took longer than {timeout:g} s") from None
         finally:
             watch.cancel()
             if proc.returncode is None:
-                self._kill(job)
+                self._kill_proc(proc)
                 with contextlib.suppress(Exception):
                     await asyncio.shield(proc.wait())
-            if job.proc is proc:
-                job.proc = None
-            job.rss = 0
+            with contextlib.suppress(ValueError):
+                job.procs.remove(proc)
+            job.rss.pop(proc.pid, None)
         if over:
             raise ChildFailed(over[0])
         if proc.returncode != 0:
@@ -1613,25 +1669,30 @@ class ScanService:
             rss = resident_bytes(proc.pid)
             if rss is None:
                 return
-            job.rss = rss
-            running = [j for j in self.jobs.values() if j.proc is not None]
-            total = sum(j.rss for j in running) + (0 if job in running else rss)
+            job.rss[proc.pid] = rss
+            held = [n for j in {*self.jobs.values(), job} for n in j.rss.values()]
+            total = sum(held)
             if memory > 0 and rss > memory:
                 over.append(f"{what} needed more than {_amount(memory)} of memory")
             elif c.children_memory > 0 and total > c.children_memory and \
-                    all(rss >= j.rss for j in running):
+                    all(rss >= n for n in held):
                 over.append("the server ran short of memory for building rooms; try again "
                             "later")
             if over:
                 log.warning("roomcall: scan %s: %s killed at %.0f MB (%s)", job.id, what,
                             rss / 1e6, over[0])
-                self._kill(job)
+                self._kill_proc(proc)
                 return
             await asyncio.sleep(c.memory_seconds)
 
     def _kill(self, job: ScanJob) -> None:
-        """Kill the job's child and everything it started (its process group)."""
-        proc = job.proc
+        """Kill every child of the job and everything they started."""
+        for proc in list(job.procs):
+            self._kill_proc(proc)
+
+    @staticmethod
+    def _kill_proc(proc) -> None:
+        """Kill one child and everything it started (its process group)."""
         if proc is None or proc.returncode is not None:
             return
         with contextlib.suppress(ProcessLookupError, PermissionError, OSError, AttributeError):
@@ -1682,6 +1743,11 @@ class ScanService:
             else:
                 for job in self.jobs.values():
                     shutil.rmtree(job.dir, ignore_errors=True)
+        for state in self.rooms.values():
+            for name in state.splats:
+                folder = self._splat_folder(name)
+                if folder is not None:
+                    shutil.rmtree(folder, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------------------------

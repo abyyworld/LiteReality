@@ -8,9 +8,12 @@ tells every room ``{"t": "splat", "name", "created"}``, and browsers fetch the n
 them in under the bodies already on screen.
 
 Where a room's bundle is:
-- locally (`litereality roomcall ... --splat DIR`), one fixed folder for whatever is served;
+- locally (`litereality roomcall ... --splat DIR`), one fixed folder for the room served;
 - hosted, ``<Volume>/splats/<room name>/``, the room name being its versions' (`tea_room` for
-  ``tea_room-1a2b3c4d5e6f``), uploaded by ``litereality splatroom <scan> --publish``.
+  ``tea_room-1a2b3c4d5e6f``), uploaded by ``litereality splatroom <scan> --publish``;
+- for a scan sent into a room during the call, ``<scratch>/splats/<scan_name(job id)>/``: named
+  by the scan, not its label, so two rooms' scans of a "Living Room" never share one, and a scan
+  labelled like the deployed room never stands in for the deployed room's bundle.
 
     GET /splat.json?v=<version>   the bundle for that version's room (404 when it has none), with
                                   every file as a URL: {"name", "stage", "step", "created",
@@ -32,12 +35,26 @@ NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _VERSION = re.compile(r"^(?P<name>[A-Za-z0-9_-]{1,48})-[0-9a-f]{12}$")
 MAX_FILE_BYTES = 200 * 1024 * 1024
 POLL_SECONDS = 2.0
+# The URL name (``splat/<name>/<file>``) of the bundle of a version with no room name: never a
+# room name itself (`hosted.scene_name` strips '-' from both ends; `room_name` refuses it).
+NO_NAME = "-"
 
 
 def room_name(version_id: str) -> str | None:
     """`tea_room` for the version id `tea_room-1a2b3c4d5e6f`; None for anything else."""
     m = _VERSION.match(version_id or "")
-    return m.group("name") if m else None
+    return m.group("name") if m and m.group("name") != NO_NAME else None
+
+
+# The bundle name of a version that has none (a room's scan restored after a restart: its
+# bundle was on the old container's disk). No source has a folder for it.
+NO_BUNDLE = ""
+
+
+def scan_name(job_id: str) -> str:
+    """The bundle name of one scan sent into a room (`scans.ScanJob.id`, `s` and 16 hex): every
+    version that scan gives the room shares it."""
+    return f"scan-{job_id}"
 
 
 class SplatSource:
@@ -51,10 +68,13 @@ class SplatSource:
         self._cache: dict[Path, tuple[float, dict | None]] = {}
 
     @classmethod
-    def fixed(cls, folder: Path) -> "SplatSource":
-        """One folder, whatever room is served (the local `--splat DIR`)."""
+    def fixed(cls, folder: Path, *, name: str | None = None) -> "SplatSource":
+        """One folder (the local `--splat DIR`): for the room called `name` only, when given,
+        so a room scanned during the call is not drawn as the served one; else for any."""
         folder = Path(folder)
-        return cls(lambda _name: folder)
+        if name is None:
+            return cls(lambda _name: folder)
+        return cls(lambda asked: folder if asked == name else None)
 
     @classmethod
     def per_room(cls, root: Path, *, poll_seconds: float = 10.0) -> "SplatSource":
@@ -84,9 +104,12 @@ class SplatSource:
             return fallback
         return cls(folder_for, poll_seconds=min(s.poll_seconds for s in given))
 
+    def _folder(self, name: str | None) -> Path | None:
+        return None if name == NO_BUNDLE else self.folder_for(name)
+
     def bundle(self, name: str | None) -> dict | None:
         """The raw ``splat.json`` of `name`'s room (re-read only when its mtime changes)."""
-        folder = self.folder_for(name)
+        folder = self._folder(name)
         if folder is None:
             return None
         path = folder / BUNDLE
@@ -121,7 +144,7 @@ class SplatSource:
         """One SPZ file of `name`'s room, if the name is a bundle file name at all."""
         if not FILE.match(file or ""):
             return None
-        folder = self.folder_for(name)
+        folder = self._folder(name)
         if folder is None:
             return None
         path = folder / file
