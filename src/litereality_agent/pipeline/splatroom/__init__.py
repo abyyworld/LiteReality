@@ -129,10 +129,11 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                 if on_scene:
                     on_scene(fixed)
         bundle = write_bundle(out_dir, parts, stage=stage, step=step)
-        # The whole snapshot, uncut, for evaluation and for cutting again later.
-        raw = out_dir / RAW
-        raw.with_suffix(".tmp").write_bytes(spz.encode(splats))
-        os.replace(raw.with_suffix(".tmp"), raw)
+        if stage == "trained" and not extra.get("replayed"):
+            # The trained snapshot, uncut, for evaluation and for cutting again (`SavedTrainer`).
+            raw = out_dir / RAW
+            raw.with_suffix(".tmp").write_bytes(spz.encode(splats))
+            os.replace(raw.with_suffix(".tmp"), raw)
         entry = {"stage": stage, "step": step, "at": round(time.perf_counter() - t0, 2),
                  "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
                  "bodies": len(parts.bodies), "masks": state["masks"] is not None,
@@ -187,7 +188,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
 
     if trainer is not None and not instant_only:
         t = time.perf_counter()
-        tar = splat_dataset.build(frames).tar()
+        tar = b"" if isinstance(trainer, SavedTrainer) else splat_dataset.build(frames).tar()
         report["dataset_s"] = round(time.perf_counter() - t, 2)
         report["dataset_mb"] = round(len(tar) / 1e6, 1)
         log(f"  training set: {len(frames)} photos, {report['dataset_mb']} MB; "
@@ -210,7 +211,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
             elif kind == "snapshot":
                 splats = spz.decode(event["spz"])
                 publish(splats, "trained", int(event["step"]),
-                        {"trainer_s": round(float(event["seconds"]), 1)})
+                        {"trainer_s": round(float(event["seconds"]), 1),
+                         **({"replayed": True} if event.get("replayed") else {})})
             elif kind == "done":
                 report["stats"] = event.get("stats") or {}
                 report["trainer_s"] = round(float(event.get("seconds") or 0), 1)
@@ -226,6 +228,31 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     report["total_s"] = round(time.perf_counter() - t0, 2)
     (out_dir / REPORT).write_text(json.dumps(report, indent=1))
     return report
+
+
+class SavedTrainer:
+    """The last trained snapshot in `out_dir` (`RAW`), replayed as if the GPU had just sent it:
+    re-cut a room (new masks, new cutting rules) without training it again."""
+
+    name = "saved snapshot"
+
+    def __init__(self, out_dir: Path) -> None:
+        self.raw = Path(out_dir) / RAW
+        try:
+            self.report = json.loads((Path(out_dir) / REPORT).read_text())
+        except (OSError, ValueError):
+            self.report = {}
+        if not self.raw.is_file():
+            raise FileNotFoundError(f"{self.raw}: no trained snapshot to re-cut (train it first)")
+        self.data = self.raw.read_bytes()            # now: the run itself rewrites the folder
+
+    def stream(self, _dataset_tar: bytes, _options: dict | None = None):
+        trained = [b for b in self.report.get("bundles", []) if b.get("stage") == "trained"]
+        step = trained[-1]["step"] if trained else 0
+        yield {"kind": "started", "seconds": 0.0, "gpu": None}
+        yield {"kind": "snapshot", "step": step, "seconds": 0.0, "splats": None,
+               "spz": self.data, "replayed": True}
+        yield {"kind": "done", "seconds": 0.0, "stats": self.report.get("stats") or {}}
 
 
 def upload_bundle(volume, name: str, out_dir: Path, bundle: dict) -> int:

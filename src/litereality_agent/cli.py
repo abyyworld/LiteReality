@@ -704,7 +704,9 @@ def _splatroom(args) -> int:
     settings = load_settings()
     modal = _modal_kwargs(settings)
     trainer = None
-    if not args.instant_only:
+    if args.recut:
+        trainer = splatroom.SavedTrainer(out)
+    elif not args.instant_only:
         from litereality_agent.models.splat.remote import ModalSplatTrainer
 
         trainer = ModalSplatTrainer(environment_name=modal["environment"] or "main",
@@ -1041,6 +1043,9 @@ def _parser() -> argparse.ArgumentParser:
                        help="train on every photo (no held-out PSNR/SSIM/LPIPS)")
     splat.add_argument("--publish", action="store_true",
                        help="put every snapshot on the deployed room call link as it lands")
+    splat.add_argument("--recut", action="store_true",
+                       help="cut the last trained snapshot in --out again (new masks, new rules) "
+                            "instead of training: no GPU time but the masks')")
     splat.add_argument("--no-masks", action="store_true",
                        help="cut objects by their boxes only (no SAM 2 masks from the photos)")
     splat.add_argument("--upload-only", action="store_true",

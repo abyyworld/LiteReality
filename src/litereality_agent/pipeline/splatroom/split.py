@@ -310,6 +310,51 @@ def _corrections_from_votes(model, data, owner, pos, named: dict[str, int]) -> d
     return out
 
 
+PENETRATION_SLACK = 0.005     # metres a corrected body may sink into static geometry beyond before
+
+
+def _static_penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int,
+                        movable: set[int]) -> float:
+    """The deepest contact between `body` and anything static, in metres (0: none)."""
+    deepest = 0.0
+    for i in range(data.ncon):
+        c = data.contact[i]
+        b1, b2 = int(model.geom_bodyid[c.geom1]), int(model.geom_bodyid[c.geom2])
+        if body not in (b1, b2):
+            continue
+        other = b2 if b1 == body else b1
+        if other in movable:
+            continue
+        deepest = max(deepest, -float(c.dist))
+    return deepest
+
+
+def _physical(model: mujoco.MjModel, corrections: dict[str, dict]) -> dict[str, dict]:
+    """`corrections`, each scaled back (to 75, 50, 25 %, then dropped) until its body sinks no
+    deeper into walls and static furniture than at the scanned pose: a body the photos put a few
+    centimetres into the wall would be wedged there and could never be moved."""
+    movable = movable_body_ids(model)
+    out = {}
+    for name, fix in corrections.items():
+        b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)
+        before = _static_penetration(model, data, b, movable)
+        for scale in (1.0, 0.75, 0.5, 0.25):
+            trial = {**fix, "dx": round(fix["dx"] * scale, 3), "dy": round(fix["dy"] * scale, 3),
+                     "dyaw_deg": fix["dyaw_deg"] * scale}
+            data = mujoco.MjData(model)
+            mujoco.mj_forward(model, data)
+            _apply(model, data, {name: trial})
+            mujoco.mj_forward(model, data)
+            if _static_penetration(model, data, b, movable) <= before + PENETRATION_SLACK:
+                if scale < 1.0:
+                    trial["scaled"] = scale
+                out[name] = trial
+                break
+    return out
+
+
 def _apply(model: mujoco.MjModel, data: mujoco.MjData, corrections: dict[str, dict]) -> None:
     """Move every corrected free body by its correction (as `split` snapping does)."""
     for name, fix in corrections.items():
@@ -372,7 +417,12 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
                                                 "dyaw_deg": dyaw, "before": before,
                                                 "after": after}
         if corrections:
-            mujoco.mj_kinematics(model, data)
+            kept = _physical(model, corrections)
+            # Undo every snap, then apply only what is physically possible.
+            mujoco.mj_resetData(model, data)
+            mujoco.mj_forward(model, data)
+            corrections = kept
+            _apply(model, data, corrections)
     boxes = _geom_boxes(model, data, movable)
     if not boxes or not len(splats):
         return Split(room=splats, corrections=corrections)
@@ -429,7 +479,8 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
             drop = (voted == -1) & np.isin(owner, masked_ids)
             owner[drop] = -1
             if from_votes:
-                corrections.update(_corrections_from_votes(model, data, owner, pos, named))
+                corrections.update(_physical(model, _corrections_from_votes(
+                    model, data, owner, pos, named)))
                 _apply(model, data, {n: corrections[n] for n in corrections})
     result = Split(room=splats.subset(owner < 0), corrections=corrections)
     for b in movable:

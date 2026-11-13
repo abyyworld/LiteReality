@@ -1240,6 +1240,29 @@ async function refreshSplat() {
   }
 }
 
+// ?debug=1: a read-only view of what this page shows, and a camera that can be put exactly
+// somewhere (MuJoCo coordinates) — for end-to-end checks and for the paper's figures. Nothing
+// here is sent to the server.
+if (params.get('debug') === '1') {
+  window.__roomcall = {
+    photo: () => ({
+      shown: photoShown(), stage: photo.stage, step: photo.step, v: photo.v,
+      bodies: [...photo.bodies.keys()],
+      attached: [...photo.bodies].filter(([, m]) => m.parent && m.parent !== world).map(([n]) => n),
+    }),
+    bodies: () => [...(shown?.bodies.values() || [])].map((b) => ({
+      id: b.id, name: b.name, p: b.node.position.toArray() })),   // nodes live in the MuJoCo frame
+    look(from, at) {
+      const a = mjToThree(...from), b = mjToThree(...at), d = b.clone().sub(a);
+      walker.pos.copy(a); walker.vel.set(0, 0, 0);
+      walker.yaw = Math.atan2(-d.z, d.x);
+      walker.pitch = Math.asin(clamp(d.y / Math.max(d.length(), 1e-6), -1, 1));
+      return true;
+    },
+    setPhoto(on) { if (photo.want !== !!on) togglePhoto(); return photoShown(); },
+  };
+}
+
 function togglePhoto() {
   photo.want = !photo.want;
   try { localStorage.setItem('rc.photo', photo.want ? '1' : '0'); } catch { /* storage blocked */ }
