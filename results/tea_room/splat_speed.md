@@ -175,3 +175,21 @@ Held-out PSNR 20.21 dB, SSIM 0.783, LPIPS 0.364.
 The ~30 s more than the 74 s above is the publishing. Each bundle uploads to the Modal Volume, and
 the instant room is cut again with the masks before the first trained snapshot. Both happen in
 line with training.
+
+## Uploads in the background (`BundleUploader`, same day)
+
+Publishing no longer blocks training or cutting. The same run as above, with masks and
+`--publish`:
+
+| | Seconds after pressing enter |
+|---|---|
+| Instant room | 11.4 |
+| Trainer up | 22.1 |
+| Final room cut | 73.7 |
+| Final room uploaded to the link (it is live within the server's ~10 s poll after that) | ~88 |
+
+- Before this change the final room was uploaded at 103.6 s.
+- Each upload takes 7.5–9.8 s from this laptop.
+- The step-800 bundle was skipped because step 1250 had already replaced it.
+
+Held-out PSNR 20.24 dB.
