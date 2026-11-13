@@ -13,8 +13,8 @@ following the reference packer (github.com/nianticlabs/spz, `src/cc/load-spz.cc`
                         then 3 x (sign bit + 9-bit magnitude / sqrt(1/2))   (N * 4, little-endian)
              sh         higher SH coefficients, 8-bit, coefficient-major then channel (N * K * 3)
 
-About 11 bytes a splat before gzip at SH degree 0, against 62 in a float PLY, so a room of half
-a million splats is a few megabytes. Coordinates are stored as given: callers write the room's own
+20 bytes a splat before gzip at SH degree 0 (29 at degree 1), against 56 (236 at degree 3) in a
+float PLY; gzip takes it to ~10 bytes on a real room (tea_room: 640k splats, 6.2 MB). Coordinates are stored as given: callers write the room's own
 frame (MuJoCo, Z up) and the browser places the mesh in its Z-up world group.
 
 Pure numpy + stdlib, Python 3.10 compatible: the Modal GPU trainer imports this module too.

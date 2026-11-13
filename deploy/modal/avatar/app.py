@@ -64,8 +64,10 @@ MS_PRIOR_ID = "Damo_XR_Lab/LHMPP-Prior"
 # The SMPLX-FREE checkpoint is not public on Hugging Face (401, 2026-11-13); on ModelScope it is
 # these files at the repo root (as LHMPP-700M's are on Hugging Face).
 MODEL_FILES = ("config.json", "configuration.json", "model.safetensors")
-MODEL_REVISION = PRIOR_REVISION = None         # unknown from here: populate logs the resolved
-                                               # commit; pin it after the first real run
+# The prior's Hugging Face commit as the first real populate resolved it (2026-11-13). The
+# model comes from ModelScope by file name (`MODEL_FILES`), which has no commit to pin.
+PRIOR_REVISION = "b683c8f68bede4f318b0bb539730b8e6711d30a0"
+MODEL_REVISION = None
 GPU = "L4"
 MAX_CONTAINERS = 2
 SCALEDOWN_SECONDS = 300
