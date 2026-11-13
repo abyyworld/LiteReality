@@ -211,23 +211,28 @@ own camera, and compare at 320$\times$240 (Table~\ref{tab:fidelity}). Object pix
 LiDAR depth inside RoomPlan boxes. The splat is also scored separately on the trainer's held-out
 photos.
 \begin{table}[t]
-\caption{Fidelity against the scan's own photos (tea\_room, 16 views at 320$\times$240, rendered
-as the call draws them in headless software WebGL). Differences are paired over views, with 95\%
-percentile-bootstrap intervals (10{,}000 resamples).}
+\caption{Fidelity against each scan's own photos (16 views per room at 320$\times$240, rendered as
+the call draws them in headless software WebGL). $\Delta$: splat $-$ mesh room, paired over views,
+with 95\% percentile-bootstrap intervals (10{,}000 resamples).}
 \label{tab:fidelity}
-\begin{tabular}{lrrrr}
+\begin{tabular}{llrrrr}
 \toprule
-Stage & PSNR & SSIM & PSNR walls/floor & PSNR objects \\
+Room & Stage & PSNR & SSIM & walls/floor & objects \\
 \midrule
-Flat mean colour (baseline) & \measured{13.75} & & & \\
-Mesh room: photo walls + TRELLIS objects & \measured{13.64} & \measured{0.679} & \measured{14.40} & \measured{11.54} \\
-Trained splat (objects cut out) & \measured{18.47} & \measured{0.788} & \measured{18.72} & \measured{19.11} \\
+tea\_room & flat-colour baseline & \measured{13.75} & & & \\
+ & mesh room & \measured{13.64} & \measured{0.679} & \measured{14.40} & \measured{11.54} \\
+ & splat room & \measured{18.47} & \measured{0.788} & \measured{18.72} & \measured{19.11} \\
+ & $\Delta$ & \measured{+4.83} [2.74, 6.67] & \measured{+0.108} & \measured{+4.31} & \measured{+7.57} [5.66, 9.74] \\
 \midrule
-Splat $-$ mesh & \measured{+4.83} [2.74, 6.67] & \measured{+0.108} & \measured{+4.31} & \measured{+7.57} [5.66, 9.74] \\
+office\_room & flat-colour baseline & \measured{12.31} & & & \\
+ & mesh room & \measured{13.48} & \measured{0.569} & \measured{14.88} & \measured{9.77} \\
+ & splat room & \measured{18.57} & \measured{0.648} & \measured{18.91} & \measured{17.93} \\
+ & $\Delta$ & \measured{+5.09} [3.30, 6.65] & \measured{+0.079} & \measured{+4.04} & \measured{+8.16} [5.48, 10.63] \\
 \bottomrule
 \end{tabular}
 \end{table}
-On the four views the splat trainer held out, the splat scores \measured{17.45\,dB} against
+The splat room is better in 14 of 16 (tea\_room) and 15 of 16 (office\_room) views. On tea\_room's
+four views the splat trainer held out, the splat scores \measured{17.45\,dB} against
 \measured{11.66\,dB} for the mesh room on its two unseen views. The gain is largest on objects,
 where the mesh room shows generated meshes and the splat shows the photographed objects
 themselves. With the photo-corrected body poses, all \measured{5/5} movable bodies in the splat

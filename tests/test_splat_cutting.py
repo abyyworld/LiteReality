@@ -138,3 +138,24 @@ def test_a_cut_that_moves_nothing_removes_the_scene_an_earlier_one_moved(tmp_pat
     stale = corrected_scene(xml, {"Box0": {"dx": 0.2, "dy": 0.0, "dyaw_deg": 0.0}})
     assert corrected_scene(xml, {"NotABody": {"dx": 0.1, "dy": 0.0, "dyaw_deg": 0.0}}) is None
     assert not stale.exists()
+
+
+def test_a_move_into_another_movable_body_is_scaled_back():
+    import mujoco
+
+    from litereality_agent.pipeline.splatroom.split import _physical
+
+    xml = """<mujoco><worldbody><geom type="plane" size="5 5 0.1"/>
+      <body name="A" pos="0 0 0.25"><freejoint/><geom type="box" size="0.2 0.2 0.25" group="3"/></body>
+      <body name="B" pos="0.6 0 0.25"><freejoint/><geom type="box" size="0.2 0.2 0.25" group="3"/></body>
+    </worldbody></mujoco>"""
+    model = mujoco.MjModel.from_xml_string(xml)
+    into = {"A": {"dx": 0.4, "dy": 0.0, "dyaw_deg": 0.0}}        # 0.2 m into B
+    kept = _physical(model, into)
+    assert "A" not in kept or kept["A"]["dx"] <= 0.2 + 1e-9         # never deeper into B
+    free = _physical(model, {"A": {"dx": -0.3, "dy": 0.0, "dyaw_deg": 0.0}})
+    assert free["A"]["dx"] == -0.3 and "scaled" not in free["A"]
+    both = _physical(model, {"A": {"dx": 0.15, "dy": 0.0, "dyaw_deg": 0.0},
+                             "B": {"dx": -0.15, "dy": 0.0, "dyaw_deg": 0.0}})
+    gap = 0.6 + both.get("B", {}).get("dx", 0) - both.get("A", {}).get("dx", 0)
+    assert gap >= 0.4 - 0.005                                         # the two moves together too

@@ -359,9 +359,10 @@ def _corrections_from_votes(model, data, owner, pos, named: dict[str, int]) -> d
 PENETRATION_SLACK = 0.005     # metres a corrected body may sink into static geometry beyond before
 
 
-def _static_penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int,
-                        movable: set[int]) -> float:
-    """The deepest contact between `body` and anything static, in metres (0: none)."""
+def _penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> float:
+    """The deepest contact between `body` and anything outside its own tree (walls, static
+    furniture and the other movable bodies), in metres (0: none)."""
+    root = int(model.body_rootid[body])
     deepest = 0.0
     for i in range(data.ncon):
         c = data.contact[i]
@@ -369,7 +370,7 @@ def _static_penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int,
         if body not in (b1, b2):
             continue
         other = b2 if b1 == body else b1
-        if other in movable:
+        if other != 0 and int(model.body_rootid[other]) == root:
             continue
         deepest = max(deepest, -float(c.dist))
     return deepest
@@ -377,28 +378,32 @@ def _static_penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int,
 
 def _physical(model: mujoco.MjModel, corrections: dict[str, dict]) -> dict[str, dict]:
     """`corrections`, each scaled back (to 75, 50, 25 %, then dropped) until its body sinks no
-    deeper into walls and static furniture than at the scanned pose: a body the photos put a few
-    centimetres into the wall would be wedged there and could never be moved."""
-    movable = movable_body_ids(model)
-    out = {}
-    for name, fix in corrections.items():
-        b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+    deeper into anything (walls, static furniture, the other bodies) than at its pose before the
+    move: a body the photos put a few centimetres into the wall, or into a chair that was itself
+    moved, would be wedged there and could never be moved. Moves are accepted one at a time, each
+    tested with those already accepted applied."""
+    accepted: dict[str, dict] = {}
+
+    def state(moves: dict[str, dict]) -> mujoco.MjData:
         data = mujoco.MjData(model)
         mujoco.mj_forward(model, data)
-        before = _static_penetration(model, data, b, movable)
+        _apply(model, data, moves)
+        mujoco.mj_forward(model, data)
+        return data
+
+    for name, fix in corrections.items():
+        b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        before = _penetration(model, state(accepted), b)
         for scale in (1.0, 0.75, 0.5, 0.25):
             trial = {**fix, "dx": round(fix["dx"] * scale, 3), "dy": round(fix["dy"] * scale, 3),
                      "dyaw_deg": fix["dyaw_deg"] * scale}
-            data = mujoco.MjData(model)
-            mujoco.mj_forward(model, data)
-            _apply(model, data, {name: trial})
-            mujoco.mj_forward(model, data)
-            if _static_penetration(model, data, b, movable) <= before + PENETRATION_SLACK:
+            if _penetration(model, state({**accepted, name: trial}), b) \
+                    <= before + PENETRATION_SLACK:
                 if scale < 1.0:
                     trial["scaled"] = scale
-                out[name] = trial
+                accepted[name] = trial
                 break
-    return out
+    return accepted
 
 
 def _apply(model: mujoco.MjModel, data: mujoco.MjData, corrections: dict[str, dict]) -> None:
