@@ -37,3 +37,16 @@ class ModalSplatTrainer:
             return
         if not ended:
             yield {"kind": "error", "error": "the trainer stopped without a result", "log": ""}
+
+
+SEGMENT_APP = "litereality-segment"
+SEGMENT_FUNCTION = "segment"
+
+
+def segment_call(*, environment_name: str = "main", profile: str | None = None,
+                 credentials: tuple[str, str] | None = None):
+    """The deployed SAM 2 function (`deploy/modal/segment`) as a plain ``request -> reply``
+    callable, for `pipeline.splatroom.masks.request`."""
+    client = ModalClient(SEGMENT_APP, SEGMENT_FUNCTION, environment_name=environment_name,
+                         profile=profile, credentials=credentials)
+    return client.function.remote

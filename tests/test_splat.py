@@ -175,7 +175,7 @@ def _room_splats(box_x: float) -> Splats:
 def test_a_body_is_cut_out_in_its_own_frame_and_the_floor_under_it_stays(tmp_path):
     model = mujoco.MjModel.from_xml_string(SCENE.format(x=1.0))
     s = _room_splats(1.0)
-    parts = split(s, model, snap_bodies=False)
+    parts = split(s, model, snap_bodies=False, fill=False)
     body = parts.bodies["Box0"]
     assert len(body) > 300 and not parts.corrections
     assert np.abs(body.positions.mean(0) - (0, 0, 0)).max() < 0.06   # body frame: centred
@@ -183,6 +183,24 @@ def test_a_body_is_cut_out_in_its_own_frame_and_the_floor_under_it_stays(tmp_pat
     assert len(parts.room) + len(body) == len(s)
     under = (np.abs(parts.room.positions[:, 0] - 1.0) < 0.15) & (parts.room.positions[:, 2] == 0)
     assert under.sum() > 20
+
+
+def test_the_floor_never_seen_under_a_body_is_patched_in_the_floor_around_it():
+    model = mujoco.MjModel.from_xml_string(SCENE.format(x=1.0))
+    s = _room_splats(1.0)
+    hidden = (np.abs(s.positions[:, 0] - 1.0) < 0.22) & (np.abs(s.positions[:, 1]) < 0.22) \
+        & (s.positions[:, 2] == 0)
+    s = s.subset(~hidden)                                  # the scan never saw under the box
+    s.colors[:] = (0.2, 0.4, 0.6)
+    parts = split(s, model, snap_bodies=False)
+    added = parts.counts["floor_fill"]
+    assert added > 100
+    new = parts.room.subset(np.arange(len(parts.room) - added, len(parts.room)))
+    assert np.allclose(new.positions[:, 2], 0.0, atol=1e-6)
+    assert np.abs(new.positions[:, 0] - 1.0).max() < 0.3 and np.abs(new.positions[:, 1]).max() < 0.3
+    assert np.allclose(new.colors, (0.2, 0.4, 0.6), atol=1e-5)       # the floor around it
+    normals = quat_to_matrices(new.rotations)[:, :, 2]
+    assert np.allclose(np.abs(normals[:, 2]), 1.0)
 
 
 def test_a_body_scanned_off_its_object_is_snapped_onto_it_and_the_scene_follows(tmp_path):
@@ -242,3 +260,78 @@ def test_a_bundle_naming_anything_but_its_own_files_is_ignored(tmp_path):
         {"room": "room-0123456789abcdef.spz", "bodies": {"Chair0": "/abs.spz"}}))
     assert SplatSource.fixed(tmp_path).bundle(None) is None
     assert SplatSource.per_room(tmp_path).bundle("../x") is None
+
+
+def _scan_above_box(folder: Path, box_x: float = 1.0, index: int = 0, cam_dx: float = 0.0) -> None:
+    """One photo straight down from 3 m above the box at (box_x, 0): the box top (z 0.5) in red,
+    the floor (z 0) grey; depth in mm, as the scanner writes it (ARKit: Y up)."""
+    from PIL import Image
+
+    W, H, w, h = 320, 240, 64, 48
+    f = 200.0
+    cam = np.array([box_x + cam_dx, 0.0, 3.0])
+    pose = np.eye(4)
+    pose[:3, 0], pose[:3, 1], pose[:3, 2] = (1, 0, 0), (0, 0, -1), (0, 1, 0)
+    pose[:3, 3] = (cam[0], cam[2], -cam[1])
+    sx = w / W
+    us, vs = np.meshgrid(np.arange(w) + 0.5, np.arange(h) + 0.5)
+    dx, dy = (us - W / 2 * sx) / (f * sx), -(vs - H / 2 * sx) / (f * sx)
+    x, y = cam[0] + dx * 2.5, cam[1] + dy * 2.5
+    on = (np.abs(x - box_x) < 0.2) & (np.abs(y) < 0.2)
+    depth = np.where(on, 2.5, 3.0)
+    Image.fromarray((depth * 1000).astype(np.uint16)).save(folder / f"depth_{index:05d}.png")
+    Image.fromarray(np.full((h, w), 2, np.uint8)).save(folder / f"conf_{index:05d}.png")
+    rgb = np.where(on[..., None], np.array([200, 30, 30], np.uint8), np.array([128] * 3, np.uint8))
+    Image.fromarray(rgb.astype(np.uint8)).resize((W, H), Image.Resampling.NEAREST).save(
+        folder / f"frame_{index:05d}.jpg", quality=95)
+    (folder / f"frame_{index:05d}.json").write_text(json.dumps({
+        "frame_index": index, "intrinsics": [f, 0, W / 2, 0, f, H / 2, 0, 0, 1],
+        "cameraPoseARFrame": pose.reshape(-1).tolist()}))
+
+
+def _red_masks(request: dict) -> dict:
+    """A stand-in for SAM 2: every box's mask is the red pixels inside it."""
+    import io
+
+    from PIL import Image
+
+    out = {}
+    for f in request["frames"]:
+        rgb = np.asarray(Image.open(io.BytesIO(f["jpeg"])).convert("RGB")).astype(int)
+        red = (rgb[..., 0] > 150) & (rgb[..., 1] < 90)
+        out[f["id"]] = {}
+        for name, (x0, y0, x1, y1) in f["boxes"].items():
+            m = np.zeros_like(red)
+            m[int(y0):int(y1) + 1, int(x0):int(x1) + 1] = True
+            buf = io.BytesIO()
+            Image.fromarray((red & m).astype(np.uint8) * 255).convert("1").save(buf, format="PNG")
+            out[f["id"]][name] = buf.getvalue()
+    return {"masks": out, "seconds": 0.01}
+
+
+def test_photo_masks_decide_what_is_the_object_and_move_its_body_there(tmp_path):
+    from litereality_agent.pipeline.splatroom import masks as object_masks
+
+    scan = tmp_path / "scan"
+    scan.mkdir()
+    _scan_above_box(scan, box_x=1.0, index=0, cam_dx=-0.1)
+    _scan_above_box(scan, box_x=1.0, index=1, cam_dx=0.1)
+    frames = rgbd.load_frames(scan)
+    xml = tmp_path / "scene.xml"
+    xml.write_text(SCENE.format(x=0.85))                 # RoomPlan put it 15 cm off
+    model = mujoco.MjModel.from_xml_path(str(xml))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    views = object_masks.plan_views(frames, model, data, {"Box0": model.body("Box0").id})
+    assert len(views) == 2 and all("Box0" in v.boxes for v in views.values())
+    got = object_masks.request(views, _red_masks)
+    assert len(got) == 2
+    top = _grid((0.82, -0.18, 0.5), (1.18, 0.18, 0.5), step=0.015)   # the box top the photos saw
+    floor = _grid((0.4, -0.5, 0.0), (1.6, 0.5, 0.0), step=0.05)
+    s = _splats_at(np.concatenate([top, floor]))
+    parts = split(s, model, masks=got)
+    fix = parts.corrections["Box0"]
+    assert fix["from"] == "photo masks" and abs(fix["dx"] - 0.15) < 0.03
+    body = parts.bodies["Box0"]
+    assert len(body) >= 0.95 * len(top)                   # the masked top (edges may fall out) ...
+    assert np.allclose(body.positions[:, 2], 0.25, atol=1e-4)    # ... and no floor; body frame

@@ -32,11 +32,12 @@ import mujoco
 
 from litereality_agent.models.splat import dataset as splat_dataset
 from litereality_agent.models.splat import rgbd, spz
-from litereality_agent.pipeline.splatroom.split import Split, split
+from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, split
 
 DEFAULT_DIR = "splat"
 BUNDLE = "splat.json"
 REPORT = "report.json"
+RAW = "raw.spz.bin"            # the latest snapshot uncut (not a bundle file: never served)
 INSTANT_VOXEL = 0.016          # ~640k splats, ~6 MB for tea_room: on screen in seconds
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -85,9 +86,21 @@ def read_bundle(out_dir: Path) -> dict | None:
 def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
           options: dict | None = None, instant_only: bool = False,
           log: Callable[[str], None] = print,
-          on_bundle: Callable[[dict], None] | None = None) -> dict:
+          on_bundle: Callable[[dict], None] | None = None,
+          segment: Callable[[dict], dict] | None = None,
+          on_scene: Callable[[Path], None] | None = None) -> dict:
     """The instant room, then (with a `trainer`) each trained snapshot, each written as a bundle
-    the moment it exists. Returns the report (also written to `REPORT`)."""
+    the moment it exists. Returns the report (also written to `REPORT`).
+
+    The first split snaps the free bodies onto the splat; every later one reuses those
+    corrections, and `corrected_scene` writes the physics with the bodies moved to match
+    (``scene_splat.xml`` beside `scene_xml`: serve that one). With `segment` (the SAM 2 function,
+    `models.splat.remote.segment_call`), each body's outline in the photos is fetched while the GPU trains, and
+    every bundle after it arrives is cut by the photos' masks (`masks`)."""
+    import threading
+
+    from litereality_agent.pipeline.splatroom import masks as object_masks
+
     t0 = time.perf_counter()
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     frames = rgbd.load_frames(scan_dir)
@@ -96,22 +109,81 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     report: dict = {"scan": str(scan_dir), "scene": str(scene_xml), "frames": len(frames),
                     "bundles": []}
 
+    state: dict = {"corrections": None, "masks": None}
+
     def publish(splats: spz.Splats, stage: str, step: int | None, extra: dict) -> None:
         t = time.perf_counter()
-        parts = split(splats, model)
+        # Before the masks: boxes only, and no snapping when masks are on their way (the photos
+        # will say where each object is). The first split with masks fixes the corrections.
+        waiting = segment is not None and state["masks"] is None
+        parts = split(splats, model, corrections=state["corrections"], masks=state["masks"],
+                      snap_bodies=not waiting)
+        if state["corrections"] is None and not waiting:
+            state["corrections"] = parts.corrections
+            fixed = corrected_scene(Path(scene_xml), parts.corrections or {})
+            report["corrections"] = parts.corrections
+            report["corrected_scene"] = str(fixed) if fixed else None
+            if fixed:
+                log(f"  {len(parts.corrections)} object(s) moved to where the "
+                    f"{'photos' if state['masks'] is not None else 'splat'} show them: {fixed}")
+                if on_scene:
+                    on_scene(fixed)
         bundle = write_bundle(out_dir, parts, stage=stage, step=step)
+        # The whole snapshot, uncut, for evaluation and for cutting again later.
+        raw = out_dir / RAW
+        raw.with_suffix(".tmp").write_bytes(spz.encode(splats))
+        os.replace(raw.with_suffix(".tmp"), raw)
         entry = {"stage": stage, "step": step, "at": round(time.perf_counter() - t0, 2),
                  "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
-                 "bodies": len(parts.bodies), "mb": round(bundle["bytes"] / 1e6, 2), **extra}
+                 "bodies": len(parts.bodies), "masks": state["masks"] is not None,
+                 "mb": round(bundle["bytes"] / 1e6, 2), **extra}
         report["bundles"].append(entry)
         log(f"  {stage}{'' if step is None else f' step {step}'}: {len(splats):,} splats, "
-            f"{len(parts.bodies)} objects cut out, {entry['mb']} MB, at {entry['at']} s")
+            f"{len(parts.bodies)} objects cut out{' by photo masks' if entry['masks'] else ''}, "
+            f"{entry['mb']} MB, at {entry['at']} s")
         if on_bundle:
             on_bundle(bundle)
 
     instant = rgbd.instant_splats(frames, voxel=INSTANT_VOXEL)
     publish(instant, "instant", None, {})
     report["instant_s"] = report["bundles"][-1]["at"]
+
+    mask_thread = None
+    if segment is not None:
+        data = mujoco.MjData(model)
+        mujoco.mj_forward(model, data)                 # the scanned poses: what SAM 2 is shown
+        from litereality_agent.room_ops.roomcall.model_info import body_name, movable_body_ids
+
+        bodies = {body_name(model, b): b for b in sorted(movable_body_ids(model))}
+        views = object_masks.plan_views(frames, model, data, bodies)
+
+        def fetch() -> None:
+            t = time.perf_counter()
+            try:
+                from litereality_agent.pipeline.splatroom.split import _geom_boxes
+
+                static = _geom_boxes(model, data, [b for b in range(1, model.nbody)
+                                                   if b not in set(bodies.values())])
+                got = object_masks.request(views, segment, static_boxes=static)
+            except Exception as exc:  # noqa: BLE001 — the boxes still cut the room
+                report["masks_error"] = f"{type(exc).__name__}: {exc}"
+                log(f"  photo masks failed ({report['masks_error']}); cutting by boxes")
+                state["failed"] = True
+                return
+            report["masks"] = {"views": len(views), "masks": len(got),
+                               "gpu_s": round(got.seconds, 1),
+                               "s": round(time.perf_counter() - t, 1)}
+            state["masks"] = got
+            log(f"  photo masks: {len(got)} from {len(views)} photos in "
+                f"{report['masks']['s']} s")
+
+        mask_thread = threading.Thread(target=fetch, daemon=True)
+        mask_thread.start()
+        if trainer is None or instant_only:
+            mask_thread.join()
+            if state["masks"] is None:
+                segment = None                     # failed: snap by the boxes after all
+            publish(instant, "instant", None, {})
 
     if trainer is not None and not instant_only:
         t = time.perf_counter()
@@ -121,6 +193,15 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         log(f"  training set: {len(frames)} photos, {report['dataset_mb']} MB; "
             f"training on Modal ({trainer.name})")
         for event in trainer.stream(tar, options):
+            if mask_thread is not None and event["kind"] == "snapshot":
+                mask_thread.join()              # cut every trained room by the photos
+                mask_thread = None
+                if state["masks"] is None:
+                    segment = None
+                # Where the objects really are comes from the LiDAR room, whose splats lie on
+                # the surfaces; trained splats are free to float. It is published again, cut by
+                # the photos, just before the trained one.
+                publish(instant, "instant", None, {})
             kind = event["kind"]
             if kind == "started":
                 report["trainer_started_s"] = round(time.perf_counter() - t0, 2)

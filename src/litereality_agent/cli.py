@@ -712,7 +712,13 @@ def _splatroom(args) -> int:
     options = {"steps": args.steps} if args.steps else {}
     if args.no_holdout:
         options["test_every"] = 100000
-    on_bundle = None
+    on_bundle = on_scene = None
+    segment = None
+    if not args.no_masks and not args.upload_only:
+        from litereality_agent.models.splat.remote import segment_call
+
+        segment = segment_call(environment_name=modal["environment"] or "main",
+                             profile=modal["profile"], credentials=modal["credentials"])
     with contextlib.ExitStack() as stack:
         if args.publish:
             import modal as modal_sdk
@@ -728,6 +734,13 @@ def _splatroom(args) -> int:
             def on_bundle(bundle: dict) -> None:
                 sent = splatroom.upload_bundle(volume, name, out, bundle)
                 print(f"    published to the room call ({sent / 1e6:.1f} MB): live within ~10 s")
+
+            def on_scene(fixed: Path) -> None:
+                from litereality_agent.room_ops.roomcall import hosted
+
+                done = hosted.publish(fixed, name=name, volume=volume, label=args.label or name,
+                                      stage="objects")
+                print(f"    physics with the moved objects published: {done.version}")
         if args.upload_only:
             bundle = splatroom.read_bundle(out)
             if not args.publish or bundle is None:
@@ -737,11 +750,13 @@ def _splatroom(args) -> int:
         print(f"splatroom  {context.scan}: {scan_dir} -> {console.short(out)}  "
               f"(physics: {console.short(scene)})")
         report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,
-                                 instant_only=args.instant_only, on_bundle=on_bundle)
+                                 instant_only=args.instant_only, on_bundle=on_bundle,
+                                 segment=segment, on_scene=on_scene)
     print(f"  done in {report['total_s']} s; report: {console.short(out / splatroom.REPORT)}")
     if not args.publish:
+        served = Path(report["corrected_scene"]) if report.get("corrected_scene") else scene
         print(f"  {console.colour('dim')}walk it:{console.colour('off')} "
-              f"uv run litereality roomcall {console.short(scene)} --splat {console.short(out)}")
+              f"uv run litereality roomcall {console.short(served)} --splat {console.short(out)}")
     return 1 if report.get("error") else 0
 
 
@@ -1026,6 +1041,8 @@ def _parser() -> argparse.ArgumentParser:
                        help="train on every photo (no held-out PSNR/SSIM/LPIPS)")
     splat.add_argument("--publish", action="store_true",
                        help="put every snapshot on the deployed room call link as it lands")
+    splat.add_argument("--no-masks", action="store_true",
+                       help="cut objects by their boxes only (no SAM 2 masks from the photos)")
     splat.add_argument("--upload-only", action="store_true",
                        help="with --publish: put the bundle already in --out on the link, build "
                             "nothing")
