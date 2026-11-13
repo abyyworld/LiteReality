@@ -280,6 +280,34 @@ def test_joints_get_our_dynamics_and_a_flap_holds_itself(tmp_path):
     assert float(data.qpos[model.jnt_qposadr[jd]]) == pytest.approx(0.7, abs=0.005)
 
 
+def test_a_person_can_pull_a_drop_down_door_open_and_it_stays_where_left(tmp_path):
+    from litereality_agent.pipeline.evaluate import physics
+    from litereality_agent.room_ops.roomcall.sim import RoomSim
+
+    asset = ig.clean(ig.load_asset(_export(tmp_path, ig.Spec.make("dishwasher", (0.6, 0.6, 0.8)))))
+    built = ig.build(asset, "Dish0", ig.Placement((0, 0, 0), (0.6, 0.6, 0.8)),
+                     ig.Overrides(mass=40.0))
+    root = tmp_path / "scene"
+    ig.write_files(built, root, root)
+    sim = RoomSim(mujoco.MjModel.from_xml_string(ig.standalone_xml(built, root, root)),
+                  settle_seconds=1.0)
+    m, d = sim.model, sim.data
+    door = {t.name: t for t in physics.testable_bodies(m)}["Dish0_door"]
+    # the audit's standard pull, through the room server's own grab spring: open, then held
+    pull = physics.pull_test(sim, door)
+    assert pull["pass"] and pull["stable"], pull
+    assert pull["drift_after_release"] < 1.0                       # deg
+    # let go shut it does not fall open, and let go lying flat it does not fall shut
+    adr = int(m.jnt_qposadr[door.joint])
+    for q in (0.0, float(m.jnt_range[door.joint][1])):
+        sim.reset()
+        d.qpos[adr] = q
+        mujoco.mj_forward(m, d)
+        for _ in range(int(5.0 / m.opt.timestep)):
+            mujoco.mj_step(m, d)
+        assert float(d.qpos[adr]) == pytest.approx(q, abs=math.radians(0.5))
+
+
 def test_the_texture_takes_the_photos_colour_and_keeps_its_shading(tmp_path):
     img = np.zeros((64, 64, 3), np.uint8)              # half the atlas unused (black)
     img[:, 32:] = 120
