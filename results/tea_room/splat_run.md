@@ -67,10 +67,11 @@ better. The held-out frames are also the hardest ones (every 8th photo, often gl
 
 ## Known gaps
 
-- **Objects are cut by their RoomPlan boxes.** RoomPlan boxes the chairs 20–30 cm off. A snap
-  step moves each box to where it holds the most splats, but around the table it also catches
-  table and wall edges. Per-photo masks (SAM 2) are the fix.
-- **Holes:** where a moved object stood, nothing was captured behind it, so a hole shows.
+- **Since fixed:** objects are now cut by SAM 2 masks voted onto the splats, not by RoomPlan
+  boxes, and the floor under each object is patched (`doc/roomcall.md`). The black chairs, a
+  blue chair and the door come out right. The most deeply tucked chair is still mostly table.
+- **Still open:** behind a moved object only the floor is patched. A wall or cabinet it stood
+  against still shows a gap.
 
 ## Fidelity against the mesh room (`litereality evaluate run/tea_room --render --max-views 16`)
 
