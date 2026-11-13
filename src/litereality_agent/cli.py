@@ -751,9 +751,11 @@ def _splatroom(args) -> int:
                                                 create_if_missing=True)
             name = scene_name(args.label or context.scan)
 
-            def on_bundle(bundle: dict) -> None:
-                sent = splatroom.upload_bundle(volume, name, out, bundle)
-                print(f"    published to the room call ({sent / 1e6:.1f} MB): live within ~10 s")
+            # Uploads run beside training and cutting, newest bundle first (BundleUploader).
+            uploader = splatroom.BundleUploader(
+                lambda bundle: splatroom.upload_bundle(volume, name, out, bundle))
+            stack.callback(uploader.close)
+            on_bundle = uploader.submit
 
             def on_scene(fixed: Path) -> None:
                 from litereality_agent.room_ops.roomcall import hosted
@@ -766,7 +768,7 @@ def _splatroom(args) -> int:
             if not args.publish or bundle is None:
                 raise SystemExit(f"--upload-only needs --publish and a bundle in {out}")
             on_bundle(bundle)
-            return 0
+            return 0                      # the stack closes the uploader: waits for it
         print(f"splatroom  {context.scan}: {scan_dir} -> {console.short(out)}  "
               f"(physics: {console.short(scene)})")
         report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,

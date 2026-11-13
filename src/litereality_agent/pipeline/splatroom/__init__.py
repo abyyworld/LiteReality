@@ -49,8 +49,11 @@ def _name(prefix: str, data: bytes) -> str:
 
 def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = None,
                  antialiased: bool = True) -> dict:
-    """Write one bundle (files first, then `splat.json` atomically) and drop older files."""
+    """Write one bundle (files first, then `splat.json` atomically) and drop older files. The
+    previous bundle's files are kept one bundle longer: an upload of it may still be reading them
+    (`BundleUploader`), and a browser may still be fetching them."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    previous = read_bundle(out_dir)
     keep: set[str] = set()
     room_bytes = spz.encode(parts.room, antialiased=antialiased)
     room = _name("room", room_bytes)
@@ -70,8 +73,11 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
     tmp = out_dir / (BUNDLE + ".tmp")
     tmp.write_text(json.dumps(bundle, indent=1))
     os.replace(tmp, out_dir / BUNDLE)
+    spare = set()
+    if previous is not None:
+        spare = {previous["room"], *previous.get("bodies", {}).values()}
     for old in out_dir.glob("*.spz"):
-        if old.name not in keep:
+        if old.name not in keep and old.name not in spare:
             old.unlink(missing_ok=True)
     return bundle
 
@@ -282,6 +288,58 @@ class SavedTrainer:
                "seconds": (trained[-1].get("trainer_s") if trained else None) or 0.0}
         yield {"kind": "done", "seconds": self.report.get("trainer_s") or 0.0,
                "stats": self.report.get("stats") or {}}
+
+
+class BundleUploader:
+    """Uploads bundles in the background, newest first: `submit` returns at once, so training and
+    cutting never wait for the network, and a bundle superseded before its turn is skipped (the
+    room call only ever needs the newest). `close` waits for the last one. `upload(bundle)` does
+    the work (`upload_bundle` with the Volume and the room's name)."""
+
+    def __init__(self, upload: Callable[[dict], int], log: Callable[[str], None] = print) -> None:
+        import threading
+
+        self._upload, self._log = upload, log
+        self._next: dict | None = None
+        self._closed = False
+        self._cv = threading.Condition()
+        self.sent = self.skipped = 0
+        self.errors: list[str] = []
+        self._thread = threading.Thread(target=self._run, daemon=True, name="bundle-upload")
+        self._thread.start()
+
+    def submit(self, bundle: dict) -> None:
+        with self._cv:
+            if self._next is not None:
+                self.skipped += 1
+            self._next = bundle
+            self._cv.notify()
+
+    def _run(self) -> None:
+        while True:
+            with self._cv:
+                while self._next is None and not self._closed:
+                    self._cv.wait()
+                if self._next is None:
+                    return
+                bundle, self._next = self._next, None
+            t = time.perf_counter()
+            try:
+                sent = self._upload(bundle)
+                self.sent += 1
+                self._log(f"    published {bundle.get('stage')}"
+                          f"{'' if bundle.get('step') is None else ' step ' + str(bundle['step'])}"
+                          f" ({sent / 1e6:.1f} MB, {time.perf_counter() - t:.1f} s): live within"
+                          " ~10 s")
+            except Exception as exc:  # noqa: BLE001 — the next bundle may well get through
+                self.errors.append(f"{type(exc).__name__}: {exc}")
+                self._log(f"    publishing failed ({type(exc).__name__}: {exc})")
+
+    def close(self) -> None:
+        with self._cv:
+            self._closed = True
+            self._cv.notify()
+        self._thread.join()
 
 
 def upload_bundle(volume, name: str, out_dir: Path, bundle: dict) -> int:

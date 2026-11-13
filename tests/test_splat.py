@@ -255,8 +255,14 @@ def test_bundles_are_written_content_named_and_served_to_the_room(tmp_path):
     floor_only = _splats_at(_grid((-1, -1, 0), (1, 1, 0)))
     again = splatroom.write_bundle(out, split(floor_only, model, snap_bodies=False),
                                    stage="trained", step=300)
-    assert sorted(p.name for p in out.glob("*.spz")) == [again["room"]]   # old files dropped
+    files = {p.name for p in out.glob("*.spz")}
+    assert again["room"] in files and first["room"] in files     # the previous kept one more round
+    third = splatroom.write_bundle(out, split(floor_only, model, snap_bodies=False, fill=False),
+                                   stage="trained", step=400)
+    files = {p.name for p in out.glob("*.spz")}
+    assert first["room"] not in files and {third["room"], again["room"]} <= files
     assert splatroom.read_bundle(out)["stage"] == "trained"
+    again = third
 
     app = server.create_app(model=model, label="tea room", web_dir=None,
                             splats=SplatSource.fixed(out))
@@ -264,7 +270,7 @@ def test_bundles_are_written_content_named_and_served_to_the_room(tmp_path):
         found = client.get("/splat.json")
         assert found.status_code == 200
         body = found.json()
-        assert body["stage"] == "trained" and body["step"] == 300 and body["bodies"] == {}
+        assert body["stage"] == "trained" and body["step"] == 400 and body["bodies"] == {}
         name = room_name(app.state.roomcall.version.id)
         assert body["room"] == f"splat/{name}/{again['room']}"
         got = client.get("/" + body["room"])
@@ -381,3 +387,33 @@ def test_evaluate_finds_the_splat_stage_and_the_trainers_held_out_photos(tmp_pat
         _frame_looking_down(scan, index=i)
     trained = fidelity.splat_training_frames(scan)
     assert trained == set(range(17)) - {0, 8, 16}           # every 8th, in name order, held out
+
+
+def test_bundles_upload_in_the_background_newest_first():
+    import threading
+
+    gate, started, seen = threading.Event(), threading.Event(), []
+
+    def upload(bundle):
+        if not seen:
+            started.set()
+            gate.wait(5)                        # the first upload is slow ...
+        seen.append(bundle["step"])
+        return 1
+
+    up = splatroom.BundleUploader(upload, log=lambda _m: None)
+    up.submit({"stage": "trained", "step": 1})
+    assert started.wait(5)
+    for step in (2, 3, 4):                      # ... and three more arrive meanwhile
+        up.submit({"stage": "trained", "step": step})
+    gate.set()
+    up.close()
+    assert seen[0] == 1 and seen[-1] == 4 and len(seen) == 2    # 2 and 3 superseded
+    assert up.sent == 2 and up.skipped == 2 and not up.errors
+
+    def broken(_bundle):
+        raise OSError("no network")
+    up = splatroom.BundleUploader(broken, log=lambda _m: None)
+    up.submit({"stage": "instant", "step": None})
+    up.close()                                  # a failed upload never raises here
+    assert up.errors and up.sent == 0
