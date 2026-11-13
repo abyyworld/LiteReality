@@ -703,20 +703,36 @@ def _splatroom(args) -> int:
     out = Path(args.out).expanduser() if args.out else context.scene_dir / splatroom.DEFAULT_DIR
     settings = load_settings()
     modal = _modal_kwargs(settings)
+    # In the hosted room call's own container (a scan sent into a call) the functions are looked
+    # up with the container's ambient credentials: there is no `.env` there.
+    ambient = not settings.modal_configured() and _in_modal_container()
     trainer = None
     if args.recut:
         trainer = splatroom.SavedTrainer(out)
     elif not args.instant_only:
-        from litereality_agent.models.splat.remote import ModalSplatTrainer
+        from litereality_agent.models.splat.remote import APP_NAME, FUNCTION_NAME, ModalSplatTrainer
 
-        trainer = ModalSplatTrainer(environment_name=modal["environment"] or "main",
-                                    profile=modal["profile"], credentials=modal["credentials"])
+        if ambient:
+            import modal as modal_sdk
+
+            trainer = ModalSplatTrainer(function=modal_sdk.Function.from_name(APP_NAME,
+                                                                              FUNCTION_NAME))
+        else:
+            trainer = ModalSplatTrainer(environment_name=modal["environment"] or "main",
+                                        profile=modal["profile"],
+                                        credentials=modal["credentials"])
     options = {"steps": args.steps} if args.steps else {}
     if args.no_holdout:
         options["test_every"] = 100000
     on_bundle = on_scene = None
     segment = None
-    if not args.no_masks and not args.upload_only:
+    if not args.no_masks and not args.upload_only and ambient:
+        import modal as modal_sdk
+
+        from litereality_agent.models.splat.remote import SEGMENT_APP, SEGMENT_FUNCTION
+
+        segment = modal_sdk.Function.from_name(SEGMENT_APP, SEGMENT_FUNCTION).remote
+    elif not args.no_masks and not args.upload_only:
         from litereality_agent.models.splat.remote import segment_call
 
         segment = segment_call(environment_name=modal["environment"] or "main",
