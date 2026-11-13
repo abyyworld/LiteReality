@@ -52,9 +52,17 @@ async def run(url: str, room: str, scan: Path, timeout: float) -> int:
         print(f"  accepted as job {job}")
         seen_splat, version = None, None
         deadline = t0 + timeout
-        while time.monotonic() < deadline:
+        # One reader task feeding a queue: cancelling ws.recv() mid-read (wait_for) breaks the
+        # websockets SSL transport on Python 3.10.
+        inbox: asyncio.Queue = asyncio.Queue()
+
+        async def reader() -> None:
+            async for raw in ws:
+                await inbox.put(json.loads(raw))
+        reading = asyncio.ensure_future(reader())
+        while time.monotonic() < deadline and not reading.done():
             try:
-                msg = json.loads(await asyncio.wait_for(ws.recv(), 5))
+                msg = await asyncio.wait_for(inbox.get(), 5)
             except asyncio.TimeoutError:
                 msg = {}
             at = time.monotonic() - t0
@@ -78,6 +86,7 @@ async def run(url: str, room: str, scan: Path, timeout: float) -> int:
                               f"step {bundle.get('step')}, {len(bundle.get('bodies', {}))} objects")
                 except Exception:  # noqa: BLE001 — none yet
                     pass
+        reading.cancel()
     return 0
 
 
