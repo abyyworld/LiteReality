@@ -211,6 +211,8 @@ MASS_RANGES: dict[str, MassRange] = {
     "window_sash": MassRange(8.0, 45.0, "glass 2500 kg/m^3: a 4 mm pane is 10 kg/m^2, double "
                              "glazing 20 kg/m^2, triple 30 kg/m^2, plus frame (derived)",
                              per="face"),
+    "rack": MassRange(0.5, 4.0, "dishwasher and oven racks: coated steel wire or plastic, "
+                      "about 1-2.5 kg (derived)"),
     "mug": MassRange(0.2, 0.7, "ceramic mug 250-400 g, stoneware up to ~685 g",
                      "https://parcelpath.com/shipping-terms-glossary/glossary-weights-and-"
                      "measurements/how-much-does-a-mug-weigh/"),
@@ -267,6 +269,8 @@ def classify(name: str, joint: str, size: tuple[float, float, float]) -> str:
     height = float(size[2])
     if "drawer" in words:
         return "drawer"
+    if "rack" in words:                  # an appliance's rack, not the appliance
+        return "rack"
     if "sash" in words or ("window" in words and joint in ("hinge", "slide")):
         return "window_sash"
     if words & {"door", "leaf", "flap"}:
