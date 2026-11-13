@@ -102,6 +102,9 @@ STORAGE_WORDS = ("storage", "cabinet", "sink", "cupboard", "dresser", "drawer", 
 DRAWER_WORDS = ("drawer", "dresser", "chest")
 MAX_CABINET_HEIGHT = 1.2   # m: taller floor-standing storage is a wardrobe or shelves, not this
 MIN_CABINET_HEIGHT = 0.25
+# A rack is thin wire, so its share of the material volume is next to nothing; a real
+# dishwasher or oven rack is 1-2.5 kg (evaluate.physics MASS_RANGES['rack']).
+RACK_MIN_MASS = 1.2
 HUNG_GAP = 0.30            # m clear of the floor: wall-hung (quickroom's rule)
 STANDING_GAP = 0.08        # m: at most this far off the floor is standing on it
 ONE_DOOR_WIDTH = 0.55      # m: narrower cabinets get one door (Infinigen's own threshold)
@@ -1502,9 +1505,9 @@ def build(asset: Asset, handle: str, placement: Placement, overrides: Overrides,
         sharing = list(asset.links)
     total_vol = sum(vol[n] for n in sharing) or 1e-6
     rate = overrides.mass / total_vol
-    masses = {n: max(properties.MIN_LINK_MASS,
+    masses = {n: max(RACK_MIN_MASS if _part_kind(lk) == "rack" else properties.MIN_LINK_MASS,
                      overrides.mass * vol[n] / total_vol if n in sharing else rate * vol[n])
-              for n in asset.links}
+              for n, lk in asset.links.items()}
 
     assets: list[ET.Element] = []
     mesh_files: dict[str, Path] = {}

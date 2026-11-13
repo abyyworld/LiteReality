@@ -53,9 +53,9 @@ Per asset:
 
 ## To fix
 
-- Done: the audit now checks a rack against a rack's range (0.5-4 kg), not the dishwasher's.
-  It still flags Infinigen's racks as light, correctly: they are thin wire, so their share of
-  the material volume is tiny. A real rack is 1-2.5 kg, so the articulated build needs a
-  per-part minimum mass.
+- Done: the audit checks a rack against a rack's range (0.5-4 kg), and the articulated build
+  gives a rack at least 1.2 kg (`RACK_MIN_MASS`): it is thin wire, so its share of the material
+  volume was next to nothing (0.15 kg). Re-audited, mass outliers are 2/17: only the window
+  sashes, 2.8 kg against a 3.55 kg minimum.
 - The dishwasher door's holding friction should let a person's pull open it, while still holding
   it at rest.
