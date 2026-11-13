@@ -141,6 +141,32 @@ def test_the_training_set_is_a_colmap_model_whose_lidar_points_reproject(scan, t
     assert np.all((np.abs(z - FLOOR_Y) < 0.01) | (np.abs(z - (FLOOR_Y + 0.75)) < 0.01))
 
 
+def _depth_beyond_range(scan: Path, index: int) -> None:
+    """Every LiDAR sample of frame `index` at 6 m: past `dataset.MAX_DEPTH`, none usable."""
+    from PIL import Image
+
+    path = scan / f"depth_{index:05d}.png"
+    with Image.open(path) as im:
+        shape = np.asarray(im).shape
+    Image.fromarray(np.full(shape, 6000, np.uint16)).save(path)
+
+
+def test_a_frame_without_lidar_points_is_left_out_of_the_training_set(scan, tmp_path):
+    # gsplat's depth loss looks each photo's points up by name: a photo with none would crash it.
+    _frame_looking_down(scan, index=1)
+    _depth_beyond_range(scan, 0)
+    ds = dataset.build(rgbd.load_frames(scan), width=160, points_per_frame=300)
+    cams, images, points = _read_colmap(ds.write(tmp_path / "ds"))
+    assert ds.images == 1 and [im[4] for im in images] == ["frame_00001.jpg"]
+    assert sorted(cams) == [im[0] for im in images] == [1]           # ids 1..n, no gap
+    assert set(points["img"]) == {1} and len(points) == ds.points == 300
+    assert sorted(ds.files) == ["images/frame_00001.jpg", "sparse/0/cameras.bin",
+                                "sparse/0/images.bin", "sparse/0/points3D.bin"]
+    _depth_beyond_range(scan, 1)
+    with pytest.raises(ValueError, match="LiDAR"):
+        dataset.build(rgbd.load_frames(scan), width=160, points_per_frame=300)
+
+
 SCENE = """<mujoco>
   <worldbody>
     <geom name="floor" type="plane" size="5 5 0.1"/>

@@ -20,8 +20,12 @@ renormalised so the splats stay in metres in the room's frame) and yields, in or
     {"kind": "error", "error", "log"}                             # instead of "done"
 
 Each snapshot is an SPZ file (models/splat/spz.py) that Spark draws as it is. The call shows the
-instant LiDAR room until the first one (step 2000, ~80 s after the request for tea_room), then
-sharpens with each. tea_room, 7000 steps on an H100: 146 s of training, ~$0.30.
+instant LiDAR room until the first one, then sharpens with each. tea_room on an H100, 1250 steps of
+4 photos (results/tea_room/splat_speed.md): first snapshot ~22 s and the final one ~46 s after the
+container starts (33 s of training), held-out PSNR 20.2 dB; ~$0.10 a room.
+
+`train(b"")` (an empty dataset) only boots a container and yields one "done" with "warm": True:
+sent when the scan arrives, it hides the GPU container's cold start behind the instant room.
 """
 
 from __future__ import annotations
@@ -55,18 +59,33 @@ TIMEOUT_SECONDS = 1800
 MAX_DATASET_BYTES = 400 * 1024 * 1024
 
 DEFAULTS = {
-    "steps": 7000,
-    # Earlier snapshots are sparser than the instant LiDAR room the call already shows (tea_room:
-    # step 300 is speckle, 1000 has holes), so the first one sent is 2000 (~50 s of training).
-    "snapshots": [2000, 3500, 5000, 7000],
+    # 4 photos a step: the H100 is bound by per-step overhead, not pixels (1 photo: 76 steps/s,
+    # 4 photos: 38 steps/s), so a batch of 4 sees 2x the photos per second, and on tea_room its
+    # 1250 steps (5000 photos) score better than 7000 single-photo steps (results/tea_room/
+    # splat_speed.md): 33 s of training instead of 142 s.
+    "steps": 1250,
+    "batch_size": 4,
+    # The first snapshot holds ~600k splats, already sharper than the instant LiDAR room.
+    "snapshots": [400, 800, 1250],
     "cap_max": 800_000,           # MCMC's splat budget: ~16 MB of SPZ at SH degree 1
     "sh_degree": 3,               # trained with; snapshots keep degree 1 (export_sh_degree)
     "export_sh_degree": 1,
     "test_every": 8,              # every 8th photo held out for PSNR/SSIM/LPIPS (paper numbers)
     "depth_lambda": 0.01,
     "bilateral_grid": True,
+    "fused_bilagrid": True,       # the bilateral grid as one CUDA kernel: 48 -> 66 steps/s
     "antialiased": True,
+    "packed": False,              # no faster here
+    "visible_adam": True,         # Adam steps only the splats a photo sees (Taming 3DGS)
+    # MCMC's growth (start 500, every 100 steps) and the SH degree's climb (every 1000 steps)
+    # are gsplat's, tuned for SCHEDULE_STEPS; True scales them to `steps`, so a short run still
+    # reaches the splat budget and SH degree 3 at the same fraction of its run.
+    "scale_schedule": True,
+    "trainer_args": [],           # any further simple_trainer.py flags, as given
 }
+SCHEDULE_STEPS = 7000
+# Lines the trainer prints on its way up, timed into the "done" event's "timing".
+MARKS = {"data_loaded": "Scene scale:", "model_ready": "Model initialized", "training": "it/s]"}
 
 image = (
     modal.Image.from_registry(CUDA_IMAGE, add_python="3.10")
@@ -120,7 +139,7 @@ def _command(data_dir: Path, result_dir: Path, opt: dict) -> list[str]:
     cmd = [sys.executable, str(TRAINER), "mcmc",
            "--data-dir", str(data_dir), "--data-factor", "1", "--result-dir", str(result_dir),
            "--no-normalize-world-space", "--disable-viewer", "--disable-video",
-           "--max-steps", str(opt["steps"]),
+           "--max-steps", str(opt["steps"]), "--batch-size", str(int(opt["batch_size"])),
            "--save-ply", "--ply-steps", *map(str, opt["snapshots"]),
            "--save-steps", str(opt["steps"]),
            "--eval-steps", str(opt["steps"]),
@@ -128,18 +147,30 @@ def _command(data_dir: Path, result_dir: Path, opt: dict) -> list[str]:
            "--sh-degree", str(opt["sh_degree"]),
            "--strategy.cap-max", str(int(opt["cap_max"])),
            "--depth-loss", "--depth-lambda", str(opt["depth_lambda"])]
-    if opt["bilateral_grid"]:
+    if opt["fused_bilagrid"]:
+        cmd.append("--use-fused-bilagrid")
+    elif opt["bilateral_grid"]:
         cmd.append("--use-bilateral-grid")
     if opt["antialiased"]:
         cmd.append("--antialiased")
-    return cmd
+    if opt["packed"]:
+        cmd.append("--packed")
+    if opt["visible_adam"]:
+        cmd.append("--visible-adam")
+    if opt["scale_schedule"]:
+        f = opt["steps"] / SCHEDULE_STEPS
+        cmd += ["--strategy.refine-start-iter", str(max(1, round(500 * f))),
+                "--strategy.refine-every", str(max(1, round(100 * f))),
+                "--sh-degree-interval", str(max(1, round(1000 * f)))]
+    cmd += ["--tb-every", "0"]                    # no tensorboard: a GPU sync every 100 steps
+    return cmd + [str(a) for a in opt["trainer_args"]]
 
 
 def _settled(path: Path) -> bool:
-    """A ply the trainer has finished writing: its size holds still for half a second."""
+    """A ply the trainer has finished writing: its size holds still for a quarter second."""
     try:
         size = path.stat().st_size
-        time.sleep(0.5)
+        time.sleep(0.25)
         return size > 0 and path.stat().st_size == size
     except OSError:
         return False
@@ -168,6 +199,14 @@ def train(dataset_tar: bytes, options: dict | None = None):
     from litereality_agent.models.splat import ply, spz
 
     t0 = time.perf_counter()
+    if not dataset_tar:
+        # A warm-up call: boots a container (and CUDA) and returns, so the real call, sent within
+        # `scaledown_window`, skips the ~10 s cold start. Send it as the scan arrives.
+        import torch
+
+        yield {"kind": "done", "seconds": time.perf_counter() - t0, "stats": {}, "warm": True,
+               "gpu": torch.cuda.get_device_name(0)}
+        return
     try:
         opt = _options(options)
         if len(dataset_tar) > MAX_DATASET_BYTES:
@@ -185,16 +224,25 @@ def train(dataset_tar: bytes, options: dict | None = None):
                     raise ValueError(f"unexpected entry in the dataset: {member.name}")
             tf.extractall(data_dir)
         images = len(list((data_dir / "images").glob("*")))
-        import torch
-        yield {"kind": "started", "seconds": time.perf_counter() - t0, "images": images,
-               "gpu": torch.cuda.get_device_name(0)}
-
         with open(log_path, "w") as log:
             proc = subprocess.Popen(_command(data_dir, result_dir, opt), cwd=TRAINER.parent,
                                     stdout=log, stderr=subprocess.STDOUT,
                                     env={**os.environ, "PYTHONUNBUFFERED": "1"})
+            # Imported after the launch: the trainer's own imports run meanwhile.
+            import torch
+
+            yield {"kind": "started", "seconds": time.perf_counter() - t0, "images": images,
+                   "gpu": torch.cuda.get_device_name(0)}
             pending = list(opt["snapshots"])
+            marks = dict(MARKS)
+            timing: dict[str, float] = {"launched": round(time.perf_counter() - t0, 2)}
             while pending:
+                if marks:
+                    text = log_path.read_text(errors="replace")
+                    for name, marker in list(marks.items()):
+                        if marker in text:
+                            timing[name] = round(time.perf_counter() - t0, 2)
+                            del marks[name]
                 path = result_dir / "ply" / f"point_cloud_{pending[0] - 1}.ply"
                 if not path.exists():
                     path = result_dir / "ply" / f"point_cloud_{pending[0]}.ply"
@@ -208,7 +256,7 @@ def train(dataset_tar: bytes, options: dict | None = None):
                     continue
                 if proc.poll() is not None:
                     break
-                time.sleep(0.5)
+                time.sleep(0.2)
             code = proc.wait()
         log_tail = log_path.read_text(errors="replace")[-6000:]
         if code != 0 or pending:
@@ -219,7 +267,7 @@ def train(dataset_tar: bytes, options: dict | None = None):
         for f in sorted((result_dir / "stats").glob("val_step*.json")):
             stats = json.loads(f.read_text())
         yield {"kind": "done", "seconds": time.perf_counter() - t0, "stats": stats,
-               "log": log_tail[-1500:]}
+               "timing": timing, "log": log_tail[-1500:]}
     except Exception as exc:  # noqa: BLE001 — reported to the caller, never retried
         tail = log_path.read_text(errors="replace")[-6000:] if log_path.exists() else ""
         yield {"kind": "error", "error": f"{type(exc).__name__}: {exc}", "log": tail}

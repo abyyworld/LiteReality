@@ -22,6 +22,7 @@ the frame the room call draws in.
 
 from __future__ import annotations
 
+import gzip
 import io
 import struct
 import tarfile
@@ -36,6 +37,7 @@ TRAIN_WIDTH = 960
 POINTS_PER_FRAME = 4000
 MAX_DEPTH = 5.0
 MIN_CONFIDENCE = 2
+MIN_FRAME_POINTS = 20         # a photo with fewer LiDAR points is left out
 GL_TO_CV = np.diag([1.0, -1.0, -1.0, 1.0])
 JPEG_QUALITY = 95
 
@@ -48,6 +50,9 @@ class Dataset:
     size: tuple[int, int]            # training (width, height)
 
     def tar(self) -> bytes:
+        """The files as one gzipped tar (the trainer's `tarfile.open` reads either). gzip level 1:
+        the float64 COLMAP points are ~70% of it and shrink 40% (tea_room: 28 -> 17 MB, ~3 s less
+        upload to Modal) for under a second of compression."""
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w") as tf:
             for name, data in sorted(self.files.items()):
@@ -55,7 +60,7 @@ class Dataset:
                 info.size = len(data)
                 info.mtime = 0
                 tf.addfile(info, io.BytesIO(data))
-        return buf.getvalue()
+        return gzip.compress(buf.getvalue(), compresslevel=1, mtime=0)
 
     def write(self, root: Path) -> Path:
         for name, data in self.files.items():
@@ -113,29 +118,38 @@ def _lidar_points(frame: Frame, rng: np.random.Generator, count: int, width: int
 
 def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: int = POINTS_PER_FRAME,
           seed: int = 0) -> Dataset:
-    """The COLMAP-format training set for `frames` (see the module docstring)."""
+    """The COLMAP-format training set for `frames` (see the module docstring). Frames with fewer
+    than `MIN_FRAME_POINTS` usable LiDAR samples are left out, the rest numbered 1..n; ValueError
+    when none is left."""
     from PIL import Image
 
     if not frames:
         raise ValueError("no frames to train on")
     rng = np.random.default_rng(seed)
     files: dict[str, bytes] = {}
-    cameras = [struct.pack("<Q", len(frames))]
-    images = [struct.pack("<Q", len(frames))]
+    cameras: list[bytes] = []
+    images: list[bytes] = []
     pts_xyz, pts_rgb, pts_track = [], [], []
     next_point = 1
     size = (0, 0)
-    for image_id, frame in enumerate(frames, start=1):
+    for frame in frames:
         scale = width / frame.size[0]
         height = int(round(frame.size[1] * scale))
-        size = (width, height)
         with Image.open(frame.image) as im:
             small = im.convert("RGB").resize((width, height), Image.LANCZOS)
+        rgb = np.asarray(small)
+        obs = _lidar_points(frame, rng, points_per_frame, width, height, rgb)
+        n = 0 if obs is None else len(obs[0])
+        if n < MIN_FRAME_POINTS:
+            # gsplat's depth loss looks a photo's points up by its name, and its Parser lists only
+            # photos that some 3D point's track names: a photo without any would crash it.
+            continue
+        image_id = len(images) + 1
+        size = (width, height)
         buf = io.BytesIO()
         small.save(buf, format="JPEG", quality=JPEG_QUALITY)
         name = f"frame_{frame.index:05d}.jpg"
         files[f"images/{name}"] = buf.getvalue()
-        rgb = np.asarray(small)
 
         # ARKit's principal point is in pixel units with the first pixel's centre at 0; COLMAP's
         # first pixel centre is 0.5.
@@ -146,20 +160,17 @@ def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: in
 
         w2c = np.linalg.inv(frame.c2w @ GL_TO_CV)
         q, t = _quat_wxyz(w2c[:3, :3]), w2c[:3, 3]
-        obs = _lidar_points(frame, rng, points_per_frame, width, height, rgb)
-        n = 0 if obs is None else len(obs[0])
         ids = np.arange(next_point, next_point + n, dtype=np.int64)
         next_point += n
         head = struct.pack("<i4d3di", image_id, *q, *t, image_id) + name.encode() + b"\0"
         p2d = np.zeros(n, dtype=[("x", "<f8"), ("y", "<f8"), ("id", "<i8")])
-        if n:
-            world, colours, pix = obs
-            p2d["x"], p2d["y"], p2d["id"] = pix[:, 0], pix[:, 1], ids
-            pts_xyz.append(world)
-            pts_rgb.append(colours)
-            track = np.zeros(n, dtype=[("img", "<i4"), ("idx", "<i4")])
-            track["img"], track["idx"] = image_id, np.arange(n)
-            pts_track.append((ids, track))
+        world, colours, pix = obs
+        p2d["x"], p2d["y"], p2d["id"] = pix[:, 0], pix[:, 1], ids
+        pts_xyz.append(world)
+        pts_rgb.append(colours)
+        track = np.zeros(n, dtype=[("img", "<i4"), ("idx", "<i4")])
+        track["img"], track["idx"] = image_id, np.arange(n)
+        pts_track.append((ids, track))
         images.append(head + struct.pack("<Q", n) + p2d.tobytes())
 
     total = next_point - 1
@@ -173,7 +184,11 @@ def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: in
         rec["len"] = 1
         tracks = np.concatenate([track for _, track in pts_track])
         rec["img"], rec["idx"] = tracks["img"], tracks["idx"]
-    files["sparse/0/cameras.bin"] = b"".join(cameras)
-    files["sparse/0/images.bin"] = b"".join(images)
+    if not images:
+        raise ValueError(f"none of the {len(frames)} frames has {MIN_FRAME_POINTS} usable LiDAR "
+                         "points to train on")
+    count = struct.pack("<Q", len(images))
+    files["sparse/0/cameras.bin"] = count + b"".join(cameras)
+    files["sparse/0/images.bin"] = count + b"".join(images)
     files["sparse/0/points3D.bin"] = struct.pack("<Q", total) + rec.tobytes()
-    return Dataset(files=files, images=len(frames), points=total, size=size)
+    return Dataset(files=files, images=len(images), points=total, size=size)
