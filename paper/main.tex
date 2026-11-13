@@ -3,6 +3,8 @@
 \documentclass[sigconf,review,anonymous]{acmart}
 \usepackage{booktabs}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,shapes.geometric}
 \newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
 \newcommand{\measured}[1]{#1}
 \newcommand{\sys}{RoomCall}
@@ -20,7 +22,7 @@ throws and rearranges the real furniture, and opens doors and drawers, with one 
 simulation on a server so that all participants see the same room. The room is built
 progressively. A physics-ready sketch appears in \measured{2\,s}, and a photoreal Gaussian-splat
 room from the scan's own photos and LiDAR in \measured{10\,s}. A sharper, trained room streams
-in over the following \measured{3\,min}, while each object's generated mesh and articulation
+in over the following \measured{1.5\,min}, while each object's generated mesh and articulation
 arrive in the background. To make the photoreal room interactive, we cut every movable object
 out of the splat with SAM~2 masks voted onto the splats, move its physics body to where the
 photos show it (but never into a wall), and patch the floor that no photo saw. We report build
@@ -37,7 +39,7 @@ RoomPlan returns its walls, openings and furniture as labelled boxes. Sharing th
 the people on a call is not ordinary. Telepresence research has shown what shared spaces can do
 for remote collaboration \cite{virtualnexus,gaussiannexus,avatarpilot}. It assumes head-mounted
 displays and a client installed on every side, and it simulates physics, if at all, on each
-client separately, as social VR platforms do. \todo{cite Hubs, Croquet}.
+client, as browser-based shared worlds do \cite{hubs,croquet}.
 
 \sys{} takes the opposite stance: \emph{no new hardware and no install}. The room lives on a
 server and is shared by a link pasted into the call chat. Four design decisions follow:
@@ -69,10 +71,15 @@ physics plausibility and capacity;
 \paragraph{Shared spaces for remote collaboration.}
 VirtualNexus \cite{virtualnexus} and GaussianNexus \cite{gaussiannexus} (UIST 2024, 2025) bring
 remote users into a captured space with head-mounted displays. GaussianNexus is the closest to our
-photoreal room, with room-scale splats and basic physics between a HoloLens and a Quest user.
-AvatarPilot \cite{avatarpilot} keeps pointing and grabbing aimed at the right objects across
-rooms. \todo{CrossGaussian (UIST'25 adjunct), Hubs/Croquet/Hyperfy (client-side physics)}.
-\sys{} differs in running on ordinary calls and browsers with one authoritative simulation.
+photoreal room: a room-scale Gaussian splat shared between a HoloLens and a Quest user, with
+objects that are segmented, tracked and kept in sync when moved. CrossGaussian
+\cite{crossgaussian} combines a splat of the space with live 360\textdegree{} video for a remote VR
+user. AvatarPilot \cite{avatarpilot} keeps relocated avatars' pointing and grabbing aimed at the
+right objects across mismatched rooms. Shared virtual worlds in the browser simulate on the
+clients: Mozilla Hubs \cite{hubs} runs physics in every client and synchronises objects, and
+Croquet \cite{croquet} replicates one deterministic computation on every client. \sys{} differs
+in running on ordinary calls and browsers, with one authoritative physics simulation on a server
+that browsers only draw.
 
 \paragraph{Scanned rooms as simulations.}
 LiteReality \cite{litereality} converts RGB-D scans into graphics- and simulation-ready
@@ -80,7 +87,7 @@ indoor scenes. \sys{} builds on its pipeline and density-based physics estimates
 DRAWER \cite{drawer} reconstructs articulated digital twins from video with splats; Splatting
 Physical Scenes \cite{splattingphysical} couples splats and meshes with MuJoCo; PhysTwin, SplatSim,
 Robo-GS and VR-GS \cite{phystwin,splatsim,robogs,vrgs} add physics to splats for robotics or VR.
-\todo{verify each citation; check ArtiTwinSplat, DREAM}.
+
 
 \paragraph{Fast and segmented Gaussian splatting.}
 We train with gsplat \cite{gsplat}, using MCMC densification. FastGS and the SIGGRAPH Asia 2025
@@ -90,9 +97,24 @@ we follow FlashSplat's \cite{flashsplat} idea of lifting 2D masks onto splats, b
 a depth test, using SAM~2 \cite{sam2} prompted by the scanner's 3D boxes.
 
 \section{The \sys{} System}
-\todo{architecture figure: phone scan $\rightarrow$ builders (laptop/Modal) $\rightarrow$ versioned
-room on a volume $\rightarrow$ one server container (MuJoCo + FastAPI/WebSocket) $\rightarrow$
-browsers (three.js + Spark), with Zoom/Meet/Teams carrying audio.}
+\begin{figure*}[t]
+  \centering
+  \input{figures/architecture}
+  \caption{\sys{} architecture. A phone scan is uploaded to builders: Modal GPUs run the gsplat
+  trainer, SAM~2 object masks and TRELLIS, and a CPU (the laptop or Modal) builds the quick room,
+  the instant splat and Infinigen's openable furniture. Each stage publishes a new version of the
+  room to a Modal Volume. One server container loads it and runs one MuJoCo simulation per room,
+  sending body poses to every browser over a WebSocket and taking grabs back; rooms are created
+  by link. Browsers draw meshes with three.js and splats with Spark. Webcams go browser to browser
+  over WebRTC, and the video call carries voice as usual.}
+  \Description{Block diagram, left to right: phone scan; builders split into a GPU group (gsplat
+  trainer, SAM 2, TRELLIS) and a CPU group (quick room, instant splat, Infinigen); a Modal
+  Volume holding versions of the room; one server container with FastAPI, WebSocket and MuJoCo;
+  three browsers with two-way arrows to the server and dashed WebRTC links between them. A bar
+  under the server and browsers stands for the Zoom, Meet or Teams call.}
+  \label{fig:architecture}
+\end{figure*}
+Figure~\ref{fig:architecture} shows the system.
 
 \paragraph{Server.} One CPU container holds every room. A room's simulation steps at real time
 and broadcasts body poses. People grab with a spring to a hand target, and a throw keeps the
@@ -119,9 +141,10 @@ Stage & Ready at & Cost \\
 \midrule
 Quick room (RoomPlan boxes $\rightarrow$ templates, photo walls, physics) & \measured{2.0\,s} & \$0 \\
 Instant splat (photos + LiDAR fused, no GPU) & \measured{10\,s} & \$0 \\
-Objects cut out by SAM~2 masks & \measured{+15\,s} & \measured{$<$\$0.01} \\
-First trained splat (gsplat, H100, step 2000) & \measured{81--102\,s} & \\
-Final trained splat (step 7000, 800k splats) & \measured{184\,s} & \measured{$\approx$\$0.30} \\
+Objects cut out by SAM~2 masks (in parallel) & \measured{+15--18\,s} & \measured{$<$\$0.01} \\
+Trainer up on an H100 (container warmed during the instant splat) & \measured{26\,s} & \\
+First trained splat (step 400, 600k splats) & \measured{73\,s} & \\
+Final trained splat (1250 steps $\times$ 4 photos, 800k splats) & \measured{104\,s} & \measured{$\approx$\$0.15} \\
 Generated object meshes (TRELLIS, 4$\times$H100) & \measured{2.0--7.2\,min} & \measured{\$2.24} \\
 Openable furniture (Infinigen-Sim, 7 assets, laptop CPU) & \measured{91\,s} & \$0 \\
 \midrule
@@ -132,6 +155,22 @@ First trained snapshot & \measured{96\,s} & \\
 \bottomrule
 \end{tabular}
 \end{table}
+\begin{figure}[t]
+  \centering
+  \input{figures/timeline}
+  \caption{Progressive build of tea\_room (62 photos), on a log time axis. Each stage is timed
+  from its own start; all start when the scan arrives and run in parallel. The trained splat
+  streams snapshots from step 400 (73\,s) to the final splat at 104\,s, uploads to the deployed link included; generated objects
+  arrive one at a time between 2.0 and 7.2\,min (circle: all previews, 275\,s). Bottom row: the
+  deployed system when a room is scanned during a call, timed from the start of the upload.}
+  \Description{Horizontal timeline with a logarithmic time axis from 1 second to 10 minutes.
+  Quick room ready at 2 seconds; instant splat at 10 seconds; trained splat training from
+  26 seconds, first snapshot at 73 seconds and final at 104 seconds; openable furniture at
+  91 seconds; generated object meshes from 2.0 to 7.2 minutes. A separate row for a live call
+  marks the mesh room at 10 seconds, the photoreal room at 22 seconds and the first trained
+  snapshot at 96 seconds.}
+  \label{fig:timeline}
+\end{figure}
 
 \paragraph{Instant splat.} Every LiDAR depth sample of every photo becomes a flat disc, oriented
 along the surface normal and sized to the surface patch the pixel covers. Discs are fused on a
@@ -141,7 +180,12 @@ voxel grid: per voxel, the sharpest view's geometry and the confidence-weighted 
 \paragraph{Trained splat.} gsplat's trainer runs unchanged on a training set written directly
 from the scan. ARKit poses and intrinsics are the cameras, so no COLMAP is needed. Confident LiDAR
 samples initialise the splats and supervise depth, and a per-photo bilateral grid absorbs the
-phone's exposure changes. Snapshots stream to the call as they are produced.
+phone's exposure changes. The H100 is bound by per-step overhead rather than pixels, so we train on
+four photos per step for 1250 steps with fused bilateral-grid and visible-splat Adam kernels: the
+training loop takes \measured{33\,s} and the held-out PSNR rises from \measured{19.17} to
+\measured{20.2\,dB} against a 7000-step single-photo schedule
+(\texttt{results/tea\_room/splat\_speed.md}). A warm-up call boots the GPU container while the
+instant splat is computed. Snapshots stream to the call as they are produced.
 
 \paragraph{Interactive objects.} For each movable body:
 \begin{enumerate}

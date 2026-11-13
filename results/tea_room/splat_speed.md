@@ -156,3 +156,22 @@ Options:
 17 trainer runs (15 in the sweep, 2 end to end) and a few small probes, about **$2.8–3.0** in all. Modal's billing report for
 `litereality-splat` shows $2.24 in the 16:00 UTC hour (which may include other sessions' runs
 of the app in that hour) and $0.84 after 17:00.
+
+## Wired in and measured on the deployed link (same day)
+
+`splatroom` now sends the warm-up call itself (`ModalSplatTrainer.warm`, at the start of
+`splatroom.build`). One full run with SAM 2 masks and `--publish` (every bundle uploaded to the
+hosted link):
+
+| | Seconds after pressing enter |
+|---|---|
+| Instant room | 12.0 |
+| Trainer up on the H100 | 25.7 |
+| First trained snapshot in the call (step 400) | 72.9 |
+| Final in the call (step 1250) | 103.6 |
+
+Held-out PSNR 20.21 dB, SSIM 0.783, LPIPS 0.364.
+
+The ~30 s more than the 74 s above is the publishing. Each bundle uploads to the Modal Volume, and
+the instant room is cut again with the masks before the first trained snapshot. Both happen in
+line with training.

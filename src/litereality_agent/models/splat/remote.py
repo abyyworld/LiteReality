@@ -23,6 +23,20 @@ class ModalSplatTrainer:
         self.client = ModalClient(APP_NAME, FUNCTION_NAME, environment_name=environment_name,
                                   profile=profile, credentials=credentials, function=function)
 
+    def warm(self) -> None:
+        """Boot a GPU container now, in the background (``train(b"")`` returns at once and the
+        container waits `scaledown_window` for the real call): its ~10 s cold boot then happens
+        while the instant room is computed. Costs only those idle seconds; never raises."""
+        import threading
+
+        def run() -> None:
+            try:
+                for _event in self.client.function.remote_gen(b"", {}):
+                    pass
+            except Exception:  # noqa: BLE001 — a failed warm-up only costs the cold boot later
+                pass
+        threading.Thread(target=run, daemon=True, name="splat-warm-up").start()
+
     def stream(self, dataset_tar: bytes, options: dict | None = None) -> Iterator[dict]:
         ended = False
         try:

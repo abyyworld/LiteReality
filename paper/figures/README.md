@@ -1,5 +1,8 @@
 # Figures
 
+**Both figures are now in `main.tex`, with the faster trainer's numbers (final splat at 104 s);
+the blocks below are the originals, kept for reference.**
+
 TikZ figures for `paper/main.tex`. Each `<name>.tex` holds a single `tikzpicture` and is meant to
 be pulled in with `\input`. Each `standalone-<name>.tex` wraps one figure so it compiles on its own.
 

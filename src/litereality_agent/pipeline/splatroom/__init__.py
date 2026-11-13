@@ -104,6 +104,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     from litereality_agent.pipeline.splatroom import masks as object_masks
 
     t0 = time.perf_counter()
+    if trainer is not None and not instant_only and hasattr(trainer, "warm"):
+        trainer.warm()                 # the GPU boots while the instant room is computed
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     frames = rgbd.load_frames(scan_dir)
     if not frames:

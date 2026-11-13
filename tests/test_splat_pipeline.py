@@ -138,3 +138,28 @@ def test_instant_only_asks_modal_for_nothing(tmp_path, box_scan, monkeypatch):
     monkeypatch.setattr(remote, "ModalSplatTrainer", lambda **_: object())
     with pytest.raises(RuntimeError, match="credentials"):   # masks still asked for otherwise
         cli._splatroom(args)
+
+
+def test_the_gpu_is_warmed_up_before_the_instant_room_and_only_when_training(tmp_path, monkeypatch):
+    from litereality_agent.models.splat.remote import ModalSplatTrainer
+
+    calls = []
+
+    class Function:
+        def remote_gen(self, data, options):
+            calls.append(("gen", data, dict(options)))
+            yield {"kind": "done", "warm": True} if not data else {"kind": "error", "error": "x"}
+
+    trainer = ModalSplatTrainer(function=Function())
+    trainer.warm()
+    import time as _time
+    for _ in range(50):
+        if calls:
+            break
+        _time.sleep(0.02)
+    assert calls and calls[0][1] == b""                       # an empty dataset: boot only
+
+    class Failing:
+        def remote_gen(self, data, options):
+            raise RuntimeError("no Modal here")
+    ModalSplatTrainer(function=Failing()).warm()              # never raises

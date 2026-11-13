@@ -3,8 +3,8 @@
 %   \usepackage{tikz}
 %   \usetikzlibrary{shapes.geometric}
 % Time axis is logarithmic: x = 1.9 cm per decade, from 1 s (x = 0) to 10 min (x = 5.28).
-% Numbers: paper Table "tab:timeline", results/tea_room/splat_run.md (trainer up 29.4 s,
-% snapshots 81.3 / 112.8 / 141.9 s, final 184.3 s) and results/tea_room/realistic_run.md
+% Numbers: paper Table "tab:timeline", results/tea_room/splat_run.md (trainer up 25.7 s,
+% snapshots 72.9 / 86.4 s, final 103.6 s; splat_speed.md) and results/tea_room/realistic_run.md
 % (TRELLIS first object 122 s, all previews 275 s, all finals 430 s). Openable furniture: 91 s.
 % Every stage is timed from its own start; they all start when the scan arrives.
 \begin{tikzpicture}[
@@ -54,15 +54,15 @@
   \node[ready=rccpu] at (\rctx{10}, \yI) {};
   \node[val, anchor=west] at ({\rctx{10}+0.08}, \yI) {10\,s, photoreal};
 
-  % trained splat: trainer up at 29.4 s, first snapshot 81-102 s, final 184 s
-  \draw[bar=rcgpulight] (\rctx{29.4}, \yT) -- (\rctx{81.3}, \yT);
-  \draw[bar=rcgpu] (\rctx{81.3}, \yT) -- (\rctx{184.3}, \yT);
+  % trained splat: trainer up at 25.7 s, first snapshot 72.9 s, final 103.6 s
+  \draw[bar=rcgpulight] (\rctx{25.7}, \yT) -- (\rctx{72.9}, \yT);
+  \draw[bar=rcgpu] (\rctx{72.9}, \yT) -- (\rctx{103.6}, \yT);
   \foreach \t in {112.8, 141.9} { \node[snap] at (\rctx{\t}, \yT) {}; }
-  \node[ready=rcgpu] at (\rctx{81.3}, \yT) {};
-  \node[ready=rcgpu] at (\rctx{184.3}, \yT) {};
-  \node[val, anchor=south] at (\rctx{81.3}, {\yT+0.1}) {first 81--102\,s};
-  \node[val, anchor=west] at ({\rctx{184.3}+0.08}, \yT) {final 184\,s};
-  \node[val, anchor=north, text=black!60] at ({0.5*(\rctx{29.4}+\rctx{81.3})}, {\yT-0.08}) {training};
+  \node[ready=rcgpu] at (\rctx{72.9}, \yT) {};
+  \node[ready=rcgpu] at (\rctx{103.6}, \yT) {};
+  \node[val, anchor=south] at (\rctx{72.9}, {\yT+0.1}) {first 73\,s};
+  \node[val, anchor=west] at ({\rctx{103.6}+0.08}, \yT) {final 104\,s};
+  \node[val, anchor=north, text=black!60] at ({0.5*(\rctx{25.7}+\rctx{72.9})}, {\yT-0.08}) {training};
 
   % openable furniture: 91 s (CPU)
   \node[ready=rccpu] at (\rctx{91}, \yF) {};
