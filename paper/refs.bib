@@ -1,107 +1,280 @@
-% Every entry needs checking against the publisher's page before submission (authors, pages,
-% DOI). The "note" field says where the reference came from.
+% References for the RoomCall paper.
+%
+% Every entry below was checked on 2026-11-13 against the publisher's record (Crossref/DOI),
+% arXiv, CVF open access, JMLR or the project's repository. The comment above each entry says
+% where. Bibliographic fields that print are only those that were found there; nothing is
+% guessed. A field "note = {UNVERIFIED: ...}" prints on purpose: it marks a claim the draft
+% makes that the source does not support as written.
+%
+% Keys are unchanged from the first draft, so main.tex needs no edits for existing citations.
+% New keys: hubs, croquet, hyperfy, crossgaussian.
 
+% ---------------------------------------------------------------- shared spaces / telepresence
+
+% Crossref 10.1145/3654777.3676377; arXiv 2408.02914.
 @inproceedings{virtualnexus,
-  title     = {VirtualNexus: Enhancing 360-Degree Video AR/VR Collaboration with Environment Cutouts and Virtual Replicas},
-  booktitle = {Proceedings of the ACM Symposium on User Interface Software and Technology (UIST)},
+  author    = {Huang, Xincheng and Yin, Michael and Xia, Ziyi and Xiao, Robert},
+  title     = {{VirtualNexus}: Enhancing 360-Degree Video {AR/VR} Collaboration with Environment Cutouts and Virtual Replicas},
+  booktitle = {Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology},
+  series    = {UIST '24},
   year      = {2024},
-  note      = {UBC "Nexus" line; verify authors, title and DOI}
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  location  = {Pittsburgh, PA, USA},
+  numpages  = {12},
+  doi       = {10.1145/3654777.3676377}
 }
 
+% Crossref 10.1145/3746059.3747693; article number 189 from dblp (conf/uist/HuangFXGX25).
+% HoloLens (AR) + Quest (VR) users confirmed from the paper's teaser caption. The draft's
+% "basic physics between a HoloLens and a Quest user" is NOT confirmed: the abstract describes
+% segmentation, object tracking and live synchronisation of moved objects, not a physics
+% simulation. Check the full text before keeping the word "physics" in Related Work.
 @inproceedings{gaussiannexus,
-  title     = {GaussianNexus},
-  booktitle = {Proceedings of the ACM Symposium on User Interface Software and Technology (UIST)},
+  author    = {Huang, Xincheng and Frehlich, Dieter and Xia, Ziyi and Gholami, Peyman and Xiao, Robert},
+  title     = {{GaussianNexus}: Room-Scale Real-Time {AR/VR} Telepresence with {Gaussian} Splatting},
+  booktitle = {Proceedings of the 38th Annual ACM Symposium on User Interface Software and Technology},
+  series    = {UIST '25},
   year      = {2025},
-  note      = {room-scale splat telepresence, HoloLens + Quest; verify full title, authors, DOI}
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  location  = {Busan, Republic of Korea},
+  articleno = {189},
+  numpages  = {18},
+  doi       = {10.1145/3746059.3747693}
 }
 
+% Crossref 10.1109/ISMAR-Adjunct64951.2024.00169. A 4-page ISMAR *Adjunct* paper, not a main
+% ISMAR paper (the first draft said ISMAR). Abstract (Microsoft Research page): weighted
+% interpolation so that relocated avatars look/point at the same objects across mismatched
+% rooms, extended to locomotion and grabbing. Matches the draft's description.
 @inproceedings{avatarpilot,
-  title     = {AvatarPilot},
-  booktitle = {IEEE International Symposium on Mixed and Augmented Reality (ISMAR)},
+  author    = {Wang, Cheng Yao and Ofek, Eyal and Kim, Hyunju and Panda, Payod and Won, Andrea Stevenson and Gonzalez-Franco, Mar},
+  title     = {{AvatarPilot}: Decoupling One-to-One Motions from their Semantics with Weighted Interpolations},
+  booktitle = {2024 IEEE International Symposium on Mixed and Augmented Reality Adjunct (ISMAR-Adjunct)},
   year      = {2024},
-  note      = {Wang, Ofek et al.; verify full title and authors}
+  pages     = {588--591},
+  publisher = {IEEE},
+  address   = {Bellevue, WA, USA},
+  doi       = {10.1109/ISMAR-Adjunct64951.2024.00169}
 }
 
-@misc{litereality,
-  title  = {LiteReality: Graphics-Ready 3D Scene Reconstruction from RGB-D Scans},
-  year   = {2025},
-  note   = {arXiv; the pipeline this system builds on (LiteReality-Agent); verify authors and ID}
+% Crossref 10.1145/3746058.3758348 (UIST '25 Adjunct, 3 pages). The same title and the same
+% eight authors also appear as a 2-page ISMAR 2025 Adjunct paper,
+% doi 10.1109/ISMAR-Adjunct68609.2025.00282, pp. 921--922. Cite one (the UIST one here).
+% It combines a 3DGS model of the space with live 360-degree video for a remote VR user.
+@inproceedings{crossgaussian,
+  author    = {Byun, Jaehyun and Kang, Byunghoon and Gwon, Yonghyun and Choi, Hongsong and Do, Yunseo and Kim, Eunho and Park, Sangkeun and Oh, Seungjae},
+  title     = {{CrossGaussian}: Enhancing Remote Collaboration through {3D} {Gaussian} Splatting and Real-time 360{\textdegree} Streaming},
+  booktitle = {Adjunct Proceedings of the 38th Annual ACM Symposium on User Interface Software and Technology},
+  series    = {UIST Adjunct '25},
+  year      = {2025},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  location  = {Busan, Republic of Korea},
+  numpages  = {3},
+  doi       = {10.1145/3746058.3758348}
 }
 
+% Software; no paper describes Hubs itself. Repository github.com/Hubs-Foundation/hubs
+% (MPL-2.0, "multi-user virtual spaces in WebVR, built with A-Frame"). Mozilla's support
+% article "End of support for Mozilla Hubs": Mozilla ended the hosted service on 31 May 2024 and
+% the code is now maintained by the Hubs Foundation. Physics: the client runs ammo.js in a web
+% worker (src/systems/physics-system.js) and networked-aframe syncs objects, i.e. client-side
+% physics, as the draft says.
+@misc{hubs,
+  author       = {{Mozilla} and {Hubs Foundation}},
+  title        = {Hubs: Multi-User Virtual Spaces in the Browser},
+  year         = {2018},
+  howpublished = {\url{https://github.com/Hubs-Foundation/hubs}},
+  note         = {Open-source social VR in the browser. Mozilla ended its hosted service on 31 May 2024; the code is maintained by the Hubs Foundation},
+  url          = {https://github.com/Hubs-Foundation/hubs},
+  lastaccessed = {November 13, 2026}
+}
+
+% Crossref 10.1109/C5.2003.1222325. The founding Croquet paper (replicated computation with
+% TeaTime). Note for the draft: Croquet does not simulate "on each client separately"; every
+% client runs the SAME deterministic computation, kept in lockstep by a reflector that orders
+% messages. It is client-side, but replicated rather than independent.
+@inproceedings{croquet,
+  author    = {Smith, David A. and Kay, Alan and Raab, Andreas and Reed, David P.},
+  title     = {Croquet -- A Collaboration System Architecture},
+  booktitle = {Proceedings of the First Conference on Creating, Connecting and Collaborating Through Computing (C5 2003)},
+  year      = {2003},
+  pages     = {2--9},
+  publisher = {IEEE},
+  address   = {Kyoto, Japan},
+  doi       = {10.1109/C5.2003.1222325}
+}
+
+% Software; no paper. Repository github.com/hyperfy-xyz/hyperfy (GPL-3.0, created Dec 2024,
+% "World building for everyone"). Its Physics system (src/core/systems/Physics.js, PhysX)
+% "runs on both the server and client", and apps choose what to network. So Hyperfy is NOT a
+% clean example of client-only physics; the note below prints until the draft's wording is fixed.
+@misc{hyperfy,
+  author       = {{Hyperfy}},
+  title        = {Hyperfy: Open-Source Multiplayer {3D} Worlds on the Web},
+  year         = {2024},
+  howpublished = {\url{https://github.com/hyperfy-xyz/hyperfy}},
+  note         = {UNVERIFIED: the draft groups Hyperfy with client-side physics, but its PhysX simulation runs on both the server and every client},
+  url          = {https://github.com/hyperfy-xyz/hyperfy},
+  lastaccessed = {November 13, 2026}
+}
+
+% ---------------------------------------------------------------- scanned rooms as simulations
+
+% Crossref 10.52202/085713-5435 (NeurIPS 2025 proceedings); arXiv 2507.02861.
+@inproceedings{litereality,
+  author    = {Huang, Zhening and Wu, Xiaoyang and Zhong, Fangcheng and Zhao, Hengshuang and Nie{\ss}ner, Matthias and Lasenby, Joan},
+  title     = {{LiteReality}: Graphics-Ready {3D} Scene Reconstruction from {RGB-D} Scans},
+  booktitle = {Advances in Neural Information Processing Systems 38 (NeurIPS 2025)},
+  year      = {2025},
+  pages     = {180677--180710},
+  doi       = {10.52202/085713-5435},
+  eprint    = {2507.02861},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV}
+}
+
+% Crossref 10.1109/CVPR52734.2025.02028; arXiv 2504.15278.
 @inproceedings{drawer,
-  title     = {DRAWER: Digital Reconstruction and Articulation With Environment Realism},
-  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  author    = {Xia, Hongchi and Su, Entong and Memmel, Marius and Jain, Arhan and Yu, Raymond and Mbiziwo-Tiapo, Numfor and Farhadi, Ali and Gupta, Abhishek and Wang, Shenlong and Ma, Wei-Chiu},
+  title     = {{DRAWER}: Digital Reconstruction and Articulation With Environment Realism},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
   year      = {2025},
-  note      = {github.com/xiahongchi/DRAWER; verify authors}
+  pages     = {21771--21782},
+  publisher = {IEEE},
+  doi       = {10.1109/CVPR52734.2025.02028}
 }
 
+% arXiv 2506.04120v2 (v2 adds an author omitted from v1). No conference/journal version found
+% as of 2026-11-13. Abstract confirms SplatMesh (3DGS + physics-ready triangle meshes) with
+% differentiable rendering and differentiable physics in MuJoCo MJX.
 @misc{splattingphysical,
-  title  = {Splatting Physical Scenes},
-  year   = {2025},
-  note   = {arXiv 2506.04120; splats + meshes with MuJoCo MJX; verify title and authors}
+  author        = {Moran, Ben and Comi, Mauro and Byravan, Arunkumar and Bohez, Steven and Erez, Tom and Li, Zhibin and Hasenclever, Leonard},
+  title         = {Splatting Physical Scenes: End-to-End Real-to-Sim from Imperfect Robot Data},
+  year          = {2025},
+  eprint        = {2506.04120},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.RO},
+  doi           = {10.48550/arXiv.2506.04120}
 }
 
+% Crossref 10.1109/ICCV51701.2025.00678; arXiv 2503.17973 (deformable objects from videos).
 @inproceedings{phystwin,
-  title     = {PhysTwin},
-  booktitle = {IEEE/CVF International Conference on Computer Vision (ICCV)},
+  author    = {Jiang, Hanxiao and Hsu, Hao-Yu and Zhang, Kaifeng and Yu, Hsin-Ni and Wang, Shenlong and Li, Yunzhu},
+  title     = {{PhysTwin}: Physics-Informed Reconstruction and Simulation of Deformable Objects from Videos},
+  booktitle = {Proceedings of the IEEE/CVF International Conference on Computer Vision (ICCV)},
   year      = {2025},
-  note      = {github.com/Jianghanxiao/PhysTwin; verify full title and authors}
+  pages     = {7219--7230},
+  publisher = {IEEE},
+  doi       = {10.1109/ICCV51701.2025.00678}
 }
 
+% Crossref 10.1109/ICRA55743.2025.11128339; arXiv 2409.10161.
 @inproceedings{splatsim,
-  title     = {SplatSim},
-  booktitle = {IEEE International Conference on Robotics and Automation (ICRA)},
+  author    = {Qureshi, Mohammad Nomaan and Garg, Sparsh and Yandun, Francisco and Held, David and Kantor, George and Silwal, Abhisesh},
+  title     = {{SplatSim}: Zero-Shot {Sim2Real} Transfer of {RGB} Manipulation Policies Using {Gaussian} Splatting},
+  booktitle = {2025 IEEE International Conference on Robotics and Automation (ICRA)},
   year      = {2025},
-  note      = {github.com/qureshinomaan/SplatSim; verify}
+  pages     = {6502--6509},
+  publisher = {IEEE},
+  address   = {Atlanta, GA, USA},
+  doi       = {10.1109/ICRA55743.2025.11128339}
 }
 
-@misc{robogs,
-  title  = {Robo-GS},
-  year   = {2024},
-  note   = {arXiv 2408.14873; verify}
+% Crossref 10.1109/ICRA55743.2025.11128786; arXiv 2408.14873 (journal-ref ICRA 2025).
+% The first draft listed it as an arXiv preprint only.
+@inproceedings{robogs,
+  author    = {Lou, Haozhe and Liu, Yurong and Pan, Yike and Geng, Yiran and Chen, Jianteng and Ma, Wenlong and Li, Chenglong and Wang, Lin and Feng, Hengzhen and Shi, Lu and Luo, Liyi and Shi, Yongliang},
+  title     = {{Robo-GS}: A Physics Consistent Spatial-Temporal Model for Robotic Arm with Hybrid Representation},
+  booktitle = {2025 IEEE International Conference on Robotics and Automation (ICRA)},
+  year      = {2025},
+  pages     = {15379--15386},
+  publisher = {IEEE},
+  address   = {Atlanta, GA, USA},
+  doi       = {10.1109/ICRA55743.2025.11128786}
 }
 
-@misc{vrgs,
-  title  = {VR-GS: A Physical Dynamics-Aware Interactive Gaussian Splatting System in Virtual Reality},
-  year   = {2024},
-  note   = {arXiv 2401.16663; verify}
+% Crossref 10.1145/3641519.3657448 (SIGGRAPH '24 Conference Papers); arXiv 2401.16663.
+% The first draft listed it as an arXiv preprint only.
+@inproceedings{vrgs,
+  author    = {Jiang, Ying and Yu, Chang and Xie, Tianyi and Li, Xuan and Feng, Yutao and Wang, Huamin and Li, Minchen and Lau, Henry and Gao, Feng and Yang, Yin and Jiang, Chenfanfu},
+  title     = {{VR-GS}: A Physical Dynamics-Aware Interactive {Gaussian} Splatting System in Virtual Reality},
+  booktitle = {ACM SIGGRAPH 2024 Conference Papers},
+  series    = {SIGGRAPH '24},
+  year      = {2024},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  location  = {Denver, CO, USA},
+  doi       = {10.1145/3641519.3657448}
 }
 
+% ---------------------------------------------------------------- fast and segmented splatting
+
+% JMLR MLOSS, jmlr.org/papers/v26/24-1476.html: vol. 26, no. 34, pp. 1--17; arXiv 2409.06765.
 @article{gsplat,
-  title   = {gsplat: An Open-Source Library for Gaussian Splatting},
+  author  = {Ye, Vickie and Li, Ruilong and Kerr, Justin and Turkulainen, Matias and Yi, Brent and Pan, Zhuoyang and Seiskari, Otto and Ye, Jianbo and Hu, Jeffrey and Tancik, Matthew and Kanazawa, Angjoo},
+  title   = {gsplat: An Open-Source Library for {Gaussian} Splatting},
   journal = {Journal of Machine Learning Research},
   year    = {2025},
-  note    = {nerfstudio-project/gsplat, v1.5.3 used; verify venue}
+  volume  = {26},
+  number  = {34},
+  pages   = {1--17},
+  url     = {http://jmlr.org/papers/v26/24-1476.html}
 }
 
+% CVF open access, CVPR 2026, pp. 26094--26103; arXiv 2511.04283.
 @inproceedings{fastgs,
-  title     = {FastGS},
-  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  author    = {Ren, Shiwei and Wen, Tianci and Fang, Yongchun and Lu, Biao},
+  title     = {{FastGS}: Training {3D} {Gaussian} Splatting in 100 Seconds},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
   year      = {2026},
-  note      = {github.com/fastgs/FastGS; verify title}
+  pages     = {26094--26103}
 }
 
+% arXiv 2601.19489 (comment: "First Rank of SIGGRAPH Asia 2025 3DGS Challenge"; code
+% github.com/will-zzy/siggraph_asia). Preprint only; no venue as of 2026-11-13.
 @misc{oneminute,
-  title  = {SIGGRAPH Asia 2025 one-minute 3DGS challenge, winning entry},
-  year   = {2026},
-  note   = {arXiv 2601.19489, github.com/will-zzy/siggraph_asia; verify}
+  author        = {Zhang, Ziyu and Liu, Tianle and Tu, Diantao and Shen, Shuhan},
+  title         = {Fast Converging {3D} {Gaussian} Splatting for 1-Minute Reconstruction},
+  year          = {2026},
+  eprint        = {2601.19489},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi           = {10.48550/arXiv.2601.19489}
 }
 
-@misc{gsfusion,
-  title  = {GSFusion},
-  year   = {2024},
-  note   = {github.com/goldoak/GSFusion; verify title, venue}
+% Crossref 10.1109/LRA.2024.3502065 (IEEE RA-L 9(12)); arXiv 2408.12677.
+@article{gsfusion,
+  author  = {Wei, Jiaxin and Leutenegger, Stefan},
+  title   = {{GSFusion}: Online {RGB-D} Mapping Where {Gaussian} Splatting Meets {TSDF} Fusion},
+  journal = {IEEE Robotics and Automation Letters},
+  year    = {2024},
+  volume  = {9},
+  number  = {12},
+  pages   = {11865--11872},
+  doi     = {10.1109/LRA.2024.3502065}
 }
 
+% Crossref 10.1007/978-3-031-72670-5_26 (ECCV 2024, LNCS); arXiv 2409.08270.
 @inproceedings{flashsplat,
-  title     = {FlashSplat: 2D to 3D Gaussian Splatting Segmentation Solved Optimally},
-  booktitle = {European Conference on Computer Vision (ECCV)},
+  author    = {Shen, Qiuhong and Yang, Xingyi and Wang, Xinchao},
+  title     = {{FlashSplat}: {2D} to {3D} {Gaussian} Splatting Segmentation Solved Optimally},
+  booktitle = {Computer Vision -- ECCV 2024},
+  series    = {Lecture Notes in Computer Science},
   year      = {2024},
-  note      = {verify authors}
+  pages     = {456--472},
+  publisher = {Springer Nature Switzerland},
+  address   = {Cham},
+  doi       = {10.1007/978-3-031-72670-5_26}
 }
 
-@misc{sam2,
-  title  = {SAM 2: Segment Anything in Images and Videos},
-  year   = {2024},
-  note   = {Meta; facebook/sam2.1-hiera-large used; verify authors, arXiv 2408.00714}
+% ICLR 2025 (oral), OpenReview Ha6RTeWMd0; arXiv 2408.00714. Authors from arXiv.
+@inproceedings{sam2,
+  author    = {Ravi, Nikhila and Gabeur, Valentin and Hu, Yuan-Ting and Hu, Ronghang and Ryali, Chaitanya and Ma, Tengyu and Khedr, Haitham and R{\"a}dle, Roman and Rolland, Chloe and Gustafson, Laura and Mintun, Eric and Pan, Junting and Alwala, Kalyan Vasudev and Carion, Nicolas and Wu, Chao-Yuan and Girshick, Ross and Doll{\'a}r, Piotr and Feichtenhofer, Christoph},
+  title     = {{SAM} 2: Segment Anything in Images and Videos},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2025},
+  url       = {https://openreview.net/forum?id=Ha6RTeWMd0}
 }

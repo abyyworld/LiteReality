@@ -1,0 +1,87 @@
+% RoomCall system architecture. Full text width (figure*), about 17.2 cm wide.
+% Needs in the preamble:
+%   \usepackage{tikz}
+%   \usetikzlibrary{arrows.meta}
+% Coordinates are in cm; x runs left to right through the pipeline. Column extents:
+%   scan 0--1.9 | builders 2.7--6.5 | volume 7.1--9.3 | server 9.9--12.6 | browsers 14.1--16.6
+\begin{tikzpicture}[
+    font=\scriptsize,
+    >={Stealth[length=4pt]},
+    flow/.style={->, thick, draw=black!70},
+    box/.style={draw=black!60, rounded corners=2pt, align=center, inner sep=2pt},
+    sub/.style={box, fill=white, minimum width=3.4cm, minimum height=0.38cm},
+    ssub/.style={box, fill=white, minimum width=2.3cm, minimum height=0.5cm},
+    group/.style={rounded corners=3pt, draw=black!50},
+    title/.style={font=\scriptsize\bfseries, align=center},
+    small/.style={font=\tiny, align=center},
+  ]
+  \definecolor{rcgpu}{RGB}{247,224,200}
+  \definecolor{rccpu}{RGB}{214,234,230}
+  \definecolor{rcsrv}{RGB}{218,228,245}
+  \definecolor{rcweb}{RGB}{238,238,238}
+  \definecolor{rcvc}{RGB}{226,240,214}
+
+  % ---- 1. phone scan ------------------------------------------------------------------
+  \node[box, fill=rcweb, minimum width=1.9cm, minimum height=2.2cm] (scan) at (0.95, 2.70)
+    {\textbf{Phone scan}\\[2pt]LiDAR iPhone\\RoomPlan boxes\\photos, poses\\depth maps};
+
+  % ---- 2. builders --------------------------------------------------------------------
+  \draw[group, fill=rcgpu] (2.70, 2.90) rectangle (6.50, 4.65);
+  \node[title] at (4.60, 4.43) {Modal GPUs};
+  \node[sub] at (4.60, 3.98) {gsplat trainer (H100)};
+  \node[sub] at (4.60, 3.53) {SAM~2 object masks};
+  \node[sub] at (4.60, 3.08) {TRELLIS objects (4$\times$H100)};
+
+  \draw[group, fill=rccpu] (2.70, 0.75) rectangle (6.50, 2.50);
+  \node[title] at (4.60, 2.28) {CPU: laptop or Modal};
+  \node[sub] at (4.60, 1.83) {quick room (2\,s)};
+  \node[sub] at (4.60, 1.38) {instant splat (10\,s)};
+  \node[sub] at (4.60, 0.93) {Infinigen openable furniture};
+
+  \draw[flow] (scan.east) -- (2.70, 3.78);
+  \draw[flow] (scan.east) -- (2.70, 1.62);
+  \node[small, rotate=90] at (2.38, 2.70) {upload};
+
+  % ---- 3. versioned room on a Modal Volume (cylinder drawn by hand) ---------------------
+  \fill[rcweb] (7.10, 1.50) rectangle (9.30, 3.90);
+  \fill[rcweb] (8.20, 1.50) ellipse [x radius=1.10, y radius=0.22];
+  \draw[black!60] (7.10, 3.90) -- (7.10, 1.50)
+        arc [start angle=180, end angle=360, x radius=1.10, y radius=0.22] -- (9.30, 3.90);
+  \draw[black!60, fill=rcweb] (8.20, 3.90) ellipse [x radius=1.10, y radius=0.22];
+  \node[align=center] at (8.20, 2.62)
+    {\textbf{Modal Volume}\\[2pt]versioned room\\v1, v2, v3, \dots\\[2pt]+ splat bundles};
+  \node[small, text=black!70] at (8.20, 0.95) {each stage publishes\\a new version};
+
+  \draw[flow] (6.50, 3.78) -- (7.10, 3.35);
+  \draw[flow] (6.50, 1.62) -- (7.10, 2.05);
+
+  % ---- 4. one server container ----------------------------------------------------------
+  \draw[group, fill=rcsrv] (9.90, 1.10) rectangle (12.60, 4.30);
+  \node[title] at (11.25, 3.95) {One server container\\(Modal, CPU)};
+  \node[ssub] at (11.25, 3.20) {FastAPI + WebSocket};
+  \node[ssub] at (11.25, 2.45) {MuJoCo:\\one simulation\\per room};
+  \node[ssub] at (11.25, 1.60) {rooms by link\\(\texttt{?room=\dots})};
+
+  \draw[flow] (9.30, 2.70) -- node[above, small] {load} (9.90, 2.70);
+
+  % ---- 5. browsers ----------------------------------------------------------------------
+  \foreach \y/\n in {4.10/b1, 2.75/b2, 1.40/b3} {
+    \node[box, fill=rcweb, minimum width=2.5cm, minimum height=1.05cm] (\n) at (15.35, \y)
+      {\textbf{Browser}\\three.js meshes\\+ Spark splats};
+  }
+  \foreach \n in {b1, b2, b3} {
+    \draw[<->, thick, draw=black!70] (12.60, 2.70) -- (\n.west);
+  }
+  \node[small] at (13.35, 4.30) {WebSocket:\\poses out, grabs in};
+  \node[small] at (13.35, 1.10) {HTTP:\\meshes, splats};
+
+  % WebRTC webcams go browser to browser, not through the server
+  \draw[<->, dashed, thick, draw=black!55] (b1.east) to[bend left=50] (b2.east);
+  \draw[<->, dashed, thick, draw=black!55] (b2.east) to[bend left=50] (b3.east);
+  \node[small, rotate=-90] at (17.10, 2.75) {WebRTC webcams, peer-to-peer};
+
+  % ---- the video call carries voice ------------------------------------------------------
+  \draw[group, fill=rcvc] (9.90, -0.25) rectangle (16.60, 0.55);
+  \node[align=center] at (13.25, 0.15)
+    {\textbf{Zoom / Meet / Teams call}\\voice and faces; room link in the chat};
+\end{tikzpicture}

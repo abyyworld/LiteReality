@@ -5,10 +5,11 @@ Target: UIST 2027 (or ISMAR 2027). System + user study.
 | File | What |
 |---|---|
 | `main.tex` | The draft (ACM `acmart`, sigconf, anonymous review). Measured numbers come from `results/`; `\todo{}` marks what is not done |
-| `refs.bib` | References. **Every entry needs checking** against the publisher's page; some came from a web survey and are marked unverified |
+| `refs.bib` | References, each checked on 2026-11-13 against Crossref/DOI, arXiv, CVF, JMLR or the project's repository; the comment above each entry says where. An `UNVERIFIED` note prints where the draft's description does not match the source |
+| `figures/` | TikZ figures (architecture, build timeline) and `figures/README.md` with the blocks to paste into `main.tex` |
 | `study_protocol.md` | User-study design: conditions, tasks, measures, analysis, ethics |
 
-Build the PDF (needs a TeX installation with `acmart`):
+Build the PDF (needs a TeX installation with `acmart` and TikZ):
 
 ```bash
 cd paper && latexmk -pdf main.tex
@@ -29,6 +30,9 @@ cd paper && latexmk -pdf main.tex
 - [ ] Run the user study (`study_protocol.md`), after ethics approval.
 - [ ] Physics study: measure tea_room's objects (or the new rooms') with the bench protocol.
 - [ ] Physics/capacity numbers from `litereality evaluate` into §5.2.
-- [ ] Architecture figure; before/after interaction figure; progressive-build figure (instant →
-      trained).
-- [ ] Check every reference.
+- [x] Architecture figure and build-timeline figure (`figures/`; not yet compiled, and not yet
+      pasted into `main.tex`).
+- [ ] Before/after interaction figure; progressive-build screenshots (instant → trained).
+- [x] Check every reference (2026-11-13). Open points: GaussianNexus "basic physics" not
+      confirmed, Croquet is replicated rather than per-client physics, Hyperfy runs physics on the
+      server too (see `figures/README.md`, section 4).
