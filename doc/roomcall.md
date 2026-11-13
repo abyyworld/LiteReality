@@ -261,7 +261,8 @@ A webcam frames only head and shoulders, so on its own the hologram floats. When
 Limits and protections:
 - **Limits:** uploads are rate-limited per person, per room, per client address and server-wide.
   GPU builds have a daily cap and fall back to the stand-in.
-- **Not tried yet:** a real webcam, real GPU bodies, and real hardware.
+- **Tried:** a real GPU body from LHM++'s sample photos (120k splats, 4.1 s of inference,
+  80 s cold). **Not tried yet:** a real webcam turnaround and real hardware.
 - **Speed:** two bodies took a software-rendered test page from about 18 to 8 fps; real GPUs
   should do far better.
 

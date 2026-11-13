@@ -484,10 +484,19 @@ class LHMRunner:
         self.device = device
         self.joint_names = list(SMPLX_JOINTS)
         model_cls = wrap_model_hub(model_dict["human_lrm_a4o"])
-        self.model = model_cls.from_pretrained(str(model_dir)).to(device).eval()
+        # Not chained: LHM++'s model overrides eval() without returning itself, so
+        # `.to(device).eval()` is None (first real run, 2026-11-13).
+        self.model = model_cls.from_pretrained(str(model_dir))
+        self.model.to(device)
+        self.model.eval()
         if getattr(self.model, "shape_head", None) is None:
             # Without the shape head every body would get SMPL-X's mean shape.
-            raise RuntimeError(f"{model_dir} is not an SMPLX-FREE model (it has no shape head)")
+            config = getattr(self.model, "config", None) or {}
+            raise RuntimeError(
+                f"{model_dir} is not an SMPLX-FREE model (it has no shape head): "
+                f"{type(self.model).__mro__[1].__module__}, config shape_head="
+                f"{config.get('shape_head') if isinstance(config, dict) else type(config)}, "
+                f"keys={sorted(config)[:12] if isinstance(config, dict) else '?'}")
 
         birefnet = BiRefNet(bb_pretrained=False)
         state = torch.load(repo_dir / "pretrained_models" / BIREFNET_WEIGHTS, map_location="cpu")

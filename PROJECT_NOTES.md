@@ -95,8 +95,9 @@ physics-perception project.
   - Legs: procedural.
   - Face: the live hologram, on the body's head.
 
-  Tested end to end with stand-in bodies in headless browsers. The LHM++ GPU path is written but
-  **not built or run yet**.
+  Tested end to end with stand-in bodies in headless browsers. The LHM++ GPU path now runs
+  (2026-11-13): LHM++'s four sample views became a 120k-splat, 1.81 m body in 4.1 s of
+  inference, 80 s with the cold start, on Modal (L4/A10G/L40S).
 
   A search (2026-10-22) found no open repo that makes a live photoreal full-body person from a
   head-and-shoulders webcam. Real-time video generation (e.g. EditaLive) costs ~$4–8 per hour per
