@@ -68,7 +68,9 @@ MODEL_FILES = ("config.json", "configuration.json", "model.safetensors")
 # model comes from ModelScope by file name (`MODEL_FILES`), which has no commit to pin.
 PRIOR_REVISION = "b683c8f68bede4f318b0bb539730b8e6711d30a0"
 MODEL_REVISION = None
-GPU = "L4"
+# Any of these, cheapest first: LHM++ needs ~8 GB of VRAM, and Modal can run out of L4s (a
+# request sat unscheduled for 40 min on 2026-11-13).
+GPU = ["L4", "A10G", "L40S"]
 MAX_CONTAINERS = 2
 SCALEDOWN_SECONDS = 300
 TIMEOUT_SECONDS = 600

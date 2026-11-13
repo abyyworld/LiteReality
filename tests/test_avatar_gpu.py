@@ -143,7 +143,7 @@ def test_the_app_is_its_own_small_gpu_app(app):
     assert app.APP_NAME == "litereality-avatar" and app.FUNCTION_NAME == "avatar"
     assert set(app.app.registered_functions) == {app.FUNCTION_NAME, app.POPULATE_FUNCTION}
     gpu = _decorator_kwargs("avatar")
-    assert ast.unparse(gpu["gpu"]) == "GPU" and app.GPU == "L4"
+    assert ast.unparse(gpu["gpu"]) == "GPU" and app.GPU[0] == "L4"         # cheapest first
     assert ast.unparse(gpu["max_containers"]) == "MAX_CONTAINERS" and app.MAX_CONTAINERS <= 2
     assert ast.unparse(gpu["scaledown_window"]) == "SCALEDOWN_SECONDS"
     assert ast.unparse(gpu["timeout"]) == "TIMEOUT_SECONDS" and ast.unparse(gpu["retries"]) == "0"
