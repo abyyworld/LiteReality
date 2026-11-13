@@ -123,6 +123,12 @@ Objects cut out by SAM~2 masks & \measured{+15\,s} & \measured{$<$\$0.01} \\
 First trained splat (gsplat, H100, step 2000) & \measured{81--102\,s} & \\
 Final trained splat (step 7000, 800k splats) & \measured{184\,s} & \measured{$\approx$\$0.30} \\
 Generated object meshes (TRELLIS, 4$\times$H100) & \measured{2.0--7.2\,min} & \measured{\$2.24} \\
+Openable furniture (Infinigen-Sim, 7 assets, laptop CPU) & \measured{91\,s} & \$0 \\
+\midrule
+\multicolumn{3}{l}{\emph{Scanned during a call (deployed system, from the start of the upload):}} \\
+Quick room in every browser & \measured{10\,s} & \\
+Photoreal (instant splat, objects cut out) & \measured{22\,s} & \\
+First trained snapshot & \measured{96\,s} & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -161,22 +167,46 @@ own camera, and compare at 320$\times$240 (Table~\ref{tab:fidelity}). Object pix
 LiDAR depth inside RoomPlan boxes. The splat is also scored separately on the trainer's held-out
 photos.
 \begin{table}[t]
-\caption{Fidelity against the scan's own photos (tea\_room, 62 views).}
+\caption{Fidelity against the scan's own photos (tea\_room, 16 views at 320$\times$240, rendered
+as the call draws them in headless software WebGL). Differences are paired over views, with 95\%
+percentile-bootstrap intervals (10{,}000 resamples).}
 \label{tab:fidelity}
 \begin{tabular}{lrrrr}
 \toprule
 Stage & PSNR & SSIM & PSNR walls/floor & PSNR objects \\
 \midrule
-Flat mean colour (baseline) & \measured{13.81} & & & \\
-Mesh room: photo walls + TRELLIS objects & \measured{14.08} & \measured{0.690} & \measured{15.37} & \measured{11.73} \\
-Trained splat & \todo{} & \todo{} & \todo{} & \todo{} \\
+Flat mean colour (baseline) & \measured{13.75} & & & \\
+Mesh room: photo walls + TRELLIS objects & \measured{13.64} & \measured{0.679} & \measured{14.40} & \measured{11.54} \\
+Trained splat (objects cut out) & \measured{18.47} & \measured{0.788} & \measured{18.72} & \measured{19.11} \\
+\midrule
+Splat $-$ mesh & \measured{+4.83} [2.74, 6.67] & \measured{+0.108} & \measured{+4.31} & \measured{+7.57} [5.66, 9.74] \\
 \bottomrule
 \end{tabular}
 \end{table}
+On the four views the splat trainer held out, the splat scores \measured{17.45\,dB} against
+\measured{11.66\,dB} for the mesh room on its two unseen views. The gain is largest on objects,
+where the mesh room shows generated meshes and the splat shows the photographed objects
+themselves. With the photo-corrected body poses, all \measured{5/5} movable bodies in the splat
+room's physics are interactable, against \measured{3/5} at RoomPlan's poses: two chairs RoomPlan
+had boxed into the table become free once moved to where the photos show them.
 
 \subsection{Physics and capacity}
-\todo{from litereality evaluate: grab/pull success per body, mass plausibility, overlaps, drift;
-step cost and rooms per CPU}.
+Every movable part is grabbed and pulled through the server's own simulation, then released
+(the audit of \texttt{litereality evaluate}). With Infinigen's openable furniture, tea\_room has
+17 moving parts:
+\begin{itemize}
+  \item \textbf{Interactable} (grabbed, moved by the pull, at rest after release):
+        \measured{12/17}. That is \measured{8/9} hinges and both window sashes.
+  \item \textbf{Failures:} two chairs tucked under the table, which the pull cannot free; and
+        the dishwasher. Its door's holding friction is sized for the door lying flat, so a pull
+        cannot open it from closed, and its racks cannot slide while the door is shut.
+  \item \textbf{Masses:} \measured{2/17} fall outside per-category plausible ranges (window
+        sashes slightly light).
+  \item \textbf{Stability:} no interpenetration above 5\,mm and no drift over 10\,s.
+  \item \textbf{Cost:} a step costs \measured{0.18--0.25\,ms}, so one room runs
+        \measured{8--11$\times$} faster than real time on one thread. One server process held
+        \measured{16} rooms (its cap) in real time.
+\end{itemize}
 
 \subsection{Estimated physics}
 \todo{physics study: LiteReality vs an LLM vs measured mass, friction, restitution

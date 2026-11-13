@@ -71,3 +71,23 @@ better. The held-out frames are also the hardest ones (every 8th photo, often gl
   step moves each box to where it holds the most splats, but around the table it also catches
   table and wall edges. Per-photo masks (SAM 2) are the fix.
 - **Holes:** where a moved object stood, nothing was captured behind it, so a hole shows.
+
+## Fidelity against the mesh room (`litereality evaluate run/tea_room --render --max-views 16`)
+
+16 views, 320×240, both stages drawn as the call draws them (headless Chromium, software WebGL;
+the splat with Spark 2.3.1), same masks:
+
+| Stage | PSNR | SSIM | PSNR walls/floor | PSNR objects | SSIM objects |
+|---|---|---|---|---|---|
+| Mesh room (photo walls + TRELLIS objects) | 13.64 | 0.679 | 14.40 | 11.54 | 0.457 |
+| Trained splat (objects cut out) | 18.47 | 0.788 | 18.72 | 19.11 | 0.721 |
+| Splat − mesh (paired, 95% bootstrap) | +4.83 [2.74, 6.67], 14/16 views | +0.108 | +4.31 | +7.57 [5.66, 9.74], 14/14 views | +0.264 |
+
+- Flat-colour baseline: 13.75 dB.
+- On views their builds never read: splat 17.45 dB (4 views), mesh room 11.66 dB (2 views).
+- Rendering the splat in software WebGL is slow: about 1 min per view, 19 min for the whole
+  run. The full 62-view run was stopped after 1.5 h.
+- **Physics (the same evaluation):** with the photo-corrected poses (`scene_splat.xml`), 5/5
+  movable bodies are interactable, against 3/5 at RoomPlan's poses (`objects/scene.xml`). The
+  two chairs RoomPlan had boxed into the table move freely once placed where the photos show
+  them.
