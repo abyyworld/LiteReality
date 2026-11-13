@@ -381,11 +381,13 @@ def _quat_xyzw(mj_wxyz: np.ndarray) -> np.ndarray:
 
 def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
           floor: float = FLOOR, snap_bodies: bool = True, fill: bool = True,
-          masks=None, corrections: dict[str, dict] | None = None) -> Split:
+          masks=None, corrections: dict[str, dict] | None = None,
+          move_bodies: bool = True) -> Split:
     """Cut `splats` (see the module docstring). `masks` (`masks.ObjectMasks`) makes the photos'
     object outlines decide wherever a photo saw a splat. `corrections` (from an earlier split of
     the same room) are applied instead of snapping again, so every snapshot of a room is cut with
-    the bodies where its first one put them."""
+    the bodies where its first one put them. With `move_bodies` False nothing is moved (no snap,
+    no correction): for a room whose physics is already live and stays as it is."""
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     movable = sorted(movable_body_ids(model))
@@ -393,6 +395,7 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         _apply(model, data, corrections)
     else:
         corrections = {}
+    snap_bodies = snap_bodies and move_bodies
     from_votes = masks is not None and len(masks) > 0 and not corrections and snap_bodies
     if snap_bodies and not corrections and not from_votes and len(splats):
         static = [b for b in range(1, model.nbody) if b not in movable]

@@ -2001,8 +2001,13 @@ def serve(scene_xml: Path | None, *, host: str = "127.0.0.1", port: int = DEFAUL
                          version=version, watch=watcher,
                          avatars=AvatarConfig(mode=avatars, environment=modal_env or "main"),
                          scans=ScanConfig(mode=uploads, fake=fake_objects,
-                                          articulated=articulated),
-                         splats=SplatSource.fixed(Path(splat)) if splat else None)
+                                          articulated=articulated,
+                                          splats_root=Path(scratch) / "splats"
+                                          if uploads != "off" else None),
+                         splats=SplatSource.chain(
+                             SplatSource.fixed(Path(splat)) if splat else None,
+                             SplatSource.per_room(Path(scratch) / "splats", poll_seconds=2.0)
+                             if uploads != "off" else None))
         if splat:
             print(f"room call  photoreal room from {splat} (new snapshots swap in live)")
         sock = bind_socket(host, port)

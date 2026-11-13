@@ -88,7 +88,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
           log: Callable[[str], None] = print,
           on_bundle: Callable[[dict], None] | None = None,
           segment: Callable[[dict], dict] | None = None,
-          on_scene: Callable[[Path], None] | None = None) -> dict:
+          on_scene: Callable[[Path], None] | None = None,
+          move_bodies: bool = True) -> dict:
     """The instant room, then (with a `trainer`) each trained snapshot, each written as a bundle
     the moment it exists. Returns the report (also written to `REPORT`).
 
@@ -117,7 +118,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         # will say where each object is). The first split with masks fixes the corrections.
         waiting = segment is not None and state["masks"] is None
         parts = split(splats, model, corrections=state["corrections"], masks=state["masks"],
-                      snap_bodies=not waiting)
+                      snap_bodies=not waiting, move_bodies=move_bodies)
         if state["corrections"] is None and not waiting:
             state["corrections"] = parts.corrections
             fixed = corrected_scene(Path(scene_xml), parts.corrections or {})

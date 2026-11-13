@@ -65,6 +65,25 @@ class SplatSource:
             return root / name if name and NAME.match(name) else None
         return cls(folder_for, poll_seconds=poll_seconds)
 
+    @classmethod
+    def chain(cls, *sources: "SplatSource | None") -> "SplatSource | None":
+        """The first of `sources` that has a bundle for a room (a room scanned during the call
+        has its own; the deployed room's comes from the Volume). None if no source is given."""
+        given = [s for s in sources if s is not None]
+        if not given:
+            return None
+
+        def folder_for(name: str | None) -> Path | None:
+            fallback = None
+            for source in given:
+                folder = source.folder_for(name)
+                if folder is not None:
+                    if (folder / BUNDLE).is_file():
+                        return folder
+                    fallback = fallback or folder
+            return fallback
+        return cls(folder_for, poll_seconds=min(s.poll_seconds for s in given))
+
     def bundle(self, name: str | None) -> dict | None:
         """The raw ``splat.json`` of `name`'s room (re-read only when its mtime changes)."""
         folder = self.folder_for(name)

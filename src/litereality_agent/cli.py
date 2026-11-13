@@ -753,7 +753,8 @@ def _splatroom(args) -> int:
               f"(physics: {console.short(scene)})")
         report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,
                                  instant_only=args.instant_only, on_bundle=on_bundle,
-                                 segment=segment, on_scene=on_scene)
+                                 segment=segment, on_scene=on_scene,
+                                 move_bodies=not args.keep_physics)
     print(f"  done in {report['total_s']} s; report: {console.short(out / splatroom.REPORT)}")
     if not args.publish:
         served = Path(report["corrected_scene"]) if report.get("corrected_scene") else scene
@@ -1046,6 +1047,9 @@ def _parser() -> argparse.ArgumentParser:
     splat.add_argument("--recut", action="store_true",
                        help="cut the last trained snapshot in --out again (new masks, new rules) "
                             "instead of training: no GPU time but the masks')")
+    splat.add_argument("--keep-physics", action="store_true",
+                       help="never move a physics body to where the photos show it (for a room "
+                            "already live in a call, whose physics must stay as it is)")
     splat.add_argument("--no-masks", action="store_true",
                        help="cut objects by their boxes only (no SAM 2 masks from the photos)")
     splat.add_argument("--upload-only", action="store_true",

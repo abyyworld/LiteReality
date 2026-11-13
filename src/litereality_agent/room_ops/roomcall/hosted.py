@@ -486,15 +486,19 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
             store.sweep()
     cap = REALISTIC_PER_DAY if realistic_per_day is None else realistic_per_day
     budget = scan_budget if scan_budget is not None else ModalDictBudget(cap, name=SCAN_BUDGET_DICT)
+    scratch_root = Path(scan_scratch or SCAN_SCRATCH)
     scans = ScanConfig(mode=uploads, realistic_per_day=cap, budget=budget, store=store,
-                       scratch=Path(scan_scratch or SCAN_SCRATCH))
+                       scratch=scratch_root, splats_root=scratch_root / "splats")
     watch = VolumeWatch(root, reload=reload, poll_seconds=poll_seconds, scratch=scratch)
     ref = served_ref(root) or watch.demo()
     from litereality_agent.room_ops.roomcall.splats import SPLATS_DIR, SplatSource
 
     # The photoreal rooms (`litereality splatroom --publish`): read after the version watcher's
     # Volume reload, so a snapshot is live within POLL_SECONDS of its upload.
-    splats = SplatSource.per_room(Path(root) / SPLATS_DIR, poll_seconds=poll_seconds)
+    # A room scanned during the call has its own bundle on the container's disk (`scans`).
+    splats = SplatSource.chain(SplatSource.per_room(scratch_root / "splats", poll_seconds=2.0),
+                               SplatSource.per_room(Path(root) / SPLATS_DIR,
+                                                    poll_seconds=poll_seconds))
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
                      prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies,
                      scans=scans, splats=splats)

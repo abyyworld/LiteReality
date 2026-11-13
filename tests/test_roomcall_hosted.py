@@ -567,9 +567,11 @@ PACKAGE = REPO / "src" / "litereality_agent"
 # import is exactly the one that breaks only in the container.
 HOSTED_ENTRIES = ("room_ops.roomcall.hosted", "room_ops.roomcall.server", "room_ops.roomcall.scans",
                   "cli", "pipeline.quickroom", "pipeline.realroom",
-                  "pipeline.realroom.articulated", "models.trellis.modal", "runtimes.modal")
+                  "pipeline.realroom.articulated", "models.trellis.modal", "runtimes.modal",
+                  "pipeline.splatroom", "pipeline.splatroom.masks", "models.splat.remote")
 DEEP = ("room_ops.roomcall", "pipeline.quickroom", "pipeline.realroom", "models.trellis",
-        "runtimes", "models.object_generation.sim.properties")
+        "runtimes", "models.object_generation.sim.properties", "pipeline.splatroom",
+        "models.splat")
 
 
 def _module_file(module: str) -> Path | None:

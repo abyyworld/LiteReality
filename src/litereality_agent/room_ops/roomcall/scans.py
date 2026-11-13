@@ -795,6 +795,10 @@ class ScanConfig:
     scratch: Path | None = None              # where jobs unpack (default: a temp folder)
     command: Sequence[str] | None = None     # the child launcher before the CLI's arguments
     store: Any = None                        # rooms' scanned versions across restarts (`RoomStore`)
+    # Where each scanned room's photoreal splat bundle is written (`<root>/<room name>/`, read by
+    # the server's `splats.SplatSource.per_room`); None: no splats for scanned rooms.
+    splats_root: Path | None = None
+    splat_timeout: float = 1200.0
 
     def __post_init__(self) -> None:
         if self.mode not in MODES:
@@ -1324,9 +1328,12 @@ class ScanService:
             log.info("roomcall: scan %s: quick room %s for room %s in %.1f s", job.id, vid,
                      job.room, time.perf_counter() - started)
             go, note = await self._realistic_allowed(job, scan)
+            splats = self._splat_task(job, scan, quick_out / "scene.xml",
+                                      train=go and not self.config.fake)
             if not go:
                 self._set(job, QUICK, detail="Quick room ready" + (f" ({note})" if note else ""),
                           progress=1.0)
+                await self._splats_done(job, splats)
                 self._set(job, DONE, detail="The room is ready" + (f" — {note}" if note else ""),
                           progress=1.0)
                 return
@@ -1334,6 +1341,7 @@ class ScanService:
             self._set(job, QUICK, detail="Quick room ready — realistic objects are next",
                       progress=1.0)
             count = await self._objects(job, scan)
+            await self._splats_done(job, splats)
             self._set(job, DONE, stage="objects", progress=1.0,
                       detail=f"Done: {count} realistic object{'s' if count != 1 else ''}" if count
                       else "Done — no object could be made realistic; the quick room stays")
@@ -1358,6 +1366,37 @@ class ScanService:
                 self._realistic_running -= 1
             self._kill(job)
             self._cleanup(job)
+
+    def _splat_task(self, job: ScanJob, scan: Scan, scene: Path, *, train: bool):
+        """The photoreal room for this scan, in a child beside the objects (`splatroom`): the
+        instant splat from the photos and LiDAR in seconds, then, when `train`, the GPU's
+        snapshots. Written where the server's splat source reads this room's name, so browsers
+        swap each in by themselves. The physics in the call stays as it is (``--keep-physics``).
+        None when this server makes no splats or the upload has no photos."""
+        root = self.config.splats_root
+        if root is None or scan.frames == 0:
+            return None
+        from litereality_agent.room_ops.roomcall.hosted import NAME_CHARS, scene_name
+
+        out = Path(root) / scene_name(scan.label)[:NAME_CHARS]
+        args = ["splatroom", str(scan.root), "--scene", str(scene), "--out", str(out),
+                "--keep-physics", f"--label={scan.label}"]
+        if not train:
+            args += ["--instant-only", "--no-masks"]
+        return asyncio.ensure_future(self._child(job, args, timeout=self.config.splat_timeout,
+                                                 memory=self.config.realistic_memory))
+
+    async def _splats_done(self, job: ScanJob, task) -> None:
+        """Wait for the splat child; its failure costs the room its photoreal look, never the
+        scan (the meshes stay)."""
+        if task is None:
+            return
+        try:
+            await task
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.warning("roomcall: scan %s: the photoreal room failed: %s", job.id, exc)
 
     def _ref(self, scene: Path, label: str, stage: str):
         from litereality_agent.room_ops.roomcall.hosted import scene_digest, version_name
