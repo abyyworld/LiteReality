@@ -54,6 +54,7 @@ const listeners = {};
 const addEventListener = (t, f) => { listeners[t] = f; };
 class HTMLInputElement {}
 const localStorage = { setItem() {}, getItem() { return null; } };
+const sessionStorage = { setItem() {}, getItem() { return null; } };
 const $ = () => null;
 const toast = (m) => toasts.push(m);
 const console = { warn() {}, info() {}, log() {} };

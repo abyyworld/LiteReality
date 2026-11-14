@@ -1144,7 +1144,7 @@ function sparkFailed(err) {
 // the server says {"t": "splat"} and the new files load beside the old, then replace them.
 const SPLAT_URL = /^splat\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]{1,140}\.spz$/;
 const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map() };
-try { const s = localStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
+try { const s = sessionStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
 
 const photoShown = () => photo.want && !!photo.room;
 
@@ -1277,7 +1277,7 @@ if (params.get('debug') === '1') {
 
 function togglePhoto() {
   photo.want = !photo.want;
-  try { localStorage.setItem('rc.photo', photo.want ? '1' : '0'); } catch { /* storage blocked */ }
+  try { sessionStorage.setItem('rc.photo', photo.want ? '1' : '0'); } catch { /* storage blocked */ }
   applyPhoto();
 }
 
