@@ -57,6 +57,7 @@ const localStorage = { setItem() {}, getItem() { return null; } };
 const sessionStorage = { setItem() {}, getItem() { return null; } };
 const $ = () => null;
 const toast = (m) => toasts.push(m);
+const showStageTag = () => {};
 const console = { warn() {}, info() {}, log() {} };
 const keys = new Set();
 let capture = null, joined = true, grab = null, sceneReady = false, bodies = new Map();

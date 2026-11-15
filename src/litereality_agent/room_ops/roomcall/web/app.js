@@ -1193,6 +1193,7 @@ function applyPhoto() {
     o.visible = !hide;
     o.userData.photoHidden = hide;
   });
+  showStageTag();
   const btn = $('photoBtn');
   if (btn) {
     btn.hidden = !photo.room;
@@ -3129,13 +3130,15 @@ function renderScanCard() {
 /** The room chip's stage tag. A scan's version is a preview while more of it is still being made;
  *  once the room's scan says it is done, that version is the room, and the tag goes. */
 function stageTag(stage) {
+  if (photoShown()) return '';    // the photoreal room is the room; "preview" is about the meshes
   if (scans.complete && (stage === 'objects' || stage === 'quick')) return '';
   return STAGE_TAGS[stage] || '';
 }
 function showStageTag() {
-  const tag = stageTag(shown?.manifest?.stage);
-  $('hudStage').textContent = tag;
-  $('hudStage').hidden = !tag;
+  const tag = stageTag(shown?.manifest?.stage), el = $('hudStage');
+  if (!el) return;
+  el.textContent = tag;
+  el.hidden = !tag;
 }
 
 /** What to say when a version goes in while a scan is on its way: the new room by name (and what
