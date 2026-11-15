@@ -9,11 +9,14 @@ voice; this adds the shared room. It can also run inside the Zoom client as a Zo
     litereality roomcall [SCENE] [--demo] [--port 8790] [--watch]
     litereality roomcall [SCENE] --deploy      # a permanent https link on Modal (`hosted`)
     litereality roomcall [SCENE] --publish     # a new version of that link, live, no redeploy
+    litereality roomcall SCENE --library       # a ready room people can pick on that link
     python -m litereality_agent.room_ops.roomcall [SCENE] [--demo] [--port 8790]
 
 Someone on the call can also send a scan straight into their room from the phone that made it
-(Add room in the page): its quick room is built in seconds and swapped into that room alone, then,
-where `--uploads realistic`, the realistic objects follow version by version (`scans`).
+(Rooms, then Add a room you scanned, in the page): its quick room is built in seconds and swapped
+into that room alone, then, where `--uploads realistic`, the realistic objects follow version by
+version (`scans`). On the hosted link, Rooms also lists the ready rooms of its library
+(`--library`): anyone in a call moves everyone in their call room into one in a click.
 
 A room's scene can improve during the call — the quick RoomPlan room seconds after the scan, the
 full pipeline's room later. Each is a new VERSION of the same link, swapped into every room live
@@ -36,6 +39,10 @@ from __future__ import annotations
 import argparse
 
 DEFAULT_PORT = 8790
+# The hosted link's room library (`hosted.add_to_library`): what `--library` and
+# `--library-remove` put in `args.deploy`, beside "deploy" and "publish".
+LIBRARY_ADD = "library"
+LIBRARY_REMOVE = "library-remove"
 # What a version may say it is (shown to people, and on the wire as the "scene" message's stage):
 # RoomPlan boxes, per-object meshes, the full pipeline's room, any other scene, the demo.
 STAGES = ("quick", "objects", "full", "scene", "demo")
@@ -73,8 +80,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help="what this version of the room is (default: from its folder — quick/ is quick, "
              "mujoco_seed/ and mujoco/ are full, anything else scene)",
     )
-    # `deploy` is False, "publish" or "deploy": truthy for both, so a caller that passes Modal
-    # credentials only `if args.deploy` covers --publish as well.
+    # `deploy` is False, "publish", "deploy", "library" or "library-remove": truthy for all of
+    # them, so a caller that passes Modal credentials only `if args.deploy` covers each.
     remote = parser.add_mutually_exclusive_group()
     remote.add_argument(
         "--deploy", action="store_const", const="deploy", default=False,
@@ -85,6 +92,20 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "--publish", dest="deploy", action="store_const", const="publish",
         help="upload the scene as a new version of the already deployed link, without "
              "redeploying: everyone in it switches over within seconds, nobody leaves",
+    )
+    remote.add_argument(
+        "--library", dest="deploy", action="store_const", const=LIBRARY_ADD,
+        help="add the scene to the deployed link's room library instead: a ready room anyone in "
+             "a call can move their call room into (Rooms in the page), named after --label; "
+             "the link's default room stays as it is",
+    )
+    remote.add_argument(
+        "--library-remove", metavar="NAME", action=_LibraryRemove, default=None,
+        help="take the room NAME out of the deployed link's room library",
+    )
+    parser.add_argument(
+        "--thumb", metavar="IMG.jpg", default=None,
+        help="with --library: the JPEG (at most 1 MB) the room is shown with in the room picker",
     )
     parser.add_argument("--modal-env", help="Modal environment to deploy into (default: main)")
     parser.add_argument(
@@ -97,7 +118,7 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--uploads", choices=UPLOAD_MODES, default=None,
-        help="what a scan someone sends into their room during the call (Add room: a .zip of "
+        help="what a scan someone sends into their room during the call (Rooms: a .zip of "
              "the scan's folder, or its room.usdz) becomes, in that room only: 'quick' its quick "
              "room in seconds; 'realistic' then realistic objects from TRELLIS on Modal, swapped "
              "in as they land; 'off' no uploads. Default: realistic when Modal credentials are "
@@ -117,11 +138,29 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
+class _LibraryRemove(argparse.Action):
+    """`--library-remove NAME`: the name, and `deploy` set like the other Modal actions so the
+    `.env` credentials are passed on for it too."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        namespace.deploy = LIBRARY_REMOVE
+
+
 def run(args: argparse.Namespace, *, credentials: tuple[str, str] | None = None,
         profile: str | None = None, environment: str | None = None) -> int:
     """Serve here, or with `--deploy` / `--publish` put the scene on Modal. `credentials`/`profile`
     are the `.env` ones `litereality roomcall` passes in; without them Modal uses its own active
     profile."""
+    # `--realistic` publishes every version after the quick room as the link's default room:
+    # with --library that would replace the default, not add to the library. Refused before
+    # anything is uploaded.
+    if getattr(args, "realistic", False) and getattr(args, "deploy", False) in (LIBRARY_ADD,
+                                                                                LIBRARY_REMOVE):
+        raise SystemExit("--library adds one finished scene: build the room first (e.g. "
+                         "`litereality realroom`), then add its objects/scene.xml with --library")
+    if getattr(args, "thumb", None) and getattr(args, "deploy", False) != LIBRARY_ADD:
+        raise SystemExit("--thumb is the picture of a room added with --library")
     if getattr(args, "deploy", False):
         if getattr(args, "watch", False):
             raise SystemExit("--watch serves here; for the hosted link, --publish each new "
@@ -158,6 +197,14 @@ def _deploy(args: argparse.Namespace, *, credentials, profile, environment: str)
         import modal  # noqa: F401
     except ImportError:
         raise SystemExit("deploying needs the Modal client: run `uv sync --extra modal`") from None
+    if args.deploy == LIBRARY_REMOVE:
+        if args.scene or args.demo:
+            raise SystemExit("--library-remove takes a room name, not a scene")
+        return hosted.library_remove(args.library_remove, environment=environment,
+                                     credentials=credentials, profile=profile)
+    if args.deploy == LIBRARY_ADD and (args.demo or not args.scene):
+        raise SystemExit("--library adds a scanned room: give its SCENE (the demo room is "
+                         "always there as the default)")
     if args.scene and not args.demo:
         try:
             scene = server.resolve_scene(args.scene)
@@ -167,6 +214,10 @@ def _deploy(args: argparse.Namespace, *, credentials, profile, environment: str)
         stage = getattr(args, "stage", None) or server.scene_stage(Path(scene))
     else:
         scene, label, stage = None, "demo room", "demo"
+    if args.deploy == LIBRARY_ADD:
+        return hosted.library_add(scene, label=label, environment=environment,
+                                  credentials=credentials, profile=profile, stage=stage,
+                                  thumb=Path(args.thumb) if args.thumb else None)
     return hosted.deploy(scene, label=label, repo_root=repo_root(), environment=environment,
                          credentials=credentials, profile=profile, stage=stage,
                          redeploy=args.deploy != "publish")

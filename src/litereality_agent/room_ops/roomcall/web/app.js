@@ -226,6 +226,8 @@ const ver = {
   gone: new Set(),      // versions the server answered 404 for (until it names them again)
   fails: 0, failedV: undefined, retryAt: 0,
   quiet: undefined,     // a version to install without the "updated" toast: the room just joined
+  pickV: undefined,     // a version someone picked for the room (see "rooms"): another room, whatever its walls
+  pickLabel: '',        // ...and its name, for the "Now in" toast
 };
 // A version the server announced but the room has not reached by then failed there (the server
 // keeps the old one): stop waiting for it and follow the frames.
@@ -501,8 +503,10 @@ function installVersion(next) {
   ver.quiet = undefined;
   // Another room altogether (a scan someone added, the room someone just joined into): everyone
   // starts it at its spawn point, holding nothing. Later stages of one room keep people put.
-  const scanJob = scanJobOf(next.v);
-  const fresh = first || quiet || !!scanJob || otherWalls(old?.manifest, next.manifest);
+  // A room someone picked is another room too, even when its walls happen to match this one's.
+  const scanJob = scanJobOf(next.v), picked = next.v === ver.pickV;
+  if (picked) ver.pickV = undefined;
+  const fresh = first || quiet || picked || !!scanJob || otherWalls(old?.manifest, next.manifest);
   // A scan's first room, with more of it still to come: a preview again (the stage tag).
   if (scanJob && !SCAN_ENDED.has(scanJob.status)) scans.complete = false;
   setHover(null);
@@ -529,7 +533,10 @@ function installVersion(next) {
   if (f && versionOf(f) === next.v) applyBodies(f);
   setLoad(1, `${bodies.size} object${bodies.size === 1 ? '' : 's'} you can move`);
   $('loadProgress').classList.add('done');
-  if (!first && !quiet) { const msg = scanSwapToast(next); if (msg) toast(msg); }
+  if (!first && !quiet) {
+    const msg = picked ? `Now in ${String(next.manifest?.label || ver.pickLabel || 'the new room').slice(0, 60)}` : scanSwapToast(next);
+    if (msg) toast(msg);
+  }
   onScanVersion();
 }
 
@@ -544,7 +551,7 @@ function otherWalls(a, b) {
  *  a room new to this page: later versions of the same room keep everyone where they are. */
 function applyManifest(man, spawn) {
   const label = String(man.label || 'Room');
-  $('sceneLabel').textContent = label;
+  $('sceneLabel').textContent = joinLabel() || label;   // the join card names the room chosen there
   $('hudLabel').textContent = label;
   document.title = label + ' · Room call';
   const tag = stageTag(man.stage);
@@ -2644,15 +2651,12 @@ function onScanWelcome(m) {
   syncScanUi();
 }
 
-/** The Add room button, the help row and the panel, for what is possible right now. */
+/** The Rooms button, the help row and the panel, for what is possible right now. */
 function syncScanUi() {
-  $('scanBtn').hidden = !scans.enabled;
-  $('helpScan').hidden = $('helpScanTerm').hidden = !scans.enabled;
   const wait = Math.ceil((scans.nextAt - performance.now()) / 1000), up = scans.up;
   const pick = $('scanPickBtn');
   pick.disabled = !!up || wait > 0 || !me.id;
   pick.textContent = up ? (up.phase === 'checking' ? 'Checking…' : 'Sending…') : wait > 0 ? `Choose the scan (in ${wait} s)` : 'Choose the scan';
-  $('scanBtn').dataset.state = up ? 'building' : '';
   $('scanRealNote').hidden = scans.realistic === false;
   $('scanStepDrop').hidden = IS_TOUCH;             // a computer can take the zip by drag and drop
   $('scanWhere').textContent = scans.realistic ? SCAN_WHERE.realistic : SCAN_WHERE.quick;
@@ -2667,6 +2671,7 @@ function syncScanUi() {
   }
   $('scanRoomNote').textContent = note;
   $('scanRoomNote').hidden = !note;
+  if (!$('roomsPanel').hidden) renderRooms(); else syncRoomsBtn();
 }
 
 function setScanStatus(text, error = false) {
@@ -2682,7 +2687,7 @@ function scanRefused(text) {
 }
 
 function openScanPanel() {
-  $('scanBtn').classList.remove('hint');
+  $('roomsBtn').classList.remove('hint');
   syncScanUi();
   togglePanel('scanPanel', true);
 }
@@ -3203,17 +3208,6 @@ setInterval(() => {
   }
 }, 1000);
 
-/** First visit to a room that takes scans: a ring on the button and one line about it. */
-function scanHint() {
-  if (!scans.enabled || scans.hinted || store.get('scanHintSeen', false)) return;
-  scans.hinted = true;
-  store.set('scanHintSeen', true);
-  $('scanBtn').classList.add('hint');
-  setTimeout(() => $('scanBtn').classList.remove('hint'), 10000);
-  setTimeout(() => toast('Scanned a room? Add room brings it into this call'), 1800);
-}
-
-$('scanBtn').addEventListener('click', () => ($('scanPanel').hidden ? openScanPanel() : togglePanel('scanPanel', false)));
 $('scanPickBtn').addEventListener('click', () => $('scanFile').click());
 $('scanFile').addEventListener('change', (e) => {
   const file = e.target.files?.[0];
@@ -3236,6 +3230,312 @@ $('scanClose').addEventListener('click', () => {
 // Leaving the page mid-upload loses it: ask first (where the browser still asks). Only while one
 // is being sent: a page with an unload guard is kept out of the back-forward cache.
 function guardUnload(e) { e.preventDefault(); e.returnValue = ''; }
+
+/* ------------------------------------------------------------------ rooms: another room for everyone */
+// The server keeps a small library of ready-made rooms beside the call's own (default) room.
+// Anyone in a call room can move everybody in it into one of them, or back: the page asks with
+// {"t":"pick"}, everyone hears {"t":"pick", state:"loading"} at once, then the server loads it and
+// the room swaps exactly as for a scan ("scene" carrying "pick", then the frames), photoreal room
+// and all. An empty call room can also be opened straight into one from the join card.
+const ROOM_NAME_RE = /^[A-Za-z0-9_-]{1,48}$/;      // the server's library names (and "scan")
+const ROOM_ARM_MS = 4000;
+const rooms = {
+  list: [],           // the rooms on offer, the default first: {name, label, thumb, default}
+  pick: '',           // what this call room shows now: a room's name, or 'scan' (a scan sent into it)
+  busy: '',           // a room on its way here (someone picked it), until it is offered or fails
+  armed: '', armTimer: 0,   // the first of two presses on a room in the panel
+  sent: null,         // my last pick: {name, at}, so its "loading" can say "you"
+  seen: 0,            // counts what the socket said about the room, so an older rooms.json loses
+  key: '',            // the panel's list as drawn: rebuilt only when the rooms change (focus stays)
+  join: null,         // the join card: {current, choice, label, tiles} (tiles null: no choice there)
+  want: '',           // the join card's choice, picked once the welcome is in
+};
+
+/** The server's room list, kept to what the page can show: valid names, short labels, no repeats. */
+function parseRooms(list) {
+  const out = [], seen = new Set();
+  for (const r of Array.isArray(list) ? list : []) {
+    const name = typeof r?.name === 'string' ? r.name : '';
+    if (!ROOM_NAME_RE.test(name) || seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, label: String(r.label || name).slice(0, 60), thumb: r.thumb === true, default: r.default === true });
+  }
+  return out;
+}
+const pickName = (p) => (typeof p === 'string' && ROOM_NAME_RE.test(p) ? p : '');
+function roomByName(name) { return rooms.list.find((r) => r.name === name) || null; }
+function defaultRoom() { return rooms.list.find((r) => r.default) || null; }
+/** The room everyone here is in: the one picked, else the call's own (an older server says neither). */
+const hereName = () => rooms.pick || defaultRoom()?.name || '';
+
+/** A room's picture (the server's thumb, same origin), or a plain tile with the room icon. */
+function roomThumb(r) {
+  const box = document.createElement('span');
+  box.className = 'room-thumb';
+  box.setAttribute('aria-hidden', 'true');
+  const plain = () => {
+    const ico = document.createElement('span');
+    ico.className = 'tool-ico ico-room';
+    box.replaceChildren(ico);
+  };
+  if (r.thumb) {
+    const img = document.createElement('img');
+    img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    img.addEventListener('error', plain);
+    img.src = `rooms/${encodeURIComponent(r.name)}/thumb.jpg`;
+    box.appendChild(img);
+  } else plain();
+  return box;
+}
+
+/** GET rooms.json for this call room: the rooms on offer and what the room shows now, or null (an
+ *  older server, offline). Never in the way of joining. */
+async function fetchRooms() {
+  try {
+    const res = await withTimeout(fetch('rooms.json?room=' + encodeURIComponent(roomId), { cache: 'no-store' }), 6000);
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || typeof j !== 'object' || !Array.isArray(j.rooms)) return null;
+    const here = j.room && typeof j.room === 'object' ? j.room : {};
+    return { list: parseRooms(j.rooms), current: pickName(here.name), label: String(here.label || '').slice(0, 60),
+             peers: Math.max(0, Math.floor(Number(here.peers) || 0)) };
+  } catch { return null; }
+}
+
+/** The Rooms button and the help row: there when there is another room to go to, or a scan to add. */
+function syncRoomsBtn() {
+  const btn = $('roomsBtn');
+  btn.hidden = rooms.list.length < 2 && !scans.enabled;
+  btn.dataset.state = rooms.busy || scans.up ? 'building' : '';
+  $('helpRooms').hidden = $('helpRoomsTerm').hidden = btn.hidden;
+  $('helpRoomsPick').hidden = rooms.list.length < 2;
+  $('helpRoomsScan').hidden = !scans.enabled;
+}
+
+/** One row of the Rooms panel (its state is set by renderRooms). */
+function roomItem(r) {
+  const li = document.createElement('li');
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn room-item';
+  b.dataset.room = r.name;
+  const text = document.createElement('span');
+  text.className = 'room-text';
+  const label = document.createElement('b');
+  label.textContent = r.label;
+  text.append(label, document.createElement('small'));
+  b.append(roomThumb(r), text);
+  b.addEventListener('click', () => chooseRoom(r.name));
+  li.appendChild(b);
+  return li;
+}
+
+/** The Rooms panel: every room on offer, the one everyone is in marked, a room on its way said. */
+function renderRooms() {
+  const box = $('roomsList'), here = hereName();
+  const items = [...rooms.list];
+  // A room scanned into this one is in no list: it is shown first, as where everyone is now.
+  if (here && !roomByName(here)) items.unshift({ name: here, label: String(shown?.manifest?.label || 'This room').slice(0, 60), thumb: false });
+  const key = JSON.stringify(items.map((r) => [r.name, r.label, r.thumb]));
+  if (key !== rooms.key) { rooms.key = key; box.replaceChildren(...items.map(roomItem)); }
+  for (const li of box.children) {
+    const b = li.firstChild, name = b.dataset.room;
+    const isHere = name === here, armed = name === rooms.armed && !isHere, coming = name === rooms.busy;
+    if (isHere) b.setAttribute('aria-current', 'true'); else b.removeAttribute('aria-current');
+    b.classList.toggle('armed', armed);
+    b.classList.toggle('coming', coming);
+    b.disabled = !!rooms.busy && !isHere;
+    b.querySelector('small').textContent = coming ? 'On its way…' : isHere ? 'Here now'
+      : armed ? (peers.size ? 'Move everyone here?' : 'Move here?') : '';
+  }
+  // A scan on its way into this room: the server takes no pick until it is in (it says so too).
+  const j = scans.job;
+  let note = '';
+  if (j && SCAN_ACTIVE.has(j.status) && (j.mine || performance.now() - j.at < SCAN.staleMs)) {
+    note = SCAN_BUSY.has(j.status) ? (j.mine ? 'Your scan is still being added here: you can pick a room once it is in.'
+      : `${scanName(j.by)} is adding a room here: you can pick another once it is in.`)
+      : 'Realistic objects are still being made for this room: you can pick another room once they are in.';
+  }
+  $('roomsNote').textContent = note;
+  $('roomsNote').hidden = !note;
+  $('roomsStatus').textContent = rooms.busy ? `Moving everyone to ${roomByName(rooms.busy)?.label || 'the room'}…` : '';
+  $('roomsScanBtn').hidden = !scans.enabled;
+  syncRoomsBtn();
+}
+
+function disarmRoom() {
+  clearTimeout(rooms.armTimer);
+  rooms.armed = '';
+}
+
+/** A press on a room in the panel: the first arms it, the second (within a few seconds) moves
+ *  everyone there. Two presses rather than confirm(), as Reset: embedded browsers may drop dialogs. */
+function chooseRoom(name) {
+  if (name === hereName() || rooms.busy) return;
+  if (!me.id) { toast('Not connected right now — try again in a moment', 'error'); return; }
+  if (rooms.armed !== name) {
+    disarmRoom();
+    rooms.armed = name;
+    rooms.armTimer = setTimeout(() => { rooms.armed = ''; renderRooms(); }, ROOM_ARM_MS);
+  } else {
+    disarmRoom();
+    sendPick(name);
+  }
+  renderRooms();
+}
+
+function sendPick(name) {
+  rooms.sent = { name, at: performance.now() };
+  send({ t: 'pick', room: name });
+}
+
+/** {"t":"pick"}: a room on its way here (to everyone), or why not (a refusal is mine alone; a
+ *  load that failed is everyone's, and the room stays as it was). */
+function onPick(m) {
+  const name = pickName(m.room);
+  rooms.seen++;
+  if (typeof m.error === 'string' && m.error) {
+    toast(m.error.slice(0, 200), 'error');
+    if (name && name === rooms.busy) rooms.busy = '';
+    if (!name || rooms.sent?.name === name) rooms.sent = null;
+    renderRooms();
+    return;
+  }
+  if (m.state !== 'loading' || !name) return;
+  rooms.busy = name;
+  disarmRoom();
+  const label = String(m.label || roomByName(name)?.label || 'another room').slice(0, 60);
+  const by = typeof m.by === 'string' ? m.by.slice(0, 40) : '';
+  const mine = rooms.sent?.name === name && performance.now() - rooms.sent.at < 15000 && (!by || by === me.name);
+  if (mine) toast(peers.size ? `You are moving everyone to ${label}…` : `Opening ${label}…`);
+  else toast(`${by || 'Someone'} is moving everyone to ${label}…`);
+  renderRooms();
+}
+
+/** A "scene" for a room someone picked ("pick" on it), or for the way back to the call's own room
+ *  while that pick is on its way: the version is another room, whatever its walls, so it goes in
+ *  as one (spawn point, no old splats). A scan's first room makes this room "scan". */
+function notePick(m, v) {
+  const said = pickName(m.pick?.room);
+  const name = said || (rooms.busy && rooms.busy === defaultRoom()?.name ? rooms.busy : '');
+  if (name) {
+    if (v !== shown?.v) ver.pickV = v;
+    ver.pickLabel = String(m.label || roomByName(name)?.label || '').slice(0, 60);
+    rooms.pick = name; rooms.busy = '';
+  } else if (scanJobOf(v)) rooms.pick = 'scan';
+  else return;
+  rooms.seen++;
+  renderRooms();
+}
+
+/** A welcome after a reconnect, into a call room someone moved to another room while this page
+ *  was away: its version goes in as another room, whatever its walls (as for a "scene" with a
+ *  pick: spawn point, no old splats). Before the version is considered, so even one already
+ *  prepared is installed as fresh. */
+function noteRejoin(m, v) {
+  const name = pickName(m.pick);
+  if (!welcomed || !name || name === rooms.pick || v === undefined || v === shown?.v) return;
+  ver.pickV = v;
+  const listed = parseRooms(m.rooms).find((r) => r.name === name);
+  ver.pickLabel = String(listed?.label || '').slice(0, 60);
+}
+
+/** What the welcome says about rooms: the list and where this call room is now; then the join
+ *  card's choice, for a room nobody else is in yet. */
+function onRoomsWelcome(m) {
+  rooms.list = parseRooms(m.rooms);
+  rooms.pick = pickName(m.pick);
+  rooms.busy = '';                                 // a pick still loading says so again with its "scene"
+  disarmRoom();
+  rooms.seen++;
+  const want = rooms.want;
+  rooms.want = '';
+  if (want && want !== rooms.pick && roomByName(want) && !(m.peers || []).length) sendPick(want);
+  renderRooms();
+}
+
+/** First visit with a Rooms button: a ring on it and one line about it. */
+function roomsHint() {
+  const btn = $('roomsBtn');
+  if (btn.hidden || scans.hinted || store.get('roomsHintSeen', false)) return;
+  scans.hinted = true;
+  store.set('roomsHintSeen', true);
+  btn.classList.add('hint');
+  setTimeout(() => btn.classList.remove('hint'), 10000);
+  const say = rooms.list.length < 2 ? 'Scanned a room? Rooms brings it into this call'
+    : scans.enabled ? 'Rooms moves everyone to another room, or brings in one you scanned'
+      : 'Rooms moves everyone here to another room';
+  setTimeout(() => toast(say), 1800);
+}
+
+/** The panel; with no other room to go to, straight to adding a scanned one (as before Rooms). */
+function openRoomsPanel() {
+  $('roomsBtn').classList.remove('hint');
+  if (rooms.list.length < 2 && scans.enabled) { openScanPanel(); return; }
+  renderRooms();
+  togglePanel('roomsPanel', true);
+  refreshRooms();
+}
+
+/** The list again as the panel opens (the server's library can grow while a call goes on). */
+async function refreshRooms() {
+  const seen = rooms.seen;
+  const got = await fetchRooms();
+  if (!got || !me.id) return;
+  rooms.list = got.list;
+  if (seen === rooms.seen && got.current) rooms.pick = got.current;   // nothing newer from the socket
+  renderRooms();
+}
+
+$('roomsBtn').addEventListener('click', () => ($('roomsPanel').hidden && $('scanPanel').hidden ? openRoomsPanel() : togglePanel('roomsPanel', false)));
+$('roomsScanBtn').addEventListener('click', openScanPanel);
+
+/** The join card's heading: the room this person will land in, as chosen there (or as it is now). */
+function joinLabel() {
+  const j = rooms.join;
+  if (!j || joined) return '';
+  return j.tiles?.find((r) => r.name === j.choice)?.label || j.label || '';
+}
+
+/** The join card's Room row: for an empty call room with somewhere else to be, the rooms as
+ *  tiles, the one it shows now chosen; for a room with people in it, who is there. */
+async function loadJoinRooms() {
+  const got = await fetchRooms();
+  if (!got || joined) return;
+  const tiles = [...got.list];
+  let current = got.current || got.list.find((r) => r.default)?.name || '';
+  const label = got.label || tiles.find((r) => r.name === current)?.label || '';
+  if (got.peers > 0) {
+    rooms.join = { current, choice: current, label, tiles: null };
+    $('roomPeople').textContent = `${got.peers} ${got.peers === 1 ? 'person is' : 'people are'} in ${label || 'this room'}`;
+    $('roomPeople').hidden = false;
+  } else {
+    if (current && !tiles.some((r) => r.name === current)) tiles.unshift({ name: current, label: label || 'This room', thumb: false });
+    if (tiles.length < 2) return;
+    current ||= tiles[0].name;
+    rooms.join = { current, choice: current, label, tiles };
+    $('roomTiles').replaceChildren(...tiles.map((r) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn room-tile';
+      b.setAttribute('role', 'radio');
+      b.dataset.room = r.name;
+      const name = document.createElement('span');
+      name.textContent = r.label;
+      b.append(roomThumb(r), name);
+      b.addEventListener('click', () => chooseJoinRoom(r.name));
+      return b;
+    }));
+    $('roomRow').hidden = false;
+    chooseJoinRoom(current);
+  }
+  const say = joinLabel();
+  if (say) $('sceneLabel').textContent = say;
+}
+
+function chooseJoinRoom(name) {
+  rooms.join.choice = name;
+  for (const b of $('roomTiles').children) b.setAttribute('aria-checked', String(b.dataset.room === name));
+  $('sceneLabel').textContent = joinLabel() || $('sceneLabel').textContent;
+}
 
 // Panels open under the toolbar, however many rows it wraps to (a narrow window, an iPad in
 // portrait), so a panel never covers the button that opened it.
@@ -3487,6 +3787,7 @@ function handle(m) {
       // server restarted with a new scene, or swapped while we were away): it is loaded and
       // swapped in like any other, no page reload.
       const v = versionOf(m);
+      noteRejoin(m, v);
       if (v !== undefined) {
         // A room can run a version of its own (a scan someone added to it): joining it is not news.
         if (!welcomed && shown?.v !== v) ver.quiet = v;
@@ -3514,6 +3815,7 @@ function handle(m) {
       syncBodyUi();
       syncPoseTrack();
       onScanWelcome(m);
+      onRoomsWelcome(m);
       liveStatus(performance.now());
       if (!welcomed) { welcomed = true; enterRoom(); }
       renderPeople();
@@ -3538,19 +3840,8 @@ function handle(m) {
     case 'state': onState(m); break;
     case 'scan': onScan(m); break;
     case 'splat': if (!m.v || m.v === shown?.v) refreshSplat(); break;
-    case 'scene': {
-      // A new version of the room: fetch it now; the room switches to it a few seconds later, at
-      // the first state frame that carries it (or already has, if the server did not wait). The
-      // version the room is already on means the opposite: whatever was pending is withdrawn.
-      const v = versionOf(m);
-      if (!v) break;
-      ver.gone.delete(v);
-      ver.next = v === ver.room ? undefined : v;
-      ver.nextAt = performance.now();
-      onScanOffer(m);
-      reconsider();
-      break;
-    }
+    case 'scene': onScene(m); break;
+    case 'pick': onPick(m); break;
     case 'media': {
       const peer = peers.get(m.id);
       if (!peer) break;
@@ -3578,6 +3869,20 @@ function handle(m) {
     }
     default: break;
   }
+}
+
+/** A new version of the room: fetch it now; the room switches to it a few seconds later, at the
+ *  first state frame that carries it (or already has, if the server did not wait). The version the
+ *  room is already on means the opposite: whatever was pending is withdrawn. */
+function onScene(m) {
+  const v = versionOf(m);
+  if (!v) return;
+  ver.gone.delete(v);
+  ver.next = v === ver.room ? undefined : v;
+  ver.nextAt = performance.now();
+  onScanOffer(m);
+  notePick(m, v);
+  reconsider();
 }
 
 /* ------------------------------------------------------------------ join screen */
@@ -3630,6 +3935,8 @@ $('joinForm').addEventListener('submit', async (e) => {
   if (joined || !booted) return;                  // Enter before the room id is known
   me.name = $('nameInput').value.trim().replace(/\s+/g, ' ').slice(0, 40) || 'Guest';
   store.set('name', me.name); store.set('color', me.color); store.set('camera', $('camInput').checked);
+  const j = rooms.join;
+  rooms.want = j?.tiles && j.choice !== j.current ? j.choice : '';
   joined = true;
   $('joinError').hidden = true;
   $('joinBtn').disabled = true; $('joinBtn').textContent = 'Joining…';
@@ -3651,7 +3958,7 @@ function enterRoom() {
   // A full body first (help follows when that panel is closed), unless there is nothing to ask.
   if (mine.enabled && mine.status === 'none' && !session.get('rc.avatar') && !bodySkipped()) openBodyPanel();
   else if (!store.get('helpSeen', false)) { togglePanel('help', true); store.set('helpSeen', true); }
-  scanHint();
+  roomsHint();
   renderScanCard();
 }
 
@@ -3664,16 +3971,17 @@ function togglePanel(id, force) {
   $('peopleBtn').setAttribute('aria-expanded', String(!$('people').hidden));
   $('helpBtn').setAttribute('aria-expanded', String(!$('help').hidden));
   $('bodyBtn').setAttribute('aria-expanded', String(!$('bodyPanel').hidden));
-  $('scanBtn').setAttribute('aria-expanded', String(!$('scanPanel').hidden));
+  // The scan panel is the Rooms panel's "Add a room you scanned…": one button for both.
+  $('roomsBtn').setAttribute('aria-expanded', String(!$('roomsPanel').hidden || !$('scanPanel').hidden));
 }
 function closePanels() {
   for (const id of PANELS) $(id).hidden = true;
   $('peopleBtn').setAttribute('aria-expanded', 'false');
   $('helpBtn').setAttribute('aria-expanded', 'false');
   $('bodyBtn').setAttribute('aria-expanded', 'false');
-  $('scanBtn').setAttribute('aria-expanded', 'false');
+  $('roomsBtn').setAttribute('aria-expanded', 'false');
 }
-const PANELS = ['people', 'help', 'invitePop', 'bodyPanel', 'scanPanel'];
+const PANELS = ['people', 'help', 'invitePop', 'bodyPanel', 'roomsPanel', 'scanPanel'];
 
 $('peopleBtn').addEventListener('click', () => togglePanel('people'));
 $('helpBtn').addEventListener('click', () => togglePanel('help'));
@@ -3822,6 +4130,7 @@ function frame() {
     if (zoom?.name) me.name = zoom.name;          // inside Zoom the meeting's screen name wins
   }
   prepareJoinScreen();
+  loadJoinRooms();                                 // the Room row, if there is a choice (never waited for)
   syncMediaButtons();
   booted = true;
   $('joinBtn').disabled = false; $('joinBtn').textContent = 'Join the room';

@@ -997,6 +997,7 @@ class ScanService:
         self._slots = asyncio.Semaphore(config.upload_slots)
         self._tasks: set[asyncio.Task] = set()
         self._scratch: Path | None = None
+        self._held: set[str] = set()          # rooms a picked room is loading into (`hold`)
 
     # -- what clients are told ------------------------------------------------------------------
 
@@ -1054,6 +1055,28 @@ class ScanService:
             self.config.keep_seconds, self._drop_room, room_id)
 
     def _drop_room(self, room_id: str) -> None:
+        self._let_go(room_id, "Stopped: everyone left the room", release=True)
+
+    def busy(self, room_id: str) -> bool:
+        """Whether a scan is still on its way into `room_id` (uploading, building, or its
+        realistic objects or photoreal room still coming): the room picker waits for it."""
+        state = self.rooms.get(room_id)
+        return state is not None and state.job is not None and state.job.status not in _ENDED
+
+    def forget_room(self, room_id: str) -> None:
+        """A room picked from the library takes `room_id` over: its scan is forgotten — the
+        kept copy, its photoreal rooms on disk, the message joiners would be told — but its
+        version is NOT let go (the hub has just put the picked one in its place)."""
+        self._let_go(room_id, "Stopped: another room was picked", release=False)
+
+    def hold(self, room_id: str) -> None:
+        """No scan may be sent into `room_id` until `unhold`: a picked room is loading there."""
+        self._held.add(room_id)
+
+    def unhold(self, room_id: str) -> None:
+        self._held.discard(room_id)
+
+    def _let_go(self, room_id: str, why: str, *, release: bool) -> None:
         state = self.rooms.pop(room_id, None)
         if state is None:
             return
@@ -1061,11 +1084,12 @@ class ScanService:
             state.drop.cancel()
         job = state.job
         if job is not None and job.status not in _ENDED:
-            self._stop(job, "Stopped: everyone left the room", tell=False)
+            self._stop(job, why, tell=False)
         if state.scanned:
-            log.info("roomcall: room %s is empty; its scanned room is let go", room_id)
-            self.release(room_id)
             store = self.config.store
+            if release:
+                log.info("roomcall: room %s is empty; its scanned room is let go", room_id)
+                self.release(room_id)
             if store is not None:
                 self._spawn(asyncio.to_thread(store.forget, room_id))
         # Its photoreal rooms too, once its build has ended (its splat child writes there).
@@ -1201,6 +1225,8 @@ class ScanService:
             raise ScanRequestError(429, f"you can add another room in {wait} s", wait)
         if any(j.room == room for j in active):
             raise ScanRequestError(429, "a room is being built here already; wait for it", 15)
+        if room in self._held:
+            raise ScanRequestError(429, "another room is being loaded here; wait for it", 5)
         if len(active) >= c.max_jobs:
             raise ScanRequestError(429, "the server is building other rooms right now; try "
                                         "again in a minute", 30)

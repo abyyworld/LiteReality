@@ -137,6 +137,9 @@ input[type=text]{font:inherit;font-size:16px;color:var(--text);background:var(--
 .btn.tool[data-state=building] .tool-ico{animation:holo-wait 1.4s ease-in-out infinite}
 /* add room: a box (a room in 3D) with a plus */
 .ico-scan{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 12V7l-8-4-8 4v10l8 4 2-1'/%3E%3Cpath d='M4 7l8 4 8-4M12 11v10M19 15v6M16 18h6'/%3E%3C/svg%3E")}
+/* rooms: four tiles (a library of rooms to pick from); one room: a box without the plus */
+.ico-rooms{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
+.ico-room{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 7l-8-4-8 4v10l8 4 8-4z'/%3E%3Cpath d='M4 7l8 4 8-4M12 11v10'/%3E%3C/svg%3E")}
 /* first visit: a soft ring says "this is new" until it is pressed or a little while has passed */
 .btn.tool.hint{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 55%,transparent);animation:hint-ring 1.6s ease-out 6}
 @keyframes hint-ring{70%{box-shadow:0 0 0 9px transparent}100%{box-shadow:0 0 0 0 transparent}}
@@ -170,6 +173,37 @@ kbd{font:600 11.5px ui-monospace,Menlo,Consolas,monospace;border:1px solid var(-
 .scan-status{font-size:13.5px;min-height:1.2em;margin:0}
 .scan-status:empty{display:none}
 .scan-status.error{color:var(--err)}
+
+/* ---- rooms: the call's rooms to move into, in the Rooms panel and on the join card ---- */
+.rooms-panel p{margin:0 0 10px}
+.rooms-list{list-style:none;margin:0 0 10px;padding:0;display:flex;flex-direction:column;gap:6px}
+.btn.room-item{width:100%;justify-content:flex-start;gap:10px;padding:6px 10px 6px 6px;text-align:left}
+.btn.room-item[aria-current=true]{cursor:default;border-color:color-mix(in srgb,var(--accent) 55%,var(--line));
+  background:color-mix(in srgb,var(--accent) 8%,var(--surface-solid))}
+.btn.room-item[aria-current=true]:active{transform:none}
+/* armed: the first of two presses, as Reset's (a move everyone sees is never one stray click) */
+.btn.room-item.armed{border-color:color-mix(in srgb,var(--err) 50%,var(--line));background:var(--err-bg)}
+.room-thumb{flex:none;width:64px;aspect-ratio:4/3;border-radius:7px;overflow:hidden;display:flex;align-items:center;
+  justify-content:center;background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--muted)}
+.room-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.room-text{display:flex;flex-direction:column;line-height:1.25;min-width:0;flex:1}
+.room-text b{font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.room-text small{font-size:12px;color:var(--muted)}
+.room-text small:empty{display:none}
+.room-item[aria-current=true] .room-text small{color:var(--accent);font-weight:600}
+.room-item.armed .room-text small{color:var(--err);font-weight:600}
+.room-item.coming .tool-ico{animation:holo-wait 1.4s ease-in-out infinite}
+.rooms-status{font-size:13.5px;min-height:1.2em;margin:0 0 10px}
+.rooms-status:empty{display:none}
+.btn.rooms-scan{width:100%}
+.btn.rooms-scan .tool-ico{color:var(--accent)}
+.help-pick:not([hidden]) + .help-scan::before{content:" · "}
+.room-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.btn.room-tile{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:5px;padding:5px 5px 7px;
+  font-size:13px;line-height:1.25;text-align:center;overflow-wrap:anywhere}
+.room-tile .room-thumb{width:100%}
+.btn.room-tile[aria-checked=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);font-weight:600}
+.room-people{margin:-6px 0 0}
 
 /* ---- a scanned room on its way: one card under the room chip, for everyone in the room ----
    Out of the top row's flow, under its taller side, so the toolbar keeps its place beside the

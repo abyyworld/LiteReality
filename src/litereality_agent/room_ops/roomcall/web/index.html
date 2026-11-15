@@ -51,6 +51,14 @@
       <div class="swatches" id="swatches" role="radiogroup" aria-labelledby="colorLabel"></div>
     </div>
 
+    <!-- an empty call room can be opened straight into one of the server's rooms (app.js fills
+         this from rooms.json; it stays hidden when there is nothing to choose) -->
+    <div class="field" id="roomRow" hidden>
+      <span class="field-label" id="roomRowLabel">Room</span>
+      <div class="room-tiles" id="roomTiles" role="radiogroup" aria-labelledby="roomRowLabel"></div>
+    </div>
+    <p class="muted small room-people" id="roomPeople" hidden></p>
+
     <label class="check">
       <input id="camInput" type="checkbox" checked>
       <span><b>Show my webcam on my avatar</b>
@@ -98,8 +106,8 @@
         <span class="tool-ico ico-mic" aria-hidden="true"></span><span class="tool-txt">Mic</span></button>
       <button class="btn tool" id="inviteBtn" type="button" title="Copy a link to paste in the call chat">
         <span class="tool-ico ico-link" aria-hidden="true"></span><span class="tool-txt">Invite</span></button>
-      <button class="btn tool" id="scanBtn" type="button" aria-expanded="false" aria-controls="scanPanel" title="Add a room you scanned" hidden>
-        <span class="tool-ico ico-scan" aria-hidden="true"></span><span class="tool-txt">Add room</span></button>
+      <button class="btn tool" id="roomsBtn" type="button" aria-expanded="false" aria-controls="roomsPanel" title="Move everyone to another room, or add one you scanned" hidden>
+        <span class="tool-ico ico-rooms" aria-hidden="true"></span><span class="tool-txt">Rooms</span></button>
       <button class="btn tool" id="peopleBtn" type="button" aria-expanded="false" aria-controls="people" title="People in the room">
         <span class="tool-ico ico-people" aria-hidden="true"></span><span class="tool-txt">People</span>
         <span class="count" id="peopleCount">1</span></button>
@@ -137,8 +145,10 @@
       <dt>Phone</dt><dd>Drag to look · press and hold an object to grab · stick or two fingers to walk</dd>
       <dt>Hologram</dt><dd>With your camera on, others see you life-size, cut out of your background on
         your own device · <b>Hologram</b> switches to plain video</dd>
-      <dt id="helpScanTerm" hidden>New room</dt><dd id="helpScan" hidden>Scanned a room with the LiteReality
-        Scanner app? <b>Add room</b> sends the scan here, and everyone in this room moves into it</dd>
+      <dt id="helpRoomsTerm" hidden>Rooms</dt><dd id="helpRooms" hidden><span class="help-pick" id="helpRoomsPick"><b>Rooms</b>
+        moves everyone here into a ready-made room: press one, then press it again</span><span class="help-scan"
+        id="helpRoomsScan">Scanned a room with the LiteReality Scanner app? <b>Add a room you scanned…</b> there
+        sends the scan here, and everyone in this room moves into it</span></dd>
     </dl>
     <p class="muted small">Voice comes from your Zoom, Meet or Teams call. Changes here are virtual
       only — nothing in the real room moves.</p>
@@ -159,6 +169,17 @@
       photos (head to toe, facing the camera, a plain background helps).</p>
     <p class="body-status" id="bodyStatus" role="status" aria-live="polite"></p>
     <input id="bodyFiles" type="file" accept="image/jpeg,image/png,image/webp" multiple hidden>
+  </section>
+
+  <section id="roomsPanel" class="card panel rooms-panel" hidden aria-label="Rooms">
+    <h2>Rooms</h2>
+    <p class="muted small">Move everyone in this room into another one: press a room, then press it
+      again. Other rooms on this link keep theirs.</p>
+    <ul id="roomsList" class="rooms-list"></ul>
+    <p class="notice warn small" id="roomsNote" hidden></p>
+    <p class="rooms-status" id="roomsStatus" role="status" aria-live="polite"></p>
+    <button class="btn rooms-scan" id="roomsScanBtn" type="button" hidden>
+      <span class="tool-ico ico-scan" aria-hidden="true"></span>Add a room you scanned…</button>
   </section>
 
   <section id="scanPanel" class="card panel scan-panel" hidden aria-label="Add a room you scanned">

@@ -143,8 +143,14 @@ class FakeVolume:
         return [SimpleNamespace(path=top, mtime=self.mtimes.get(top, 0)) for top in sorted(tops)]
 
     def remove_file(self, path: str, recursive: bool = False):
-        assert recursive
+        if path in self.files:                         # one file (a library thumbnail)
+            del self.files[path]
+            return
+        if not recursive:
+            raise FileNotFoundError(path)              # as `modal.Volume.remove_file` does
         prefix = path.rstrip("/") + "/"
+        if not any(remote.startswith(prefix) for remote in self.files):
+            raise FileNotFoundError(path)              # as `modal.Volume.remove_file` does
         for remote in [r for r in self.files if r.startswith(prefix)]:
             del self.files[remote]
 
@@ -713,3 +719,247 @@ def test_the_hosted_app_takes_scans_and_keeps_rooms_on_the_volume(tmp_path):
     assert off.state.roomcall.scans.config.store is None
     # Never a version folder (a publish never prunes it) and never what CURRENT can name.
     assert not hosted._VERSION.match(hosted.ROOMS_DIR) and not hosted._NAME.match(hosted.ROOMS_DIR)
+
+
+# -- the room library: ready rooms people pick in a call, beside the default CURRENT names ---------
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\0" * 64          # what the upload checks: a JPEG's magic
+
+
+def _variant(export: Path, folder: Path, mass: str) -> Path:
+    """A copy of the export with Mug0's mass changed: new content, so a new version."""
+    for local, relative in hosted.scene_files(export):
+        (folder / relative).parent.mkdir(parents=True, exist_ok=True)
+        (folder / relative).write_bytes(local.read_bytes())
+    (folder / "extra.xml").write_text(EXTRA.replace("0.3", mass))
+    return folder / "scene.xml"
+
+
+def _library(volume: FakeVolume) -> list[dict]:
+    return json.loads(volume.files["/.library/rooms.json"])["rooms"]
+
+
+def test_uploading_a_version_leaves_the_served_room_alone(export, tmp_path):
+    volume = FakeVolume()
+    live = hosted.publish(export, name="tea_room", volume=volume, prebuild=False).version
+    batches = len(volume.batches)
+    office = hosted.upload_version(_variant(export, tmp_path / "office", "0.4"), name="office_room",
+                                   volume=volume, label="office_room", prebuild=False)
+    assert re.fullmatch(r"office_room-[0-9a-f]{12}", office.version) and office.sent > 0
+    assert volume.files["/current"] == live.encode()   # still the default room
+    assert len(volume.batches) == batches + 1          # the folder, nothing else
+    assert all(path.startswith(f"/{office.version}/") for path in volume.batches[-1])
+    meta = json.loads(volume.files[f"/{office.version}/roomcall.json"])
+    assert meta["label"] == "office room" and meta["version"] == office.version
+    # `publish` is that upload plus CURRENT: the same files make the same version.
+    again = hosted.publish(_variant(export, tmp_path / "office", "0.4"), name="office_room",
+                           volume=volume, label="office_room", prebuild=False)
+    assert again.version == office.version and volume.files["/current"] == office.version.encode()
+
+
+def test_adding_to_the_library_lists_the_room_and_its_thumbnail(export, tmp_path):
+    volume = FakeVolume()
+    live = hosted.publish(export, name="tea_room", volume=volume, prebuild=False).version
+    thumb = tmp_path / "office.jpg"
+    thumb.write_bytes(JPEG)
+    first = hosted.add_to_library(_variant(export, tmp_path / "o1", "0.4"), name="office_room",
+                                  volume=volume, label="office_room", stage="objects",
+                                  thumb=thumb, prebuild=False).version
+    assert volume.files["/current"] == live.encode()   # never the default room
+    assert _library(volume) == [{"name": "office_room", "label": "office room",
+                                 "version": first, "thumb": True}]
+    assert volume.files["/.library/office_room.jpg"] == JPEG
+    # The folder committed first; the list and its picture together, after it.
+    assert all(path.startswith(f"/{first}/") for path in volume.batches[-2])
+    assert volume.batches[-1] == ["/.library/office_room.jpg", "/.library/rooms.json"]
+    assert json.loads(volume.files[f"/{first}/roomcall.json"])["stage"] == "objects"
+
+    hosted.add_to_library(_variant(export, tmp_path / "lab", "0.5"), name="lab", volume=volume,
+                          prebuild=False)
+    # The same name again replaces its entry in place; the thumbnail it had stays.
+    second = hosted.add_to_library(_variant(export, tmp_path / "o2", "0.6"), name="office_room",
+                                   volume=volume, label="Office", prebuild=False).version
+    assert second != first
+    rooms = _library(volume)
+    assert [room["name"] for room in rooms] == ["office_room", "lab"]
+    assert rooms[0] == {"name": "office_room", "label": "Office", "version": second,
+                        "thumb": True}
+    assert rooms[1]["thumb"] is False and rooms[1]["label"] == "lab"
+    assert volume.files["/current"] == live.encode()
+
+    # Refused before anything is sent: a picture that is not a JPEG, a name that is no room's.
+    sent = len(volume.batches)
+    png = tmp_path / "office.png"
+    _png(png)
+    with pytest.raises(ValueError, match="JPEG"):
+        hosted.add_to_library(export, name="office_room", volume=volume, thumb=png,
+                              prebuild=False)
+    for missing in (tmp_path / "ofice.jpg", tmp_path):     # a typo, a folder: a message, no trace
+        with pytest.raises(ValueError, match="cannot be read"):
+            hosted.add_to_library(export, name="office_room", volume=volume, thumb=missing,
+                                  prebuild=False)
+    for bad in ("demo", "../x", "a" * 49, "-office", "scan"):
+        with pytest.raises(ValueError, match="library room's name"):
+            hosted.add_to_library(export, name=bad, volume=volume, prebuild=False)
+    # A full library takes no new room (the container would never list it), but a room it
+    # already lists may still be replaced.
+    full = {"rooms": [{"name": f"r{k}", "label": f"r{k}", "version": f"r{k}-0123456789ab"}
+                      for k in range(64)]}
+    kept = volume.files["/.library/rooms.json"]
+    volume.files["/.library/rooms.json"] = json.dumps(full).encode()
+    with pytest.raises(ValueError, match="full"):
+        hosted.add_to_library(export, name="office_room", volume=volume, prebuild=False)
+    volume.files["/.library/rooms.json"] = kept
+    volume.files["/.library/rooms.json"] = b"{not json"
+    with pytest.raises(ValueError, match="cannot be read"):   # never written over blind
+        hosted.add_to_library(export, name="office_room", volume=volume, prebuild=False)
+    assert len(volume.batches) == sent
+
+
+def test_pruning_never_removes_a_version_the_library_lists(export, tmp_path, capsys):
+    volume = FakeVolume()
+    listed = hosted.add_to_library(_variant(export, tmp_path / "v0", "0.40"), name="tea_room",
+                                   volume=volume, prebuild=False).version
+    published = [hosted.publish(_variant(export, tmp_path / f"v{k}", f"0.4{k}"), name="tea_room",
+                                volume=volume, prebuild=False).version for k in range(1, 5)]
+    # The newest two, as always, and the one people pick in calls.
+    assert {f for f in volume.folders() if f.startswith("tea_room-")} == \
+        {listed, published[-1], published[-2]}
+    # Adding prunes as publishing does: it keeps CURRENT's version, and the one it replaces in
+    # the library for this once (a call room may be on it), as a publish keeps the one before.
+    newer = hosted.add_to_library(_variant(export, tmp_path / "v5", "0.45"), name="tea_room",
+                                  volume=volume, prebuild=False).version
+    assert {f for f in volume.folders() if f.startswith("tea_room-")} == \
+        {newer, listed, published[-1]}
+    assert volume.files["/current"] == published[-1].encode()
+    # A library that cannot be read protects what it may list: nothing is pruned, and the
+    # version is live all the same.
+    volume.files["/.library/rooms.json"] = b"[]"
+    before = volume.folders()
+    live = hosted.publish(_variant(export, tmp_path / "v6", "0.46"), name="tea_room",
+                          volume=volume, prebuild=False).version
+    assert volume.files["/current"] == live.encode() and volume.folders() == before | {live}
+    assert "could not prune" in capsys.readouterr().err
+
+
+def test_removing_from_the_library(export, tmp_path):
+    volume = FakeVolume()
+    thumb = tmp_path / "office.jpg"
+    thumb.write_bytes(JPEG)
+    office = hosted.add_to_library(_variant(export, tmp_path / "o", "0.4"), name="office_room",
+                                   volume=volume, thumb=thumb, prebuild=False).version
+    hosted.add_to_library(_variant(export, tmp_path / "lab", "0.5"), name="lab", volume=volume,
+                          prebuild=False)
+    assert hosted.remove_from_library("office_room", volume=volume) is True
+    assert [room["name"] for room in _library(volume)] == ["lab"]
+    assert "/.library/office_room.jpg" not in volume.files
+    assert office in volume.folders()                  # a call room may still be on it
+    assert hosted.remove_from_library("office_room", volume=volume) is False
+    assert hosted.remove_from_library("../lab", volume=volume) is False
+    assert hosted.remove_from_library("anything", volume=FakeVolume()) is False   # no library
+
+
+def test_the_container_reads_the_library_the_upload_writes(export, tmp_path):
+    from litereality_agent.room_ops.roomcall.library import RoomLibrary
+
+    volume = FakeVolume()
+    hosted.publish(export, name="tea_room", volume=volume, prebuild=False)
+    thumb = tmp_path / "office.jpg"
+    thumb.write_bytes(JPEG)
+    office = hosted.add_to_library(_variant(export, tmp_path / "o", "0.4"), name="office_room",
+                                   volume=volume, label="office_room", stage="objects",
+                                   thumb=thumb).version
+    lab = hosted.add_to_library(_variant(export, tmp_path / "lab", "0.5"), name="lab",
+                                volume=volume, prebuild=False).version
+    root = volume.materialise(tmp_path / "volume")
+    rooms = {room.name: room for room in RoomLibrary.folder(root, poll_seconds=0).rooms()}
+    assert set(rooms) == {"office_room", "lab"}
+    assert rooms["office_room"].version == office and rooms["office_room"].label == "office room"
+    assert rooms["office_room"].scene == root / office / "scene.xml"
+    assert rooms["office_room"].stage == "objects"
+    assert rooms["office_room"].prebuilt == root / office          # built here, like publish
+    assert rooms["office_room"].thumb == root / ".library" / "office_room.jpg"
+    assert rooms["lab"].version == lab and rooms["lab"].prebuilt is None
+    assert rooms["lab"].thumb is None
+    # The hosted app is given that library.
+    app = hosted.build_app(root, scratch=tmp_path / "demo", uploads="off")
+    with TestClient(app) as client:
+        assert client.get("/healthz").json()["library"] == 2
+        listed = client.get("/rooms.json", params={"room": "call"}).json()["rooms"]
+        assert [room["name"] for room in listed] == ["tea_room", "office_room", "lab"]
+        assert client.get("/rooms/office_room/thumb.jpg").content == JPEG
+
+
+def test_library_flags_add_and_remove_without_deploying(export, monkeypatch, tmp_path):
+    pytest.importorskip("modal")
+    calls = []
+    monkeypatch.setattr(hosted, "library_add", lambda scene, **kw: calls.append((scene, kw)) or 0)
+    monkeypatch.setattr(hosted, "library_remove", lambda name, **kw: calls.append((name, kw)) or 0)
+
+    def no_deploy(*args, **kwargs):
+        raise AssertionError("--library must not publish or deploy")
+
+    monkeypatch.setattr(hosted, "deploy", no_deploy)
+    args = _parse([str(export), "--library", "--label", "office_room", "--thumb", "a.jpg",
+                   "--modal-env", "dev"])
+    assert args.deploy == roomcall.LIBRARY_ADD               # truthy: `.env` credentials go along
+    assert roomcall.run(args, credentials=("id", "secret")) == 0
+    scene, kw = calls[0]
+    assert scene == export and kw["label"] == "office_room" and kw["environment"] == "dev"
+    assert kw["thumb"] == Path("a.jpg") and kw["credentials"] == ("id", "secret")
+    assert kw["stage"] == "full"                             # mujoco_seed/, as --publish reads it
+    assert roomcall.run(_parse([str(export.parents[1]), "--library"])) == 0
+    assert calls[1][1]["label"] == "tea_room" and calls[1][1]["thumb"] is None
+
+    args = _parse(["--library-remove", "office_room"])
+    assert args.deploy == roomcall.LIBRARY_REMOVE and args.library_remove == "office_room"
+    assert roomcall.run(args, profile="me") == 0
+    assert calls[2] == ("office_room", {"environment": "main", "credentials": None,
+                                        "profile": "me"})
+    assert _parse([str(export)]).library_remove is None
+
+    for argv in (["--library", "--publish"], ["--library", "--library-remove", "x"],
+                 ["--deploy", "--library-remove", "x"]):
+        with pytest.raises(SystemExit):                      # one Modal action at a time
+            _parse([str(export), *argv])
+    with pytest.raises(SystemExit, match="--thumb"):
+        roomcall.run(_parse([str(export), "--publish", "--thumb", "a.jpg"]))
+    with pytest.raises(SystemExit, match="SCENE"):
+        roomcall.run(_parse(["--demo", "--library"]))
+    with pytest.raises(SystemExit, match="SCENE"):
+        roomcall.run(_parse(["--library"]))
+    with pytest.raises(SystemExit, match="not a scene"):
+        roomcall.run(_parse([str(export), "--library-remove", "x"]))
+    # `--realistic` publishes each version after the quick room as the link's default room:
+    # refused with --library before anything is sent.
+    args = _parse([str(export), "--library", "--thumb", "a.jpg"])
+    args.realistic = True
+    with pytest.raises(SystemExit, match="finished scene"):
+        roomcall.run(args)
+    assert len(calls) == 3
+
+
+def test_library_add_uploads_without_touching_the_default_room(export, monkeypatch, tmp_path,
+                                                               capsys):
+    modal = pytest.importorskip("modal")
+    volume = FakeVolume()
+    monkeypatch.setattr(modal.Volume, "from_name", lambda *a, **kw: volume)
+
+    def no_deploy(*args, **kwargs):
+        raise AssertionError("--library must not run `modal deploy`")
+
+    monkeypatch.setattr(hosted.subprocess, "run", no_deploy)
+    monkeypatch.setattr(hosted, "upload_version", lambda scene, **kw: hosted.Published(
+        f"{kw['name']}-0123456789ab", 7))               # the build is upload_version's own test
+    assert hosted.library_add(export, label="office room", stage="objects") == 0
+    out = capsys.readouterr().out
+    assert "/current" not in volume.files
+    assert _library(volume)[0]["name"] == "office-room"
+    assert "office-room-0123456789ab" in out
+    assert "splatroom <scan> --label office-room --publish --upload-only" in out
+    with pytest.raises(SystemExit, match="shorter --label"):
+        hosted.library_add(export, label="x" * 49)
+    assert hosted.library_remove("office-room") == 0
+    assert hosted.library_remove("office-room") == 1
+    assert "no room named" in capsys.readouterr().err
+

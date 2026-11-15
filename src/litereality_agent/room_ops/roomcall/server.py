@@ -57,6 +57,13 @@ room's, and a version offered to every room passes it by — until a newer scan,
 has been empty for a while. The realistic objects follow the same way, version by version. The
 room hears how it goes ({"t": "scan"}); GET /scan/<job> says the same.
 
+Ready rooms (`library`). Besides the default room, a server may have a library of ready-made rooms
+(on the Volume when hosted). Anyone in a call may move everyone in their call room into one of
+them, or back to the default ({"t": "pick"}): it goes in the way a scan does, into that call room
+only, with its own photoreal bundle, and is let go the same way once the room has stayed empty.
+GET /rooms.json lists them and says what a call room shows now (the join card offers the choice
+to whoever is first in).
+
 Every HTTP response carries the OWASP headers the Zoom client checks before it will render a Zoom
 App at all (Strict-Transport-Security, X-Content-Type-Options, Content-Security-Policy,
 Referrer-Policy — developers.zoom.us/docs/zoom-apps/security/owasp/). The CSP admits the page's one
@@ -109,6 +116,9 @@ from litereality_agent.room_ops.roomcall.avatars import (
 )
 from litereality_agent.room_ops.roomcall.geometry import build_scene_assets
 from litereality_agent.room_ops.roomcall.hosted import scene_digest, scene_files, version_name
+from litereality_agent.room_ops.roomcall.library import NAME as LIBRARY_NAME
+from litereality_agent.room_ops.roomcall.library import SCAN as LIBRARY_SCAN
+from litereality_agent.room_ops.roomcall.library import LibraryRoom, RoomLibrary
 from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
 from litereality_agent.room_ops.roomcall.scans import ScanConfig, ScanRequestError, ScanService
 from litereality_agent.room_ops.roomcall.sim import RoomSim, load_model
@@ -235,6 +245,20 @@ SENT_JOINTS = 13
 JOINT_LIMIT = 400
 # An avatar file never changes once built (a new body is a new id), so a browser keeps it.
 AVATAR_CACHE = "private, max-age=86400, immutable"
+# The room picker: seconds between two picks in one call room (a swap is a big change for everyone
+# in it, so nobody can flick the room back and forth), what a call room on a scan of its own is
+# called, and what the default room is called when its version has no room name. A thumbnail may
+# change when a room is added again, so it is cached briefly; one too big for a tile is not served.
+PICK_COOLDOWN = 4.0
+# Rooms loaded at once for call rooms (picks and scans, `install_room_version`): each load holds a
+# compiled model and a glb that can be hundreds of MB, or runs a geometry build, on a container of
+# 2 CPUs and 6 GB. A pick that would start another is refused, never queued; a pick of a room that
+# is already loading waits for that load instead of starting its own.
+ROOM_LOADS = 2
+PICK_SCAN = LIBRARY_SCAN
+PICK_DEFAULT = "default"
+THUMB_CACHE = "public, max-age=300"
+MAX_THUMB_BYTES = 2 * 1024 * 1024
 
 
 # ---------------------------------------------------------------------------------------------
@@ -881,6 +905,15 @@ def _swap_sims(old: RoomSim, commands: deque[list], version: SceneVersion,
     return new, new.adopt(old)
 
 
+@dataclass(eq=False)
+class _Load:
+    """A version loading for call rooms (`RoomHub._load_shared`): the load, and how many rooms
+    wait on it."""
+
+    task: asyncio.Task
+    waiters: int = 0
+
+
 class RoomHub:
     """Every live room of one server, keyed by room id. Rooms on one version share its model;
     `version` is the live one (what /scene.json serves and new rooms start on), `versions` every
@@ -889,7 +922,7 @@ class RoomHub:
     def __init__(self, version: SceneVersion | mujoco.MjModel, *, settle_seconds: float = 1.0,
                  prefetch_seconds: float | None = None, watch: Any = None,
                  avatars: AvatarConfig | None = None, scans: ScanConfig | None = None,
-                 splats: SplatSource | None = None) -> None:
+                 splats: SplatSource | None = None, library: RoomLibrary | None = None) -> None:
         if isinstance(version, mujoco.MjModel):  # a bare model: a version with nothing to draw
             version = SceneVersion("scene", "room", "scene", version, b"", {})
         self.version = version
@@ -925,6 +958,19 @@ class RoomHub:
                                  install=self.install_room_version,
                                  release=self.release_room_version,
                                  offer_gap=self.prefetch_seconds + OFFER_SLACK)
+        # Ready rooms a call room may be moved into (`pick`). By call room: the library room it
+        # was moved into, as (name, version id) — it shows that while its version is that one —
+        # and the pick to name in a joiner's {"t": "scene"} while that version is pending; the
+        # loop time of its last pick (`PICK_COOLDOWN`); and those with a pick loading.
+        self.library = library
+        self.picked: dict[str, tuple[str, str]] = {}
+        self._pick_notes: dict[str, tuple[str, dict]] = {}
+        self._picked_at: dict[str, float] = {}
+        self._picking: set[str] = set()
+        self._pick_tasks: set[asyncio.Task] = set()
+        # Versions being loaded for call rooms right now, by id: every room that wants one while
+        # it loads waits on the same load (`_load_shared`), and picks count them (`ROOM_LOADS`).
+        self._loading: dict[str, _Load] = {}
 
     def _find_peer(self, room_id: str, peer_id: str) -> Peer | None:
         room = self.rooms.get(room_id)
@@ -957,6 +1003,10 @@ class RoomHub:
             if self._splat_task is not None:
                 self._splat_task.cancel()
                 self._splat_task = None
+            for task in list(self._pick_tasks):
+                task.cancel()
+            for load in list(self._loading.values()):
+                load.task.cancel()
             for room in list(self.rooms.values()):
                 room.ready.cancel()
                 if room.task:
@@ -1210,44 +1260,84 @@ class RoomHub:
                 self._settle_pool(), functools.partial(version.settle, self.settle_seconds))
             version.settling.add_done_callback(functools.partial(self._settled, version))
 
-    def offer_room(self, room_id: str, version: SceneVersion) -> None:
+    def offer_room(self, room_id: str, version: SceneVersion, extra: dict | None = None) -> None:
         """Give one room a version of its own (a scan sent into it): that room alone is told
         {"t": "scene"} and swaps after the prefetch window, exactly as for `offer`; every other
         room, and the live version, stay as they are. The room keeps it — joiners get it, a version
         offered to every room passes it by — until another one replaces it here or
         `release_room_version` lets it go. Works for a room that is empty right now too: whoever
-        comes back gets it."""
+        comes back gets it. `extra` goes into the room's {"t": "scene"} (a pick says who moved
+        everyone, so browsers treat it as another room)."""
         version = self.versions.setdefault(version.id, version)
         self.room_versions[room_id] = version
         self._start_settling(version)
         room = self.rooms.get(room_id)
         if room is not None:
+            withdrawn = room.pending
             room.pending = None if room.version is version else version
             room.offered_at = asyncio.get_running_loop().time()
-            if room.pending is not None:
-                room.broadcast(version.message())
+            # Told also when it only withdraws another offer: browsers stop fetching that one.
+            if room.pending is not None or withdrawn is not None:
+                room.broadcast({**version.message(), **(extra or {})})
         self._prune()
 
-    async def install_room_version(self, room_id: str, ref: SceneRef) -> str:
+    async def install_room_version(self, room_id: str, ref: SceneRef,
+                                   extra: dict | None = None) -> str:
         """Load `ref` off the event loop (`load_version`; a version some room already has is
-        reused) and offer it to `room_id` alone. Returns its id; raises if it cannot be loaded.
-        Its photoreal room is the one `ref` names (the scan's), never its label's room's."""
+        reused) and offer it to `room_id` alone (`offer_room`, with `extra`). Returns its id;
+        raises if it cannot be loaded. Its photoreal room is the one `ref` names (the scan's,
+        the library room's), never its label's room's."""
         version = self.versions.get(ref.id)
         if version is None:
-            version = await load_version(
-                replace(ref, splat=SPLAT_NO_BUNDLE if ref.splat is None else ref.splat))
-        self.offer_room(room_id, version)
+            version = await self._load_shared(ref)
+        self.offer_room(room_id, version, extra)
         return version.id
 
-    def release_room_version(self, room_id: str) -> None:
-        """`room_id`'s own version is over (it stayed empty): it follows the live one again."""
+    async def _load_shared(self, ref: SceneRef) -> SceneVersion:
+        """`load_version(ref)`, once however many rooms want it at the same moment: a load of
+        `ref.id` already running is waited on, not started again (two call rooms picking the same
+        new room would otherwise hold two copies of it). The load is stopped only when every room
+        waiting on it has gone."""
+        load = self._loading.get(ref.id)
+        if load is None:
+            task = asyncio.ensure_future(load_version(
+                replace(ref, splat=SPLAT_NO_BUNDLE if ref.splat is None else ref.splat)))
+            load = self._loading[ref.id] = _Load(task)
+            task.add_done_callback(functools.partial(self._loaded, ref.id))
+        load.waiters += 1
+        try:
+            return await asyncio.shield(load.task)
+        except asyncio.CancelledError:
+            if load.waiters == 1 and not load.task.done():
+                load.task.cancel()
+            raise
+        finally:
+            load.waiters -= 1
+
+    def _loaded(self, vid: str, task: asyncio.Task) -> None:
+        load = self._loading.get(vid)
+        if load is not None and load.task is task:
+            del self._loading[vid]
+        if not task.cancelled():
+            task.exception()           # its waiters raise it; never "never retrieved" when gone
+
+    def release_room_version(self, room_id: str, extra: dict | None = None) -> None:
+        """`room_id`'s own version is over (it stayed empty, or someone picked the default room):
+        it follows the live one again. `extra` as for `offer_room`."""
+        self.picked.pop(room_id, None)
         if self.room_versions.pop(room_id, None) is None:
             return
         room = self.rooms.get(room_id)
-        if room is not None and room.version is not self.version:
-            room.pending = self.version
-            room.offered_at = asyncio.get_running_loop().time()
-            room.broadcast(self.version.message())
+        if room is not None:
+            if room.version is not self.version:
+                room.pending = self.version
+                room.offered_at = asyncio.get_running_loop().time()
+                room.broadcast({**self.version.message(), **(extra or {})})
+            elif room.pending is not None:
+                # Its own version was offered but never swapped in: withdrawn, and browsers are
+                # told to stay on the live one they still run.
+                room.pending = None
+                room.broadcast({**self.version.message(), **(extra or {})})
         self._prune()
 
     def _settled(self, version: SceneVersion, future: asyncio.Future) -> None:
@@ -1353,6 +1443,7 @@ class RoomHub:
             room.task = None
         if self.rooms.get(room.id) is room:
             del self.rooms[room.id]
+            self._pick_notes.pop(room.id, None)   # nobody left to swap: a rejoin gets it at once
             self.scans.room_emptied(room.id)
         self._prune()
 
@@ -1361,6 +1452,156 @@ class RoomHub:
             peer_id = secrets.token_hex(4)
             if peer_id not in room.peers:
                 return peer_id
+
+    # -- the room picker ------------------------------------------------------------------------
+
+    @property
+    def default_pick(self) -> str:
+        """The default room's name in the picker: the live version's room name."""
+        return splat_room_name(self.version.id) or PICK_DEFAULT
+
+    async def library_rooms(self) -> list[LibraryRoom]:
+        """The ready rooms, read off the event loop (the library may look at the Volume)."""
+        if self.library is None:
+            return []
+        return await asyncio.to_thread(self.library.rooms)
+
+    def room_items(self, library: list[LibraryRoom]) -> list[dict]:
+        """The picker's list: the default room first, then the library's. A library room with
+        the default's name is the default (and lends it its thumbnail)."""
+        default = self.default_pick
+        same = next((r for r in library if r.name == default), None)
+        items = [{"name": default, "label": self.version.label,
+                  "thumb": same is not None and same.thumb is not None, "default": True}]
+        items += [{"name": r.name, "label": r.label, "thumb": r.thumb is not None,
+                   "default": False} for r in library if r.name != default]
+        return items
+
+    def room_pick(self, room_id: str) -> dict:
+        """What `room_id` shows now (or would, to whoever joins it next): {"name", "label"} —
+        the library room it was moved into, the default room, or `PICK_SCAN` for a scan."""
+        own = self.room_versions.get(room_id)
+        if own is None:
+            return {"name": self.default_pick, "label": self.version.label}
+        picked = self.picked.get(room_id)
+        if picked is not None and picked[1] == own.id:
+            return {"name": picked[0], "label": own.label}
+        return {"name": PICK_SCAN, "label": own.label}
+
+    def scene_message(self, room_id: str, version: SceneVersion) -> dict:
+        """{"t": "scene"} for `version` in `room_id`, naming the pick that brought it if one did
+        (for someone who joins while the room is about to swap)."""
+        message = version.message()
+        note = self._pick_notes.get(room_id)
+        if note is not None and note[0] == version.id:
+            message.update(note[1])
+        return message
+
+    def pick(self, room: Room, peer: Peer, name: Any) -> None:
+        """{"t": "pick", "room": name} from `peer`: move everyone in `room` into that ready
+        room, or back to the default. Something malformed, or what the room already shows, is
+        ignored; a pick that has to wait (another one loading, `PICK_COOLDOWN`, a scan on its
+        way here) is refused to the sender alone."""
+        if not isinstance(name, str) or not LIBRARY_NAME.fullmatch(name):
+            return
+        if name == self.room_pick(room.id)["name"]:
+            return
+        refusal = self._pick_refusal(room.id)
+        if refusal is not None:
+            peer.push(dumps({"t": "pick", "error": refusal}))
+            return
+        if name == self.default_pick:
+            self._picked_at[room.id] = asyncio.get_running_loop().time()
+            label = self.version.label
+            room.broadcast({"t": "pick", "room": name, "label": label, "by": peer.name,
+                            "state": "loading"})
+            self.scans.forget_room(room.id)
+            note = {"pick": {"room": name, "by": peer.name}}
+            self._pick_notes[room.id] = (self.version.id, note)
+            self.release_room_version(room.id, note)
+            log.info("roomcall: room %s moved back to the default room by %s", room.id, peer.id)
+            return
+        self._picking.add(room.id)   # before anything waits: a second pick is refused at once
+        task = asyncio.ensure_future(self._pick(room.id, peer, name))
+        self._pick_tasks.add(task)       # held, or the loop may drop it half-way
+        task.add_done_callback(self._pick_done)
+
+    def _pick_done(self, task: asyncio.Task) -> None:
+        self._pick_tasks.discard(task)
+        if not task.cancelled() and (exc := task.exception()) is not None:
+            log.warning("roomcall: a room pick failed: %s: %s", type(exc).__name__, exc)
+
+    def _pick_refusal(self, room_id: str) -> str | None:
+        if room_id in self._picking:
+            return "Another room is already on its way here; wait a moment."
+        now = asyncio.get_running_loop().time()
+        for other, at in list(self._picked_at.items()):   # kept small: only recent picks count
+            if now - at >= PICK_COOLDOWN:
+                del self._picked_at[other]
+        last = self._picked_at.get(room_id)
+        if last is not None:
+            wait = max(1, math.ceil(PICK_COOLDOWN - (now - last)))
+            return f"The room just changed; you can pick another in {wait} s."
+        if self.scans.busy(room_id):
+            return "A scanned room is still being built here; wait for it to finish."
+        return None
+
+    async def _pick(self, room_id: str, peer: Peer, name: str) -> None:
+        """The rest of `pick` for a library room: find it, tell the room it is coming, load it
+        (prebuilt on the Volume: seconds) and put it in, or say it could not be."""
+        try:
+            found = None
+            if self.library is not None:
+                found = await asyncio.to_thread(self.library.get, name)
+            if found is None:
+                peer.push(dumps({"t": "pick", "error": "That room is not in the library any more."}))
+                return
+            if found.version == self.room_version(room_id).id:
+                return                    # another name for what the room shows already
+            if self.scans.busy(room_id):  # sent while the library was read
+                peer.push(dumps({"t": "pick", "error": "A scanned room is still being built "
+                                                       "here; wait for it to finish."}))
+                return
+            # A room in memory, or loading for another call room, costs nothing more; a new load
+            # only while fewer than ROOM_LOADS run (nothing waits from here to the load's start).
+            if (found.version not in self.versions and found.version not in self._loading
+                    and len(self._loading) >= ROOM_LOADS):
+                peer.push(dumps({"t": "pick", "error": "The server is loading another room; "
+                                                       "try again in a moment."}))
+                return
+            self._picked_at[room_id] = asyncio.get_running_loop().time()
+            self._broadcast_room(room_id, {"t": "pick", "room": name, "label": found.label,
+                                           "by": peer.name, "state": "loading"})
+            note = {"pick": {"room": name, "by": peer.name}}
+            self._pick_notes[room_id] = (found.version, note)
+            ref = SceneRef(scene=found.scene, id=found.version, label=found.label,
+                           stage=found.stage, prebuilt=found.prebuilt, splat=found.name)
+            self.scans.hold(room_id)      # no scan may go in over it while it loads
+            try:
+                vid = await self.install_room_version(room_id, ref, note)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — the room stays as it was
+                log.warning("roomcall: room %s: the ready room %s could not be loaded: %s",
+                            room_id, name, exc)
+                if self._pick_notes.get(room_id, (None,))[0] == found.version:
+                    del self._pick_notes[room_id]
+                self._broadcast_room(room_id, {"t": "pick", "room": name,
+                                               "error": f"Couldn't load {found.label}"})
+                return
+            finally:
+                self.scans.unhold(room_id)
+            log.info("roomcall: room %s moved to the ready room %s (%s) by %s", room_id, name,
+                     vid, peer.id)
+            self.picked[room_id] = (name, vid)
+            # Whatever scan the room had is over; the picked room is let go like one, once the
+            # room has stayed empty (it may have emptied while it loaded).
+            self.scans.forget_room(room_id)
+            self.scans.scanned(room_id)
+            if room_id not in self.rooms:
+                self.scans.room_emptied(room_id)
+        finally:
+            self._picking.discard(room_id)
 
     # -- one connection -------------------------------------------------------------------------
 
@@ -1395,6 +1636,7 @@ class RoomHub:
             color = clean_color(first.get("color"))
             first = None
         early = [first] if first is not None else []
+        library = await self.library_rooms()     # for the welcome; read before the room exists
 
         room = self._room(room_id)
         if room is None:
@@ -1433,7 +1675,8 @@ class RoomHub:
                    "color": peer.color, "v": room.v,
                    "peers": [p.info() for p in room.peers.values()],
                    "key": peer.key, "avatars": self.avatars.welcome_info(),
-                   "scans": self.scans.welcome_info()}
+                   "scans": self.scans.welcome_info(), "rooms": self.room_items(library),
+                   "pick": self.room_pick(room.id)["name"]}
         latest = self.scans.latest(room.id)
         if latest is not None:
             welcome["scan"] = latest       # joined during (or just after) a scan's build
@@ -1444,7 +1687,7 @@ class RoomHub:
             if room.pending is not None:
                 # Joined during a prefetch window: the room still runs the old version, and is
                 # about to switch — fetch the new one too.
-                peer.push(dumps(room.pending.message()))
+                peer.push(dumps(self.scene_message(room.id, room.pending)))
             room.broadcast({"t": "join", "peer": peer.info()}, exclude=peer.id)
             if room.task is None or room.task.done():
                 room.task = asyncio.create_task(self._physics(room))
@@ -1582,6 +1825,8 @@ class RoomHub:
         elif kind == "avatar":
             if "claim" in message:
                 self.avatars.claim(peer, room.id, message.get("claim"), message.get("key"))
+        elif kind == "pick":
+            self.pick(room, peer, message.get("room"))
         elif kind == "rtc":
             to = message.get("to")
             target = room.peers.get(to) if isinstance(to, str) else None
@@ -1668,6 +1913,16 @@ class RoomHub:
 # The app
 # ---------------------------------------------------------------------------------------------
 
+def _read_small(path: Path, limit: int) -> bytes | None:
+    """`path`'s bytes, or None if it is gone or bigger than `limit`."""
+    try:
+        if path.stat().st_size > limit:
+            return None
+        return path.read_bytes()
+    except OSError:
+        return None
+
+
 def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = None,
                label: str = "room", web_dir: Path | None = None,
                settle_seconds: float = 1.0, stage: str = "scene", version: str | None = None,
@@ -1675,7 +1930,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                prefetch_seconds: float | None = None,
                avatars: AvatarConfig | None = None,
                scans: ScanConfig | None = None,
-               splats: SplatSource | None = None) -> FastAPI:
+               splats: SplatSource | None = None,
+               library: RoomLibrary | None = None) -> FastAPI:
     """The room call app for one scene: its first version's geometry built here, once (or read
     from `prebuilt`, see `read_prebuilt`); rooms made on demand.
 
@@ -1687,7 +1943,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     `avatars` says how full bodies are made (default: off — everyone a capsule or hologram).
     `scans` says whether, and how far, a scan sent into a room is built (default: off).
     `splats` is where the photoreal room's splat bundles are (`splats.SplatSource`; default none:
-    everyone sees the meshes).
+    everyone sees the meshes). `library` is the ready rooms a call room may be moved into
+    (`library.RoomLibrary`; default none: the default room only).
     """
     if model is None:
         if scene_xml is None:
@@ -1699,7 +1956,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     first = SceneVersion.build(model, label=label, stage=stage, id=version, prebuilt=prebuilt)
     hub = RoomHub(first, settle_seconds=settle_seconds, watch=watch,
                   prefetch_seconds=PREFETCH_SECONDS if prefetch_seconds is None else prefetch_seconds,
-                  avatars=avatars, scans=scans, splats=splats)
+                  avatars=avatars, scans=scans, splats=splats, library=library)
 
     # No /docs, /redoc or /openapi.json: nothing to document for a browser, and less surface.
     app = FastAPI(title="LiteReality room call", docs_url=None, redoc_url=None,
@@ -1912,12 +2169,41 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                                 headers={"Cache-Control": "no-store"})
         return Response(data, media_type=BINARY, headers={"Cache-Control": IMMUTABLE})
 
+    @app.get("/rooms.json")
+    async def rooms_json(request: Request) -> Response:
+        """The rooms a call room may be moved into (the default first) and, for ?room=<id>, what
+        it shows now and how many people are in it: {"rooms": [{name, label, thumb, default}],
+        "room": {name, label, peers}}. An empty or unknown room is on the default room."""
+        hub.ensure_watching()
+        room_id = request.query_params.get("room") or DEFAULT_ROOM
+        if not ROOM_ID.fullmatch(room_id):
+            return JSONResponse({"detail": "bad room id"}, status_code=400,
+                                headers={"Cache-Control": "no-store"})
+        items = hub.room_items(await hub.library_rooms())
+        room = hub.rooms.get(room_id)
+        shown = {**hub.room_pick(room_id), "peers": len(room.peers) if room is not None else 0}
+        return JSONResponse({"rooms": items, "room": shown}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/rooms/{name}/thumb.jpg")
+    async def room_thumb(name: str) -> Response:
+        """A ready room's thumbnail, for the picker's tiles."""
+        data = None
+        if hub.library is not None and LIBRARY_NAME.fullmatch(name):
+            found = await asyncio.to_thread(hub.library.get, name)
+            if found is not None and found.thumb is not None:
+                data = await asyncio.to_thread(_read_small, found.thumb, MAX_THUMB_BYTES)
+        if data is None:
+            return JSONResponse({"detail": "Not Found"}, status_code=404,
+                                headers={"Cache-Control": "no-store"})
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": THUMB_CACHE})
+
     @app.get("/healthz")
     async def healthz() -> Response:
         hub.ensure_watching()
         return JSONResponse({"ok": True, "label": hub.version.label, **hub.stats(),
                              **hub.status(), "avatars": hub.avatars.stats(),
-                             "scans": hub.scans.stats()},
+                             "scans": hub.scans.stats(),
+                             "library": len(await hub.library_rooms())},
                             headers={"Cache-Control": "no-store"})
 
     @app.websocket("/ws")

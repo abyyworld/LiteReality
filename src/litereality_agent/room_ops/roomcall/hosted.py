@@ -26,6 +26,14 @@ What runs where:
   across (`server.RoomHub.offer`, `sim.RoomSim.adopt`). So `--publish` changes the room during a
   call in seconds, without a `modal deploy` and without anyone leaving; `--deploy` (publish AND
   deploy) is for the first time and for code changes.
+- Beside the default room CURRENT names, the Volume keeps a LIBRARY of ready rooms anyone in a
+  call can move their call room into (`library`, the Rooms panel): `/.library/rooms.json` lists
+  each one's version folder, `/.library/<name>.jpg` its thumbnail. `--library` adds a scene there
+  (`add_to_library`) without making it current; a library room's photoreal bundle is the same
+  /splats/<name>/ that `litereality splatroom --label <name> --publish` uploads. Pruning never
+  removes a version the library lists.
+
+    uv run litereality roomcall run/office_room/objects/scene_splat.xml --library --thumb a.jpg
 
 - A scan sent into a room during the call (POST /scan, `scans`) is unpacked and built in the
   container itself, by the CLI in child processes: the quick room, then realistic objects from
@@ -226,7 +234,8 @@ def scene_files(scene_xml: Path) -> list[tuple[Path, PurePosixPath]]:
 
 @dataclass(frozen=True)
 class Published:
-    """What `publish` did: the version folder CURRENT now names, and the bytes sent."""
+    """What an upload did: the version folder it sent (the one CURRENT now names, after
+    `publish`), and the bytes sent."""
 
     version: str
     sent: int
@@ -236,35 +245,20 @@ class Published:
 _PREBUILT = ("scene.glb", "scene.json", "roomcall.json")
 
 
-def publish(scene_xml: Path | None, *, name: str, volume, label: str | None = None,
-            stage: str = "scene", prebuild: bool = True) -> Published:
-    """Upload a scene into `volume` as a new version of the room `name` and make it the one served.
-
-    Three steps, in this order, each finished before the next starts:
-    1. one batch with the version's folder — the scene's files plus, with `prebuild`, its geometry
-       built here (`server.prebuilt_files`; it also proves the scene compiles);
-    2. a second batch with `CURRENT` naming that folder: a batch commits as a whole when it
-       returns, so a container that sees the new CURRENT always finds the whole folder;
-    3. pruning older versions of `name`, keeping `KEEP_VERSIONS` (this one and the one served
-       before it, which a running container may still have rooms on), whatever CURRENT names by
-       then, and any folder uploaded since the one served before (another publish of the room
-       may be about to name it: `_prune`). A prune that fails is reported, never fatal: the
-       version is already live.
-
-    `scene_xml=None` switches the link back to the demo room without uploading anything. `volume`
-    is a `modal.Volume`; anything with its `batch_upload`, `read_file`, `listdir` and
-    `remove_file` works, which is how the tests run offline.
-    """
-    if scene_xml is None:
-        with volume.batch_upload(force=True) as batch:
-            batch.put_file(io.BytesIO(DEMO.encode()), f"/{CURRENT}")
-        return Published(DEMO, 0)
+def upload_version(scene_xml: Path, *, name: str, volume, label: str | None = None,
+                   stage: str = "scene", prebuild: bool = True) -> Published:
+    """Upload a scene into `volume` as a new version folder of the room `name`, in one batch: the
+    scene's files plus, with `prebuild`, its geometry built here (`server.prebuilt_files`; it
+    also proves the scene compiles). Nothing else: CURRENT is not touched, so a container keeps
+    serving what it serves (`publish` makes it current; `add_to_library` lists it as a ready
+    room). The batch commits as a whole when it returns, so whatever names the folder afterwards
+    always finds all of it."""
     scene_xml = Path(scene_xml)
     files = scene_files(scene_xml)
     clash = sorted(str(rel) for _local, rel in files if str(rel) in _PREBUILT)
     if clash:
         raise ValueError(f"the scene names files the room call keeps beside it: {', '.join(clash)}")
-    shown = label.replace("_", " ") if label else name.replace("_", " ").replace("-", " ")
+    shown = _shown(name, label)
     folder = version_name(name, files_digest(files, also=(shown, stage)))
     if prebuild:
         from litereality_agent.room_ops.roomcall.server import prebuilt_files
@@ -281,6 +275,39 @@ def publish(scene_xml: Path | None, *, name: str, volume, label: str | None = No
         for file_name, data in extra.items():
             batch.put_file(io.BytesIO(data), f"/{folder}/{file_name}")
             sent += len(data)
+    return Published(folder, sent)
+
+
+def _shown(name: str, label: str | None) -> str:
+    """The label a version is shown with: the given one, else the room's name, words spaced."""
+    return label.replace("_", " ") if label else name.replace("_", " ").replace("-", " ")
+
+
+def publish(scene_xml: Path | None, *, name: str, volume, label: str | None = None,
+            stage: str = "scene", prebuild: bool = True) -> Published:
+    """Upload a scene into `volume` as a new version of the room `name` and make it the one served.
+
+    Three steps, in this order, each finished before the next starts:
+    1. one batch with the version's folder (`upload_version`);
+    2. a second batch with `CURRENT` naming that folder: a batch commits as a whole when it
+       returns, so a container that sees the new CURRENT always finds the whole folder;
+    3. pruning older versions of `name`, keeping `KEEP_VERSIONS` (this one and the one served
+       before it, which a running container may still have rooms on), whatever CURRENT names by
+       then, any folder uploaded since the one served before (another publish of the room
+       may be about to name it: `_prune`), and any the room library lists. A prune that fails
+       is reported, never fatal: the version is already live.
+
+    `scene_xml=None` switches the link back to the demo room without uploading anything. `volume`
+    is a `modal.Volume`; anything with its `batch_upload`, `read_file`, `listdir` and
+    `remove_file` works, which is how the tests run offline.
+    """
+    if scene_xml is None:
+        with volume.batch_upload(force=True) as batch:
+            batch.put_file(io.BytesIO(DEMO.encode()), f"/{CURRENT}")
+        return Published(DEMO, 0)
+    published = upload_version(scene_xml, name=name, volume=volume, label=label, stage=stage,
+                               prebuild=prebuild)
+    folder = published.version
     previous = _read_current(volume)
     with volume.batch_upload(force=True) as batch:
         batch.put_file(io.BytesIO(folder.encode()), f"/{CURRENT}")
@@ -291,7 +318,7 @@ def publish(scene_xml: Path | None, *, name: str, volume, label: str | None = No
                since={folder, previous})
     except Exception as exc:  # noqa: BLE001 — the new version is live either way
         print(f"  (could not prune older versions of {name}: {exc})", file=sys.stderr)
-    return Published(folder, sent)
+    return published
 
 
 def _read_current(volume) -> str | None:
@@ -306,9 +333,13 @@ def _prune(volume, name: str, *, keep: set[str | None], since: set[str | None] |
     """Remove all but the newest `KEEP_VERSIONS` version folders of `name`, never one in `keep`
     and never one at least as new as the oldest folder in `since` (`publish`: its own and the
     one CURRENT named before it). A folder uploaded since then may be another publish's that has
-    not written CURRENT yet; removing it would leave CURRENT naming nothing. Newest by the
-    listing's mtime; the folders in `keep` count first. Returns what was removed."""
+    not written CURRENT yet; removing it would leave CURRENT naming nothing. Never one the room
+    library lists either (`add_to_library`): people pick those in calls, whatever the newest
+    is. Newest by the listing's mtime; the folders in `keep` count first. Returns what was
+    removed. A library file that cannot be read raises: nothing is removed then, since what it
+    protects is unknown."""
     prefix = scene_name(name)[:NAME_CHARS]
+    keep = set(keep) | {room.get("version") for room in _read_library(volume)}
     entries = []
     for entry in volume.listdir("/"):
         folder = PurePosixPath(str(entry.path)).name
@@ -328,6 +359,129 @@ def _prune(volume, name: str, *, keep: set[str | None], since: set[str | None] |
         volume.remove_file(f"/{folder}", recursive=True)
         removed.append(folder)
     return removed
+
+
+# The thumbnail a library room is shown with in the room picker: a JPEG, small enough that a
+# list of them loads at once on a phone.
+MAX_THUMB_BYTES = 1 << 20
+
+
+def _library_paths(name: str | None = None) -> tuple[str, str]:
+    """The Volume paths of the library file and of `name`'s thumbnail."""
+    from litereality_agent.room_ops.roomcall.library import LIBRARY_DIR, LIBRARY_FILE
+
+    return f"/{LIBRARY_DIR}/{LIBRARY_FILE}", f"/{LIBRARY_DIR}/{name}.jpg"
+
+
+def _read_library(volume) -> list[dict]:
+    """The entries of the Volume's room library (`library.RoomLibrary.folder` reads the same
+    file in the container); none when there is no library yet. A file that is there but cannot
+    be read or parsed raises ValueError rather than reading as empty: whoever writes it next
+    would otherwise drop every room it lists, and a prune would remove their versions."""
+    path, _ = _library_paths()
+    try:
+        data = b"".join(volume.read_file(path))
+    except FileNotFoundError:
+        return []
+    try:
+        rooms = json.loads(data.decode("utf-8"))["rooms"]
+        if not isinstance(rooms, list):
+            raise TypeError("'rooms' is not a list")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ValueError(f"the room library {path} on the Volume cannot be read ({exc}); fix "
+                         f"or remove it (`modal volume rm {SCENES_VOLUME} {path}`)") from None
+    return [room for room in rooms if isinstance(room, dict)]
+
+
+def _write_library(batch, rooms: list[dict]) -> None:
+    path, _ = _library_paths()
+    data = json.dumps({"rooms": rooms}, indent=1).encode("utf-8")
+    batch.put_file(io.BytesIO(data), path)
+
+
+def add_to_library(scene_xml: Path, *, name: str, volume, label: str | None = None,
+                   stage: str = "scene", thumb: Path | None = None,
+                   prebuild: bool = True) -> Published:
+    """Upload a scene as a version of the room `name` and list it in the Volume's room library,
+    which people in a call pick rooms from (`library`, the Rooms panel) — without making it the
+    link's default room: CURRENT is never touched.
+
+    `name` is the room's folder name (`scene_name`), at most `NAME_CHARS`, so the version it
+    gets (`name-<12 hex>`) maps back to it (`splats.room_name`) and the room's photoreal bundle
+    on the Volume (/splats/<name>/, `litereality splatroom --label <name> --publish`) is found
+    with no further wiring. Adding a name the library already lists replaces that entry and
+    keeps its thumbnail unless `thumb` (a JPEG, at most `MAX_THUMB_BYTES`) brings a new one.
+
+    Order: the version folder in one batch (`upload_version`), then the library file and the
+    thumbnail together in a second, so a container never lists a room whose folder is still
+    arriving. The library file is read again just before it is written, but two adds at the
+    very same moment can still lose one entry (the Volume has no compare-and-swap). Older
+    versions of `name` are then pruned as `publish` does; the library's own never are.
+    """
+    from litereality_agent.room_ops.roomcall.library import MAX_ROOMS, NAME, SCAN
+
+    if not NAME.match(name or "") or scene_name(name) != name or name == SCAN:
+        raise ValueError(f"a library room's name is letters, digits, '_' and '-', at most "
+                         f"{NAME_CHARS} (and not '{DEMO}' or '{SCAN}'): {name!r}")
+    picture = None
+    if thumb is not None:
+        try:   # a mistyped path is a plain message too, like every other bad thumbnail
+            picture = Path(thumb).read_bytes()
+        except OSError as exc:
+            raise ValueError(f"the thumbnail cannot be read: {thumb} "
+                             f"({exc.strerror or exc})") from None
+        if len(picture) > MAX_THUMB_BYTES or not picture.startswith(b"\xff\xd8\xff"):
+            raise ValueError(f"the thumbnail must be a JPEG of at most "
+                             f"{MAX_THUMB_BYTES // 1024} KB: {thumb}")
+    # A broken library refuses before anything is uploaded; so does a full one (the container
+    # reads no more than MAX_ROOMS, so another would be written but never listed).
+    listed = _read_library(volume)
+    if len(listed) >= MAX_ROOMS and not any(room.get("name") == name for room in listed):
+        raise ValueError(f"the room library is full ({MAX_ROOMS} rooms): take one out first "
+                         "(`litereality roomcall --library-remove NAME`)")
+    published = upload_version(scene_xml, name=name, volume=volume, label=label, stage=stage,
+                               prebuild=prebuild)
+    rooms = _read_library(volume)
+    before = next((room for room in rooms if room.get("name") == name), None)
+    entry = {"name": name, "label": _shown(name, label)[:80], "version": published.version,
+             "thumb": picture is not None or bool(before and before.get("thumb") is True)}
+    if before is None:
+        rooms.append(entry)
+    else:
+        rooms = [entry if room is before else room for room in rooms
+                 if room is before or room.get("name") != name]
+    _, thumb_path = _library_paths(name)
+    with volume.batch_upload(force=True) as batch:
+        _write_library(batch, rooms)
+        if picture is not None:
+            batch.put_file(io.BytesIO(picture), thumb_path)
+    try:
+        _prune(volume, name, keep={published.version, before and before.get("version"),
+                                   _read_current(volume)},
+               since={published.version})
+    except Exception as exc:  # noqa: BLE001 — the room is in the library either way
+        print(f"  (could not prune older versions of {name}: {exc})", file=sys.stderr)
+    return published
+
+
+def remove_from_library(name: str, *, volume) -> bool:
+    """Take the room `name` out of the Volume's room library (and its thumbnail); False when the
+    library does not list it. Its version folder stays: a call room may be on it right now, and
+    with the entry gone the next publish or add of that room prunes it as any other."""
+    from litereality_agent.room_ops.roomcall.library import NAME
+
+    if not NAME.match(name or ""):
+        return False
+    rooms = _read_library(volume)
+    kept = [room for room in rooms if room.get("name") != name]
+    if len(kept) == len(rooms):
+        return False
+    with volume.batch_upload(force=True) as batch:
+        _write_library(batch, kept)
+    _, thumb_path = _library_paths(name)
+    with suppress(FileNotFoundError):
+        volume.remove_file(thumb_path)
+    return True
 
 
 def served_scene(root: Path, *, strict: bool = False) -> tuple[Path, str] | None:
@@ -499,9 +653,14 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
     splats = SplatSource.chain(SplatSource.per_room(scratch_root / "splats", poll_seconds=2.0),
                                SplatSource.per_room(Path(root) / SPLATS_DIR,
                                                     poll_seconds=poll_seconds))
+    from litereality_agent.room_ops.roomcall.library import RoomLibrary
+
+    # The ready rooms people pick in a call (`add_to_library`): their list is read again once
+    # the version watcher's Volume reload shows it changed.
+    library = RoomLibrary.folder(Path(root), poll_seconds=poll_seconds)
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
                      prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies,
-                     scans=scans, splats=splats)
+                     scans=scans, splats=splats, library=library)
     if freeze:
         freeze_startup_objects()
     return app
@@ -592,4 +751,55 @@ def deploy(scene_xml: Path | None, *, label: str, repo_root: Path, environment: 
     print("  everyone who opens it lands in the same room; the first visit after a quiet spell "
           "takes a few seconds while the server starts")
     print(f"  stop it   uv run modal app stop --env {environment} {APP_NAME}")
+    return 0
+
+
+def library_add(scene_xml: Path, *, label: str, environment: str = "main",
+                credentials: tuple[str, str] | None = None, profile: str | None = None,
+                stage: str = "scene", thumb: Path | None = None) -> int:
+    """`roomcall SCENE --library`: build the scene here and add it to the hosted link's room
+    library (`add_to_library`) — no `modal deploy`, and the link's default room stays what it
+    is. A running container lists it within a poll or two."""
+    import modal
+
+    name = scene_name(label)
+    if len(name) > NAME_CHARS:
+        raise SystemExit(f"a library room's name is at most {NAME_CHARS} characters: give a "
+                         f"shorter --label than {label!r}")
+    with _modal_credentials(credentials, profile):
+        volume = modal.Volume.from_name(SCENES_VOLUME, environment_name=environment,
+                                        create_if_missing=True)
+        print(f"→ Building {label} ({stage}) and adding it to the room library on the Modal "
+              f"Volume {SCENES_VOLUME}")
+        try:
+            published = add_to_library(Path(scene_xml), name=name, volume=volume, label=label,
+                                       stage=stage, thumb=thumb)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+    print(f"  version {published.version}  {published.sent / 1e6:.1f} MB")
+    print(f"\n{name} is in the room library: anyone in a call can pick it under Rooms within "
+          f"~{2 * POLL_SECONDS:.0f} s; the link's default room is unchanged")
+    print(f"  its photoreal room   uv run litereality splatroom <scan> --label {name} "
+          "--publish --upload-only")
+    print(f"  take it out again    uv run litereality roomcall --library-remove {name}")
+    return 0
+
+
+def library_remove(name: str, *, environment: str = "main",
+                   credentials: tuple[str, str] | None = None, profile: str | None = None) -> int:
+    """`roomcall --library-remove NAME`: take a room out of the hosted link's library."""
+    import modal
+
+    with _modal_credentials(credentials, profile):
+        volume = modal.Volume.from_name(SCENES_VOLUME, environment_name=environment,
+                                        create_if_missing=True)
+        try:
+            removed = remove_from_library(name, volume=volume)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from None
+    if not removed:
+        print(f"the room library has no room named {name!r}", file=sys.stderr)
+        return 1
+    print(f"{name} is out of the room library; calls already in it stay until they pick "
+          "another room")
     return 0
