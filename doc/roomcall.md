@@ -59,7 +59,8 @@ uv run litereality roomcall run/my_room --publish   # serves mujoco_seed/ once i
 
 ## Scan straight into the call (no laptop)
 
-During a call, open the room link on the phone you scanned with, tap **Add room** and pick the scan:
+During a call, open the room link on the phone you scanned with, tap **Rooms → Add a room you
+scanned…** and pick the scan:
 a zip of the scan folder (in Files, long-press the folder → Compress), or a bare `room.usdz`
 (flat colours, no photos).
 1. **Seconds later, the quick room:** everyone in that room id is standing in the scanned room, with
@@ -85,8 +86,38 @@ Safety and limits:
   build, and a room that stays empty for 60 s drops its scan.
 - **Hosted:** each room's latest scan is kept on the Volume, so a container restart restores it.
 
-Not tried yet: a real iPhone upload, the hosted path on Modal (including whether long uploads are
-cut off), and real TRELLIS timing.
+Tried on the hosted link with `scripts/roomcall/upload_scan.py` (quick room ~10 s, photoreal ~22 s
+after the upload). Not tried yet: a real iPhone upload over a phone network.
+
+## Ready-made rooms: the room picker
+
+Not everyone has a scan. The hosted link keeps a small library of finished rooms, each with its
+photoreal splat, and anyone in a call can move everyone in that call room into one:
+- **Joining an empty call room:** the join card shows the rooms as tiles; the one picked is where
+  everyone who joins next lands.
+- **During a call:** **Rooms** lists them; press a room, then press it again to move everyone
+  there (the default room is always first). The same panel has **Add a room you scanned…**.
+- A picked room is let go like a scanned one: once the call room has been empty for a minute, it
+  is back on the link's default room. Picks are refused while a scan is being built there.
+
+Adding a room to the library (it does not change the link's default room, and needs no redeploy):
+
+```bash
+uv run litereality roomcall run/office_room/objects/scene_splat.xml --library --label office_room --thumb run/office_room/thumb.jpg
+```
+
+```bash
+uv run litereality splatroom ~/LiteReality-Agent/example-scans/office_room --label office_room --out run/office_room/splat --publish --upload-only
+```
+
+```bash
+uv run litereality roomcall --library-remove office_room
+```
+
+The first command uploads the room's physics and thumbnail (a JPEG under 1 MB) to the Volume's
+`.library/`; the second uploads its photoreal bundle to `splats/office_room/`, where the server
+finds it by the room's name. The label has to match in both. Within ~20 s of a change, anyone
+opening Rooms sees it. Versions the library names are never pruned by later publishes.
 
 ## Realistic objects, streaming in (needs Modal)
 
@@ -161,7 +192,7 @@ Without Modal (`--no-masks`), boxes are used, snapped to where they hold the mos
 - `--recut` cuts the last trained snapshot again (new masks, new rules) without training.
 - `--keep-physics` never moves a body: for a room already live.
 
-**Scanned during a call:** when someone uses **Add room**, the server also builds that room's
+**Scanned during a call:** when someone adds a scan under **Rooms**, the server also builds that room's
 splat beside the quick room and the objects.
 - Locally, measured on tea_room: quick room at 4.6 s after the upload, photoreal at 16.7 s.
 - On the deployed link: quick room at 10 s, photoreal at 22 s, the first trained snapshot at 96 s.

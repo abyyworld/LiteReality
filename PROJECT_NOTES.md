@@ -49,7 +49,10 @@ physics-perception project.
   (preview, then final). TRELLIS now runs up to 4 GPUs safely: weights are downloaded once by a CPU
   function and loaded offline. Built and tested offline with a fake generator; **the real Modal run
   is not done yet.**
-- **Scan straight into the call** (`roomcall/scans.py`, Add room button): a phone uploads the scan zip
+- **Ready-made rooms** (`roomcall/library.py`, Rooms button, join-card tiles): a library of finished
+  rooms on the Volume (`.library/rooms.json` + thumbnails); anyone in a call moves everyone in that
+  call room into one, photoreal splat included. `roomcall --library/--library-remove` manage it.
+- **Scan straight into the call** (`roomcall/scans.py`, Rooms → Add a room you scanned…): a phone uploads the scan zip
   into a running call. The server builds the quick room in a child process (~6–8 s locally) and
   swaps it into that room only, then streams realistic-object versions as they finish. Uploads are
   checked hard (zip-slip, bombs, prim-name injection) and rate- and cost-limited. Tested locally
