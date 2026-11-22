@@ -81,7 +81,7 @@ def _quat_wxyz(R: np.ndarray) -> np.ndarray:
 
 def _lidar_points(frame: Frame, rng: np.random.Generator, count: int, width: int, height: int,
                   rgb: np.ndarray):
-    """Up to `count` confident LiDAR samples of one frame: world points, colours, and their
+    """`count` confident LiDAR samples of one frame (repeating some when it has fewer): world points, colours, and their
     pixel in the training image (COLMAP pixel coordinates: the top-left pixel's centre is 0.5)."""
     from PIL import Image
 
@@ -100,7 +100,9 @@ def _lidar_points(frame: Frame, rng: np.random.Generator, count: int, width: int
     vv, uu = np.nonzero(valid)
     if len(vv) == 0:
         return None
-    pick = rng.choice(len(vv), size=min(count, len(vv)), replace=False)
+    # Exactly `count` per photo: gsplat batches photos, and its collate needs every photo's depth
+    # points to be the same length (a close-up of a bare wall has fewer: some repeat).
+    pick = rng.choice(len(vv), size=count, replace=len(vv) < count)
     vv, uu = vv[pick], uu[pick]
     z = depth[vv, uu]
     # Depth-map pixel centre -> photo pixel coordinates -> camera ray.

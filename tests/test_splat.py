@@ -167,6 +167,25 @@ def test_a_frame_without_lidar_points_is_left_out_of_the_training_set(scan, tmp_
         dataset.build(rgbd.load_frames(scan), width=160, points_per_frame=300)
 
 
+
+def test_a_photo_with_few_lidar_points_still_gets_the_full_count(scan, tmp_path):
+    # gsplat trains on batches of photos and stacks their depth points: every photo needs the
+    # same number, also a close-up of a bare wall with few usable samples (some repeat).
+    from PIL import Image
+
+    _frame_looking_down(scan, index=1)
+    path = scan / "depth_00000.png"
+    with Image.open(path) as im:
+        depth = np.asarray(im).copy()
+    keep = depth[:6, :8].copy()
+    depth[:] = 6000
+    depth[:6, :8] = keep                          # 48 usable samples, fewer than asked for
+    Image.fromarray(depth).save(path)
+    ds = dataset.build(rgbd.load_frames(scan), width=160, points_per_frame=300)
+    _cams, images, points = _read_colmap(ds.write(tmp_path / "ds"))
+    assert ds.images == 2 and [len(im[5]) for im in images] == [300, 300]
+    assert len(points) == ds.points == 600
+
 SCENE = """<mujoco>
   <worldbody>
     <geom name="floor" type="plane" size="5 5 0.1"/>
