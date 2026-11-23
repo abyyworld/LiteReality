@@ -1,0 +1,132 @@
+{
+ "variant": "rs_stray_gs5k_sub5_rspose",
+ "out_dir": "/Users/abyyworld/LiteReality/run/realityscan/rs_stray_gs5k",
+ "scan": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool",
+ "spz": "raw.spz.bin",
+ "renderer": "playwright-chromium-spark 159.0.8154.6 (SwiftShader, Spark 2.3.1)",
+ "size": [
+  480,
+  360
+ ],
+ "render_scale": 2,
+ "views": 5,
+ "alignment_vs_pool": {
+  "poses": "RealityScan eval poses",
+  "dir": "/Users/abyyworld/LiteReality-scans/rs_stray/eval_rs"
+ },
+ "render_s": 370.8,
+ "summary": {
+  "psnr": 18.6301,
+  "psnr_cc": 20.1003,
+  "ssim": 0.7279,
+  "lpips": 0.3158,
+  "coverage": 0.9352,
+  "psnr_openings": 18.8728,
+  "psnr_objects": 21.0146
+ },
+ "train": {
+  "frames": 55,
+  "dataset": {
+   "photos": 55,
+   "held_out": 7,
+   "points": 31532,
+   "poses": "rs",
+   "lens": "undistorted (RealityScan FULL_OPENCV -> PINHOLE)"
+  },
+  "options": {
+   "steps": 5000,
+   "snapshots": [
+    5000
+   ],
+   "batch_size": 1
+  },
+  "train_width": 960,
+  "trainer_s": 57.468674859000004,
+  "total_s": 67.5,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "trainer_heldout": {
+   "psnr": 23.714962005615234,
+   "ssim": 0.8652899265289307,
+   "lpips": 0.22761192917823792,
+   "cc_psnr": 26.569982528686523,
+   "num_GS": 751532
+  },
+  "splats": 751532,
+  "raw_mb": 13.59,
+  "bundle_mb": 13.59,
+  "gpu_s": {
+   "trainer": 57.468674859000004,
+   "depth_and_masks": 0.0
+  },
+  "cost_est_usd": 0.063,
+  "corrections": null,
+  "corrected_scene": null
+ },
+ "per_view": [
+  {
+   "row": 32,
+   "image": "frame_00002.jpg",
+   "psnr": 20.5315,
+   "psnr_cc": 22.1037,
+   "ssim": 0.7773,
+   "lpips": 0.2863,
+   "coverage": 0.9417,
+   "frac_openings": 0.155,
+   "psnr_openings": 18.2541,
+   "frac_objects": 0.2148,
+   "psnr_objects": 25.7736
+  },
+  {
+   "row": 116,
+   "image": "frame_00024.jpg",
+   "psnr": 19.7363,
+   "psnr_cc": 20.2122,
+   "ssim": 0.7443,
+   "lpips": 0.2683,
+   "coverage": 0.9642,
+   "frac_openings": 0.2672,
+   "psnr_openings": 20.7043,
+   "frac_objects": 0.6038,
+   "psnr_objects": 19.5713
+  },
+  {
+   "row": 224,
+   "image": "frame_00047.jpg",
+   "psnr": 17.2782,
+   "psnr_cc": 19.0602,
+   "ssim": 0.6992,
+   "lpips": 0.3371,
+   "coverage": 0.9226,
+   "frac_openings": 0.0,
+   "psnr_openings": null,
+   "frac_objects": 0.6234,
+   "psnr_objects": 20.9299
+  },
+  {
+   "row": 308,
+   "image": "frame_00067.jpg",
+   "psnr": 21.4087,
+   "psnr_cc": 23.087,
+   "ssim": 0.829,
+   "lpips": 0.2561,
+   "coverage": 0.9453,
+   "frac_openings": 0.173,
+   "psnr_openings": 20.2152,
+   "frac_objects": 0.3704,
+   "psnr_objects": 24.1175
+  },
+  {
+   "row": 981,
+   "image": "frame_00253.jpg",
+   "psnr": 14.196,
+   "psnr_cc": 16.0382,
+   "ssim": 0.5898,
+   "lpips": 0.4313,
+   "coverage": 0.9021,
+   "frac_openings": 0.289,
+   "psnr_openings": 16.3176,
+   "frac_objects": 0.3906,
+   "psnr_objects": 14.6808
+  }
+ ]
+}

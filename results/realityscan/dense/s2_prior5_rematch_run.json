@@ -1,0 +1,17 @@
+{
+ "tag": "s2_prior5_rematch",
+ "src": "inputs/rs_dense_stray",
+ "images": 1095,
+ "xmp_priors_in": 1066,
+ "copy_s": 203.1,
+ "seconds": 852.2,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-xrrz6ffx\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-xrrz6ffx\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=25.1561\" -set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.05\" -set \"sfmCameraPriorAccuracyY=0.05\" -set \"sfmCameraPriorAccuracyZ=0.05\" -set \"sfmCameraPriorAccuracyYaw=5\" -set \"sfmCameraPriorAccuracyPitch=5\" -set \"sfmCameraPriorAccuracyRoll=5\" -align -set \"sfmForceComponentRematch=true\" -align -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-xrrz6ffx\\out\\colmap\\colmap' 'Z:\\tmp\\rs-xrrz6ffx\\out\\params.xml' -save 'Z:\\tmp\\rs-xrrz6ffx\\out\\scene.rsproj' -quit",
+ "focal35": 25.1561,
+ "distortion_model": 2,
+ "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.05\" -set \"sfmCameraPriorAccuracyY=0.05\" -set \"sfmCameraPriorAccuracyZ=0.05\" -set \"sfmCameraPriorAccuracyYaw=5\" -set \"sfmCameraPriorAccuracyPitch=5\" -set \"sfmCameraPriorAccuracyRoll=5\"",
+ "post": "-set \"sfmForceComponentRematch=true\" -align",
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "cpu": 8,
+ "memory_mb": 16384
+}

@@ -1,0 +1,5 @@
+lfs_mcmc30k_nocal: PSNR 18.7355 (cc 20.7623), SSIM 0.7267, LPIPS 0.3323, openings 19.8467, objects 19.1249, coverage 0.9561 over 29 views; render 1460 s; alignment vs pool {'translation_mm': 3.36, 'rotation_deg': 0.0253}
+lfs_mcmc30k_default: PSNR 18.5321 (cc 20.5694), SSIM 0.726, LPIPS 0.3069, openings 19.7329, objects 18.9898, coverage 0.9538 over 29 views; render 1860 s; alignment vs pool {'translation_mm': 3.36, 'rotation_deg': 0.0253}
+lfs_mrnf30k_nocal: PSNR 18.8541 (cc 21.7994), SSIM 0.7254, LPIPS 0.2885, openings 20.7597, objects 20.267, coverage 0.9534 over 29 views; render 2430 s; alignment vs pool {'translation_mm': 3.36, 'rotation_deg': 0.0253}
+gsplat_nodepth5k: PSNR 18.9315 (cc 21.4111), SSIM 0.7215, LPIPS 0.2835, openings 20.8367, objects 19.8603, coverage 0.9537 over 29 views; render 1167 s; alignment vs pool {'translation_mm': 3.36, 'rotation_deg': 0.0253}
+QUEUE-DONE

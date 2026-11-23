@@ -1,0 +1,2335 @@
+{
+ "registered": 221,
+ "input": 400,
+ "eval_input": 29,
+ "eval_registered": 18,
+ "compared": 221,
+ "rs_points": 87837,
+ "sim3": {
+  "how": "robust Umeyama on camera centres + axis points (pose-aware)",
+  "scale_rs_to_m": 0.9914586842815277,
+  "median_residual_m": 0.035657276605191426,
+  "vs_orientation_only_rotation_deg": 8.914439659747465,
+  "centre_only": {
+   "scale": 0.9979225510484563,
+   "median_residual_m": 0.009702509000638742,
+   "rotation_vs_used_deg": 1.3324996776783993,
+   "pos_err_m": {
+    "n": 221,
+    "median": 0.009702509000638742,
+    "mean": 0.02692341896283139,
+    "rmse": 0.12265217267453421,
+    "p90": 0.04501465432516189,
+    "max": 1.7725328088027712
+   },
+   "rot_err_deg": {
+    "n": 221,
+    "median": 3.7001012614296367,
+    "mean": 17.262361781997807,
+    "rmse": 30.88949359837805,
+    "p90": 81.19133042526424,
+    "max": 85.63536183619452
+   }
+  }
+ },
+ "arkit_extent_m": 1.3827655147443823,
+ "pos_err_m": {
+  "n": 221,
+  "median": 0.017777251965464713,
+  "mean": 0.03133609724768333,
+  "rmse": 0.12221833408141808,
+  "p90": 0.04177294335254605,
+  "max": 1.7592205410782225
+ },
+ "rot_err_deg": {
+  "n": 221,
+  "median": 3.3166986742784204,
+  "mean": 17.31409973029226,
+  "rmse": 30.78361636672836,
+  "p90": 81.08182118898335,
+  "max": 85.55687702976907
+ },
+ "rot_err_rotfit_deg": {
+  "n": 221,
+  "median": 11.39444257066683,
+  "mean": 20.330238198983714,
+  "rmse": 28.808762662503554,
+  "p90": 72.32084817442434,
+  "max": 76.78957893672148
+ },
+ "eval_pos_err_m": {
+  "n": 18,
+  "median": 0.019490408777150383,
+  "mean": 0.12601359851030963,
+  "rmse": 0.416373154487587,
+  "p90": 0.07513928440464474,
+  "max": 1.7592205410782225
+ },
+ "eval_rot_err_deg": {
+  "n": 18,
+  "median": 4.778414573235998,
+  "mean": 17.371251805706656,
+  "rmse": 30.30094558997392,
+  "p90": 49.250519173193304,
+  "max": 84.06522271609622
+ },
+ "rpe_1s_rot_deg": {
+  "n": 216,
+  "median": 1.2130615892994867,
+  "mean": 13.083939538961554,
+  "rmse": 24.094580488229163,
+  "p90": 36.552033110781174,
+  "max": 83.18367206525944
+ },
+ "rpe_1s_pos_m": {
+  "n": 216,
+  "median": 0.02375999628663697,
+  "mean": 0.06925352101916646,
+  "rmse": 0.15533201666313037,
+  "p90": 0.16200834521920432,
+  "max": 1.7362548815203498
+ },
+ "intrinsics": {
+  "n_cameras": 221,
+  "rs": {
+   "first": {
+    "model": "FULL_OPENCV",
+    "w": 1920,
+    "h": 1440,
+    "fx": 1338.746333896189,
+    "fy": 1338.746333896189,
+    "cx": 964.9974049184084,
+    "cy": 727.9469561912155,
+    "dist": [
+     0.1007288866966508,
+     -0.2991085048184409,
+     0.0,
+     0.0,
+     0.2538780181067387,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "arkit_median": {
+   "fx": 1340.0099,
+   "fy": 1340.0099,
+   "cx_colmap": 966.66034,
+   "cy_colmap": 719.21875
+  },
+  "fx_rel_diff": -0.0009429528123716668
+ },
+ "frames": [
+  {
+   "name": "frame_00000.jpg",
+   "eval": false,
+   "time_s": 0.0,
+   "pos_err_m": 0.014843316756799663,
+   "rot_err_deg": 3.009271028002555,
+   "rot_err_rotfit_deg": 11.3226710584747,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.4805
+  },
+  {
+   "name": "frame_00001.jpg",
+   "eval": false,
+   "time_s": 0.4502,
+   "pos_err_m": 0.017866376471234454,
+   "rot_err_deg": 3.012368929613364,
+   "rot_err_rotfit_deg": 11.324121499275817,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1321
+  },
+  {
+   "name": "frame_00002.jpg",
+   "eval": true,
+   "time_s": 0.7336,
+   "pos_err_m": 0.01781459530024671,
+   "rot_err_deg": 2.989362113050372,
+   "rot_err_rotfit_deg": 11.339267242814113,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1261
+  },
+  {
+   "name": "frame_00005.jpg",
+   "eval": false,
+   "time_s": 1.1171,
+   "pos_err_m": 0.01476110391484885,
+   "rot_err_deg": 3.047133180552889,
+   "rot_err_rotfit_deg": 11.398660872810563,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1351
+  },
+  {
+   "name": "frame_00006.jpg",
+   "eval": false,
+   "time_s": 1.2172,
+   "pos_err_m": 0.014498056668418989,
+   "rot_err_deg": 3.044059680972716,
+   "rot_err_rotfit_deg": 11.39444257066683,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.0994
+  },
+  {
+   "name": "frame_00007.jpg",
+   "eval": false,
+   "time_s": 1.3005,
+   "pos_err_m": 0.014465932313337808,
+   "rot_err_deg": 3.035262755506955,
+   "rot_err_rotfit_deg": 11.391660683957756,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1233
+  },
+  {
+   "name": "frame_00009.jpg",
+   "eval": false,
+   "time_s": 1.4839,
+   "pos_err_m": 0.014857111973821464,
+   "rot_err_deg": 3.0590282735622103,
+   "rot_err_rotfit_deg": 11.43617231325265,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1202
+  },
+  {
+   "name": "frame_00010.jpg",
+   "eval": false,
+   "time_s": 1.634,
+   "pos_err_m": 0.020030153766746675,
+   "rot_err_deg": 3.108250536285636,
+   "rot_err_rotfit_deg": 11.481905709163652,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1023
+  },
+  {
+   "name": "frame_00011.jpg",
+   "eval": false,
+   "time_s": 1.6673,
+   "pos_err_m": 0.020232783410905408,
+   "rot_err_deg": 3.1041750358129527,
+   "rot_err_rotfit_deg": 11.4826935607031,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.1559
+  },
+  {
+   "name": "frame_00013.jpg",
+   "eval": false,
+   "time_s": 1.8341,
+   "pos_err_m": 0.02182069912302005,
+   "rot_err_deg": 3.1357655511355484,
+   "rot_err_rotfit_deg": 11.533160756669062,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.5729
+  },
+  {
+   "name": "frame_00014.jpg",
+   "eval": false,
+   "time_s": 1.8674,
+   "pos_err_m": 0.02256528509789164,
+   "rot_err_deg": 3.1361687353179963,
+   "rot_err_rotfit_deg": 11.523328673353879,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1335.8766
+  },
+  {
+   "name": "frame_00016.jpg",
+   "eval": false,
+   "time_s": 2.0675,
+   "pos_err_m": 0.024773748575215592,
+   "rot_err_deg": 3.0706491981256137,
+   "rot_err_rotfit_deg": 11.467435022965761,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1337.6901
+  },
+  {
+   "name": "frame_00017.jpg",
+   "eval": false,
+   "time_s": 2.1175,
+   "pos_err_m": 0.024598183889724904,
+   "rot_err_deg": 3.0463670214838143,
+   "rot_err_rotfit_deg": 11.452200845548385,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.2589
+  },
+  {
+   "name": "frame_00018.jpg",
+   "eval": false,
+   "time_s": 2.1842,
+   "pos_err_m": 0.026425424358140697,
+   "rot_err_deg": 2.9986936329469343,
+   "rot_err_rotfit_deg": 11.391224812225392,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.9199
+  },
+  {
+   "name": "frame_00020.jpg",
+   "eval": false,
+   "time_s": 2.3843,
+   "pos_err_m": 0.02709869658120821,
+   "rot_err_deg": 2.821744641794717,
+   "rot_err_rotfit_deg": 11.259721517323863,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1340.6144
+  },
+  {
+   "name": "frame_00024.jpg",
+   "eval": true,
+   "time_s": 2.6511,
+   "pos_err_m": 0.007704450839352599,
+   "rot_err_deg": 3.375930866121701,
+   "rot_err_rotfit_deg": 11.949336447047262,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1341.7073
+  },
+  {
+   "name": "frame_00027.jpg",
+   "eval": false,
+   "time_s": 2.9512,
+   "pos_err_m": 0.0032625085743225074,
+   "rot_err_deg": 3.4431926215159456,
+   "rot_err_rotfit_deg": 12.073397554989942,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1342.288
+  },
+  {
+   "name": "frame_00028.jpg",
+   "eval": false,
+   "time_s": 2.9845,
+   "pos_err_m": 0.0035260443529027486,
+   "rot_err_deg": 3.4144944341627506,
+   "rot_err_rotfit_deg": 12.045989918952355,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1342.2135
+  },
+  {
+   "name": "frame_00040.jpg",
+   "eval": false,
+   "time_s": 4.6852,
+   "pos_err_m": 0.005723795226881349,
+   "rot_err_deg": 3.3540516846004835,
+   "rot_err_rotfit_deg": 11.925545413359728,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1346.4601
+  },
+  {
+   "name": "frame_00041.jpg",
+   "eval": false,
+   "time_s": 4.7186,
+   "pos_err_m": 0.005697857501060513,
+   "rot_err_deg": 3.3166986742784204,
+   "rot_err_rotfit_deg": 11.890515610941307,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1346.853
+  },
+  {
+   "name": "frame_00043.jpg",
+   "eval": false,
+   "time_s": 4.902,
+   "pos_err_m": 0.005886357217283568,
+   "rot_err_deg": 3.2572983993687488,
+   "rot_err_rotfit_deg": 11.834544534730504,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1349.1848
+  },
+  {
+   "name": "frame_00044.jpg",
+   "eval": false,
+   "time_s": 5.002,
+   "pos_err_m": 0.004821861820867818,
+   "rot_err_deg": 3.2503125857701334,
+   "rot_err_rotfit_deg": 11.841434358046586,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1349.8787
+  },
+  {
+   "name": "frame_00045.jpg",
+   "eval": false,
+   "time_s": 5.0854,
+   "pos_err_m": 0.004994199530382329,
+   "rot_err_deg": 3.2426462781236345,
+   "rot_err_rotfit_deg": 11.843333951497447,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1351.1443
+  },
+  {
+   "name": "frame_00047.jpg",
+   "eval": true,
+   "time_s": 5.2855,
+   "pos_err_m": 0.007272429148804918,
+   "rot_err_deg": 3.164483228205462,
+   "rot_err_rotfit_deg": 11.756426792718402,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1352.1956
+  },
+  {
+   "name": "frame_00051.jpg",
+   "eval": false,
+   "time_s": 5.819,
+   "pos_err_m": 0.00976758097399252,
+   "rot_err_deg": 3.1239214817451324,
+   "rot_err_rotfit_deg": 11.678625860276782,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1352.2194
+  },
+  {
+   "name": "frame_00052.jpg",
+   "eval": false,
+   "time_s": 5.9357,
+   "pos_err_m": 0.012559377248265634,
+   "rot_err_deg": 3.1128578861968204,
+   "rot_err_rotfit_deg": 11.664186851858126,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1352.6571
+  },
+  {
+   "name": "frame_00053.jpg",
+   "eval": false,
+   "time_s": 6.0858,
+   "pos_err_m": 0.011361381028593916,
+   "rot_err_deg": 3.1680585744813996,
+   "rot_err_rotfit_deg": 11.73287498703269,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1353.2795
+  },
+  {
+   "name": "frame_00055.jpg",
+   "eval": false,
+   "time_s": 6.2192,
+   "pos_err_m": 0.012646079964902369,
+   "rot_err_deg": 3.1971596833483678,
+   "rot_err_rotfit_deg": 11.748140289857503,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1353.0354
+  },
+  {
+   "name": "frame_00056.jpg",
+   "eval": false,
+   "time_s": 6.2692,
+   "pos_err_m": 0.012966907880958627,
+   "rot_err_deg": 3.1683271672412903,
+   "rot_err_rotfit_deg": 11.703861472211818,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1352.684
+  },
+  {
+   "name": "frame_00057.jpg",
+   "eval": false,
+   "time_s": 6.4026,
+   "pos_err_m": 0.013988598869597814,
+   "rot_err_deg": 3.1328835544819786,
+   "rot_err_rotfit_deg": 11.638314311481997,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1351.5166
+  },
+  {
+   "name": "frame_00058.jpg",
+   "eval": false,
+   "time_s": 6.4359,
+   "pos_err_m": 0.013151716934146884,
+   "rot_err_deg": 3.1192464885136353,
+   "rot_err_rotfit_deg": 11.622885337567649,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1350.9834
+  },
+  {
+   "name": "frame_00060.jpg",
+   "eval": false,
+   "time_s": 6.6194,
+   "pos_err_m": 0.012600534536224318,
+   "rot_err_deg": 3.1083080790911577,
+   "rot_err_rotfit_deg": 11.599384741994408,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1349.685
+  },
+  {
+   "name": "frame_00061.jpg",
+   "eval": false,
+   "time_s": 6.6694,
+   "pos_err_m": 0.013025363608574154,
+   "rot_err_deg": 3.1290559691899076,
+   "rot_err_rotfit_deg": 11.616742912942193,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1349.2115
+  },
+  {
+   "name": "frame_00062.jpg",
+   "eval": false,
+   "time_s": 6.8028,
+   "pos_err_m": 0.012309089244140972,
+   "rot_err_deg": 3.120284051163963,
+   "rot_err_rotfit_deg": 11.619988235153713,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1348.7233
+  },
+  {
+   "name": "frame_00064.jpg",
+   "eval": false,
+   "time_s": 6.9361,
+   "pos_err_m": 0.01221335417249978,
+   "rot_err_deg": 3.0837316001688695,
+   "rot_err_rotfit_deg": 11.610965418251823,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1347.5946
+  },
+  {
+   "name": "frame_00067.jpg",
+   "eval": true,
+   "time_s": 7.1696,
+   "pos_err_m": 0.014667535602268581,
+   "rot_err_deg": 3.058932506222654,
+   "rot_err_rotfit_deg": 11.625184691973496,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1346.3588
+  },
+  {
+   "name": "frame_00069.jpg",
+   "eval": false,
+   "time_s": 7.4197,
+   "pos_err_m": 0.018755829643560477,
+   "rot_err_deg": 3.091622286759052,
+   "rot_err_rotfit_deg": 11.743386541700565,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1345.0426
+  },
+  {
+   "name": "frame_00070.jpg",
+   "eval": false,
+   "time_s": 7.4697,
+   "pos_err_m": 0.018930161761042494,
+   "rot_err_deg": 3.1032346263451354,
+   "rot_err_rotfit_deg": 11.763839820471233,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1344.6049
+  },
+  {
+   "name": "frame_00072.jpg",
+   "eval": false,
+   "time_s": 7.6198,
+   "pos_err_m": 0.025205508786599613,
+   "rot_err_deg": 3.152105173524447,
+   "rot_err_rotfit_deg": 11.865487664391734,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1343.8484
+  },
+  {
+   "name": "frame_00073.jpg",
+   "eval": false,
+   "time_s": 7.7365,
+   "pos_err_m": 0.029519221409572548,
+   "rot_err_deg": 3.2409670546030256,
+   "rot_err_rotfit_deg": 11.966827770120796,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1342.9044
+  },
+  {
+   "name": "frame_00074.jpg",
+   "eval": false,
+   "time_s": 7.7698,
+   "pos_err_m": 0.030261944510347746,
+   "rot_err_deg": 3.2522167004488622,
+   "rot_err_rotfit_deg": 11.982603445124091,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1342.3417
+  },
+  {
+   "name": "frame_00076.jpg",
+   "eval": false,
+   "time_s": 8.0199,
+   "pos_err_m": 0.040715534536547755,
+   "rot_err_deg": 3.3770470013917673,
+   "rot_err_rotfit_deg": 12.129794884921852,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1340.6888
+  },
+  {
+   "name": "frame_00081.jpg",
+   "eval": true,
+   "time_s": 8.5868,
+   "pos_err_m": 0.014012746458881347,
+   "rot_err_deg": 35.36681946259579,
+   "rot_err_rotfit_deg": 27.942425630584314,
+   "fx_rs": 809.1578250384867,
+   "fx_arkit": 1337.6395
+  },
+  {
+   "name": "frame_00083.jpg",
+   "eval": false,
+   "time_s": 8.8036,
+   "pos_err_m": 0.016456596308594643,
+   "rot_err_deg": 34.1640023411959,
+   "rot_err_rotfit_deg": 26.5372845316507,
+   "fx_rs": 809.1578250384867,
+   "fx_arkit": 1337.1362
+  },
+  {
+   "name": "frame_00084.jpg",
+   "eval": false,
+   "time_s": 8.8869,
+   "pos_err_m": 0.01747964294887387,
+   "rot_err_deg": 33.49967675359334,
+   "rot_err_rotfit_deg": 25.804264327048518,
+   "fx_rs": 809.1578250384867,
+   "fx_arkit": 1337.0707
+  },
+  {
+   "name": "frame_00086.jpg",
+   "eval": false,
+   "time_s": 9.0537,
+   "pos_err_m": 0.014667505454256734,
+   "rot_err_deg": 32.14517972525595,
+   "rot_err_rotfit_deg": 24.293924647516175,
+   "fx_rs": 809.1578250384867,
+   "fx_arkit": 1336.6271
+  },
+  {
+   "name": "frame_00088.jpg",
+   "eval": false,
+   "time_s": 9.2537,
+   "pos_err_m": 0.014017355692755687,
+   "rot_err_deg": 2.9303521696161794,
+   "rot_err_rotfit_deg": 10.039694398660924,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1335.954
+  },
+  {
+   "name": "frame_00089.jpg",
+   "eval": false,
+   "time_s": 9.3371,
+   "pos_err_m": 0.013317937387490321,
+   "rot_err_deg": 2.886718883401432,
+   "rot_err_rotfit_deg": 10.035980724906983,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.0135
+  },
+  {
+   "name": "frame_00090.jpg",
+   "eval": false,
+   "time_s": 9.3871,
+   "pos_err_m": 0.013073878792337174,
+   "rot_err_deg": 2.8844089591855875,
+   "rot_err_rotfit_deg": 10.021905419036813,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1335.9182
+  },
+  {
+   "name": "frame_00092.jpg",
+   "eval": false,
+   "time_s": 9.5872,
+   "pos_err_m": 0.012718879207671572,
+   "rot_err_deg": 2.8688992144133993,
+   "rot_err_rotfit_deg": 10.025354644657343,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.5675
+  },
+  {
+   "name": "frame_00093.jpg",
+   "eval": false,
+   "time_s": 9.6206,
+   "pos_err_m": 0.012983708567671509,
+   "rot_err_deg": 2.8729948235809224,
+   "rot_err_rotfit_deg": 10.041038351315766,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.4006
+  },
+  {
+   "name": "frame_00095.jpg",
+   "eval": false,
+   "time_s": 9.8206,
+   "pos_err_m": 0.015355835480336717,
+   "rot_err_deg": 2.8866483354751944,
+   "rot_err_rotfit_deg": 10.049862132283119,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.6151
+  },
+  {
+   "name": "frame_00096.jpg",
+   "eval": false,
+   "time_s": 9.904,
+   "pos_err_m": 0.01620920190958833,
+   "rot_err_deg": 2.874098694061,
+   "rot_err_rotfit_deg": 10.04832170903062,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.4364
+  },
+  {
+   "name": "frame_00097.jpg",
+   "eval": false,
+   "time_s": 9.954,
+   "pos_err_m": 0.01676248108144343,
+   "rot_err_deg": 2.882187003602033,
+   "rot_err_rotfit_deg": 10.068983965100225,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.6896
+  },
+  {
+   "name": "frame_00098.jpg",
+   "eval": false,
+   "time_s": 10.0707,
+   "pos_err_m": 0.019671649188422815,
+   "rot_err_deg": 2.863930884756279,
+   "rot_err_rotfit_deg": 10.04943614610917,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1336.6151
+  },
+  {
+   "name": "frame_00100.jpg",
+   "eval": false,
+   "time_s": 10.2542,
+   "pos_err_m": 0.027760097076587633,
+   "rot_err_deg": 2.958788710127804,
+   "rot_err_rotfit_deg": 10.046607535427508,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.1868
+  },
+  {
+   "name": "frame_00101.jpg",
+   "eval": false,
+   "time_s": 10.3375,
+   "pos_err_m": 0.03030533815778902,
+   "rot_err_deg": 2.96962721715636,
+   "rot_err_rotfit_deg": 10.047376560129123,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.035
+  },
+  {
+   "name": "frame_00103.jpg",
+   "eval": false,
+   "time_s": 10.5209,
+   "pos_err_m": 0.03194649156772528,
+   "rot_err_deg": 2.9494036312877516,
+   "rot_err_rotfit_deg": 10.035879379547046,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.1898
+  },
+  {
+   "name": "frame_00104.jpg",
+   "eval": false,
+   "time_s": 10.5876,
+   "pos_err_m": 0.031421519686776866,
+   "rot_err_deg": 2.934458575368699,
+   "rot_err_rotfit_deg": 10.05029735000093,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.1244
+  },
+  {
+   "name": "frame_00105.jpg",
+   "eval": false,
+   "time_s": 10.671,
+   "pos_err_m": 0.031341240258402174,
+   "rot_err_deg": 2.9130315373098474,
+   "rot_err_rotfit_deg": 10.048468448906249,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.6603
+  },
+  {
+   "name": "frame_00108.jpg",
+   "eval": true,
+   "time_s": 11.0211,
+   "pos_err_m": 0.0290681303975035,
+   "rot_err_deg": 2.9102731719919266,
+   "rot_err_rotfit_deg": 10.024145051496966,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.708
+  },
+  {
+   "name": "frame_00109.jpg",
+   "eval": false,
+   "time_s": 11.2546,
+   "pos_err_m": 0.02528078129136314,
+   "rot_err_deg": 2.905359833817474,
+   "rot_err_rotfit_deg": 10.06018383460527,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.6663
+  },
+  {
+   "name": "frame_00110.jpg",
+   "eval": false,
+   "time_s": 11.4046,
+   "pos_err_m": 0.02341557780153877,
+   "rot_err_deg": 2.9192786731172022,
+   "rot_err_rotfit_deg": 10.069027398823728,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.7378
+  },
+  {
+   "name": "frame_00112.jpg",
+   "eval": false,
+   "time_s": 11.5713,
+   "pos_err_m": 0.020559064712495623,
+   "rot_err_deg": 2.9349191559388186,
+   "rot_err_rotfit_deg": 10.075142895320514,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.6603
+  },
+  {
+   "name": "frame_00114.jpg",
+   "eval": false,
+   "time_s": 11.6881,
+   "pos_err_m": 0.017720274212058785,
+   "rot_err_deg": 2.9456497913514497,
+   "rot_err_rotfit_deg": 10.086031682778433,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.6008
+  },
+  {
+   "name": "frame_00115.jpg",
+   "eval": false,
+   "time_s": 11.8048,
+   "pos_err_m": 0.014048734992778932,
+   "rot_err_deg": 2.9358628264337017,
+   "rot_err_rotfit_deg": 10.095469799425818,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.1576
+  },
+  {
+   "name": "frame_00116.jpg",
+   "eval": false,
+   "time_s": 11.9382,
+   "pos_err_m": 0.011100873669577564,
+   "rot_err_deg": 2.8940844531587055,
+   "rot_err_rotfit_deg": 10.068653940807705,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.2559
+  },
+  {
+   "name": "frame_00117.jpg",
+   "eval": false,
+   "time_s": 12.0049,
+   "pos_err_m": 0.01056454247646353,
+   "rot_err_deg": 2.88648239397684,
+   "rot_err_rotfit_deg": 10.05052110010427,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.1935
+  },
+  {
+   "name": "frame_00119.jpg",
+   "eval": false,
+   "time_s": 12.1382,
+   "pos_err_m": 0.008370018027578469,
+   "rot_err_deg": 2.8877371562850436,
+   "rot_err_rotfit_deg": 10.045086535821685,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.7949
+  },
+  {
+   "name": "frame_00120.jpg",
+   "eval": false,
+   "time_s": 12.2883,
+   "pos_err_m": 0.0093661763640388,
+   "rot_err_deg": 2.904898800305976,
+   "rot_err_rotfit_deg": 10.032055809524245,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.8485
+  },
+  {
+   "name": "frame_00122.jpg",
+   "eval": false,
+   "time_s": 12.3883,
+   "pos_err_m": 0.009530598904433205,
+   "rot_err_deg": 2.904176160661877,
+   "rot_err_rotfit_deg": 10.02678682481909,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.8425
+  },
+  {
+   "name": "frame_00123.jpg",
+   "eval": false,
+   "time_s": 12.4717,
+   "pos_err_m": 0.009531730816465361,
+   "rot_err_deg": 2.9082662618680923,
+   "rot_err_rotfit_deg": 10.035208749795549,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.8307
+  },
+  {
+   "name": "frame_00124.jpg",
+   "eval": false,
+   "time_s": 12.5551,
+   "pos_err_m": 0.010611468987469142,
+   "rot_err_deg": 2.9112080406493095,
+   "rot_err_rotfit_deg": 10.053841982071885,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.9021
+  },
+  {
+   "name": "frame_00126.jpg",
+   "eval": false,
+   "time_s": 12.7218,
+   "pos_err_m": 0.010084818824385293,
+   "rot_err_deg": 2.8827268247325883,
+   "rot_err_rotfit_deg": 10.022835713928778,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1339.3934
+  },
+  {
+   "name": "frame_00127.jpg",
+   "eval": false,
+   "time_s": 12.7885,
+   "pos_err_m": 0.00909547164990083,
+   "rot_err_deg": 2.887075847952449,
+   "rot_err_rotfit_deg": 10.026280263558206,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1339.5692
+  },
+  {
+   "name": "frame_00130.jpg",
+   "eval": true,
+   "time_s": 12.9886,
+   "pos_err_m": 0.006630856800056177,
+   "rot_err_deg": 2.8872714763883023,
+   "rot_err_rotfit_deg": 9.994499661493965,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.0099
+  },
+  {
+   "name": "frame_00133.jpg",
+   "eval": false,
+   "time_s": 13.1887,
+   "pos_err_m": 0.007237138808433776,
+   "rot_err_deg": 2.894555035669464,
+   "rot_err_rotfit_deg": 9.99832541934159,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1339.9861
+  },
+  {
+   "name": "frame_00136.jpg",
+   "eval": false,
+   "time_s": 13.4721,
+   "pos_err_m": 0.007871039806491826,
+   "rot_err_deg": 2.9810800580511487,
+   "rot_err_rotfit_deg": 9.858760577634573,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.1409
+  },
+  {
+   "name": "frame_00138.jpg",
+   "eval": false,
+   "time_s": 13.6722,
+   "pos_err_m": 0.0039846927040274585,
+   "rot_err_deg": 2.8941817410154203,
+   "rot_err_rotfit_deg": 9.728761603612206,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.0308
+  },
+  {
+   "name": "frame_00140.jpg",
+   "eval": false,
+   "time_s": 13.7889,
+   "pos_err_m": 0.00292084828930352,
+   "rot_err_deg": 2.8691157177249416,
+   "rot_err_rotfit_deg": 9.72480228613601,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.6532
+  },
+  {
+   "name": "frame_00141.jpg",
+   "eval": false,
+   "time_s": 13.8889,
+   "pos_err_m": 0.0017630998726877887,
+   "rot_err_deg": 2.8558091827969774,
+   "rot_err_rotfit_deg": 9.726653362175444,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.7246
+  },
+  {
+   "name": "frame_00143.jpg",
+   "eval": false,
+   "time_s": 14.0223,
+   "pos_err_m": 0.003596080829735551,
+   "rot_err_deg": 2.887262865722311,
+   "rot_err_rotfit_deg": 9.780371590131159,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.6799
+  },
+  {
+   "name": "frame_00144.jpg",
+   "eval": false,
+   "time_s": 14.0723,
+   "pos_err_m": 0.0029961488629808705,
+   "rot_err_deg": 2.771576029563631,
+   "rot_err_rotfit_deg": 9.736584294839641,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1340.5817
+  },
+  {
+   "name": "frame_00145.jpg",
+   "eval": false,
+   "time_s": 14.139,
+   "pos_err_m": 0.005404481365818849,
+   "rot_err_deg": 2.872275404998999,
+   "rot_err_rotfit_deg": 9.794334449921303,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1341.1683
+  },
+  {
+   "name": "frame_00147.jpg",
+   "eval": false,
+   "time_s": 14.2724,
+   "pos_err_m": 0.007939903653280456,
+   "rot_err_deg": 2.8942762402696043,
+   "rot_err_rotfit_deg": 9.829145078098826,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1341.8115
+  },
+  {
+   "name": "frame_00148.jpg",
+   "eval": false,
+   "time_s": 14.3725,
+   "pos_err_m": 0.01039019262024681,
+   "rot_err_deg": 2.881048660382772,
+   "rot_err_rotfit_deg": 9.835676452980836,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1341.8234
+  },
+  {
+   "name": "frame_00149.jpg",
+   "eval": false,
+   "time_s": 14.4225,
+   "pos_err_m": 0.011198193261772795,
+   "rot_err_deg": 2.8716745905239356,
+   "rot_err_rotfit_deg": 9.815443662418176,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1341.6864
+  },
+  {
+   "name": "frame_00151.jpg",
+   "eval": true,
+   "time_s": 14.6726,
+   "pos_err_m": 0.013644176122902781,
+   "rot_err_deg": 2.891201317585612,
+   "rot_err_rotfit_deg": 9.766351763802087,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1342.2612
+  },
+  {
+   "name": "frame_00153.jpg",
+   "eval": false,
+   "time_s": 14.9394,
+   "pos_err_m": 0.015268895666111778,
+   "rot_err_deg": 2.8260999853719193,
+   "rot_err_rotfit_deg": 9.709877097307917,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1343.5477
+  },
+  {
+   "name": "frame_00155.jpg",
+   "eval": false,
+   "time_s": 15.0561,
+   "pos_err_m": 0.015746491024856837,
+   "rot_err_deg": 2.801948400712266,
+   "rot_err_rotfit_deg": 9.682605208830344,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1343.5952
+  },
+  {
+   "name": "frame_00156.jpg",
+   "eval": false,
+   "time_s": 15.1394,
+   "pos_err_m": 0.015303006778023539,
+   "rot_err_deg": 2.7963487604493387,
+   "rot_err_rotfit_deg": 9.698055399322744,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1343.5804
+  },
+  {
+   "name": "frame_00158.jpg",
+   "eval": false,
+   "time_s": 15.3228,
+   "pos_err_m": 0.014141093038709975,
+   "rot_err_deg": 2.8240748924510095,
+   "rot_err_rotfit_deg": 9.650856097781348,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1344.1195
+  },
+  {
+   "name": "frame_00159.jpg",
+   "eval": false,
+   "time_s": 15.3895,
+   "pos_err_m": 0.014642715937159424,
+   "rot_err_deg": 2.8271071357463855,
+   "rot_err_rotfit_deg": 9.657636347661391,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1344.1165
+  },
+  {
+   "name": "frame_00160.jpg",
+   "eval": false,
+   "time_s": 15.4729,
+   "pos_err_m": 0.014179103770133336,
+   "rot_err_deg": 2.818307514919651,
+   "rot_err_rotfit_deg": 9.618166652081607,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1344.0004
+  },
+  {
+   "name": "frame_00162.jpg",
+   "eval": false,
+   "time_s": 15.6063,
+   "pos_err_m": 0.015233860225330213,
+   "rot_err_deg": 2.8358924567729984,
+   "rot_err_rotfit_deg": 9.575559687404661,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1344.6019
+  },
+  {
+   "name": "frame_00163.jpg",
+   "eval": false,
+   "time_s": 15.6897,
+   "pos_err_m": 0.01581016663489759,
+   "rot_err_deg": 2.859301188394897,
+   "rot_err_rotfit_deg": 9.54020793747321,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1344.6107
+  },
+  {
+   "name": "frame_00164.jpg",
+   "eval": false,
+   "time_s": 15.773,
+   "pos_err_m": 0.01674683929392865,
+   "rot_err_deg": 2.877874411929554,
+   "rot_err_rotfit_deg": 9.545275904542715,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1345.2153
+  },
+  {
+   "name": "frame_00165.jpg",
+   "eval": false,
+   "time_s": 15.8731,
+   "pos_err_m": 0.01789331702340619,
+   "rot_err_deg": 2.856207595270185,
+   "rot_err_rotfit_deg": 9.572884371727335,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1345.8733
+  },
+  {
+   "name": "frame_00175.jpg",
+   "eval": false,
+   "time_s": 16.5567,
+   "pos_err_m": 0.056798470822745,
+   "rot_err_deg": 17.936655175654277,
+   "rot_err_rotfit_deg": 18.22828151155661,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1348.2141
+  },
+  {
+   "name": "frame_00178.jpg",
+   "eval": true,
+   "time_s": 16.8401,
+   "pos_err_m": 0.03774476316193128,
+   "rot_err_deg": 17.3554333056942,
+   "rot_err_rotfit_deg": 17.568212430699568,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1347.5232
+  },
+  {
+   "name": "frame_00181.jpg",
+   "eval": false,
+   "time_s": 17.0902,
+   "pos_err_m": 0.024077724068490146,
+   "rot_err_deg": 17.08593993561153,
+   "rot_err_rotfit_deg": 17.10113946242361,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1346.3737
+  },
+  {
+   "name": "frame_00182.jpg",
+   "eval": false,
+   "time_s": 17.1402,
+   "pos_err_m": 0.0220938894654769,
+   "rot_err_deg": 17.06528519546703,
+   "rot_err_rotfit_deg": 17.03467395629956,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1346.3112
+  },
+  {
+   "name": "frame_00184.jpg",
+   "eval": false,
+   "time_s": 17.307,
+   "pos_err_m": 0.022445290217735198,
+   "rot_err_deg": 17.184042515145435,
+   "rot_err_rotfit_deg": 16.956995217825718,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.933
+  },
+  {
+   "name": "frame_00185.jpg",
+   "eval": false,
+   "time_s": 17.3903,
+   "pos_err_m": 0.027073287629632837,
+   "rot_err_deg": 17.206426393385268,
+   "rot_err_rotfit_deg": 16.890170814157212,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.7512
+  },
+  {
+   "name": "frame_00187.jpg",
+   "eval": false,
+   "time_s": 17.5071,
+   "pos_err_m": 0.033553272912948184,
+   "rot_err_deg": 17.256805587904562,
+   "rot_err_rotfit_deg": 16.979766681964993,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.7543
+  },
+  {
+   "name": "frame_00188.jpg",
+   "eval": false,
+   "time_s": 17.5404,
+   "pos_err_m": 0.03380370709903072,
+   "rot_err_deg": 17.236252052666885,
+   "rot_err_rotfit_deg": 16.980989746576455,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.7722
+  },
+  {
+   "name": "frame_00189.jpg",
+   "eval": false,
+   "time_s": 17.6404,
+   "pos_err_m": 0.03875711048525296,
+   "rot_err_deg": 17.293792520557904,
+   "rot_err_rotfit_deg": 17.01306593879359,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.8048
+  },
+  {
+   "name": "frame_00190.jpg",
+   "eval": false,
+   "time_s": 17.7071,
+   "pos_err_m": 0.0442126242732449,
+   "rot_err_deg": 17.338391580412175,
+   "rot_err_rotfit_deg": 17.01713924118901,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.7661
+  },
+  {
+   "name": "frame_00194.jpg",
+   "eval": true,
+   "time_s": 17.9406,
+   "pos_err_m": 0.07251680086106986,
+   "rot_err_deg": 17.375226331234185,
+   "rot_err_rotfit_deg": 17.164654569597083,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1345.8466
+  },
+  {
+   "name": "frame_00198.jpg",
+   "eval": false,
+   "time_s": 18.2573,
+   "pos_err_m": 0.10723138353678015,
+   "rot_err_deg": 18.136335666939356,
+   "rot_err_rotfit_deg": 17.720236523457004,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1346.3647
+  },
+  {
+   "name": "frame_00199.jpg",
+   "eval": false,
+   "time_s": 18.3407,
+   "pos_err_m": 0.10582731982283193,
+   "rot_err_deg": 17.949294624400085,
+   "rot_err_rotfit_deg": 17.500944055998236,
+   "fx_rs": 1423.616501807796,
+   "fx_arkit": 1346.3916
+  },
+  {
+   "name": "frame_00239.jpg",
+   "eval": false,
+   "time_s": 22.7258,
+   "pos_err_m": 0.03429536986192803,
+   "rot_err_deg": 2.855875961236457,
+   "rot_err_rotfit_deg": 9.669248700979601,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1336.5735
+  },
+  {
+   "name": "frame_00241.jpg",
+   "eval": false,
+   "time_s": 22.9259,
+   "pos_err_m": 0.035428302031514834,
+   "rot_err_deg": 2.8220157609103738,
+   "rot_err_rotfit_deg": 9.718871271694939,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1336.5347
+  },
+  {
+   "name": "frame_00244.jpg",
+   "eval": false,
+   "time_s": 23.1259,
+   "pos_err_m": 0.028322762370023055,
+   "rot_err_deg": 2.8145929511321777,
+   "rot_err_rotfit_deg": 9.849834476568875,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1336.5645
+  },
+  {
+   "name": "frame_00245.jpg",
+   "eval": false,
+   "time_s": 23.276,
+   "pos_err_m": 0.035410251641535016,
+   "rot_err_deg": 2.87711716697738,
+   "rot_err_rotfit_deg": 9.80041483553048,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1336.6122
+  },
+  {
+   "name": "frame_00247.jpg",
+   "eval": false,
+   "time_s": 23.4427,
+   "pos_err_m": 0.03619702121377595,
+   "rot_err_deg": 2.8416444956513702,
+   "rot_err_rotfit_deg": 9.781133809754236,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1337.029
+  },
+  {
+   "name": "frame_00248.jpg",
+   "eval": false,
+   "time_s": 23.4761,
+   "pos_err_m": 0.03512874786240351,
+   "rot_err_deg": 2.8522982929422875,
+   "rot_err_rotfit_deg": 9.78703741183157,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1337.1302
+  },
+  {
+   "name": "frame_00249.jpg",
+   "eval": false,
+   "time_s": 23.5928,
+   "pos_err_m": 0.035202971143880955,
+   "rot_err_deg": 2.9189522569448494,
+   "rot_err_rotfit_deg": 9.876846378602448,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1337.6901
+  },
+  {
+   "name": "frame_00251.jpg",
+   "eval": false,
+   "time_s": 23.7595,
+   "pos_err_m": 0.03773809543831121,
+   "rot_err_deg": 3.0405641357734883,
+   "rot_err_rotfit_deg": 10.017543563021528,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1337.6157
+  },
+  {
+   "name": "frame_00253.jpg",
+   "eval": true,
+   "time_s": 23.9763,
+   "pos_err_m": 0.04069169045628399,
+   "rot_err_deg": 3.1093450440556625,
+   "rot_err_rotfit_deg": 10.064901973567736,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.244
+  },
+  {
+   "name": "frame_00256.jpg",
+   "eval": false,
+   "time_s": 24.1764,
+   "pos_err_m": 0.03881108216036331,
+   "rot_err_deg": 3.022597173026868,
+   "rot_err_rotfit_deg": 9.934039864429907,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.8992
+  },
+  {
+   "name": "frame_00257.jpg",
+   "eval": false,
+   "time_s": 24.243,
+   "pos_err_m": 0.03811871702530355,
+   "rot_err_deg": 2.951773263995567,
+   "rot_err_rotfit_deg": 9.79459265547576,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.8873
+  },
+  {
+   "name": "frame_00259.jpg",
+   "eval": false,
+   "time_s": 24.3764,
+   "pos_err_m": 0.035949289231322186,
+   "rot_err_deg": 2.864630079345137,
+   "rot_err_rotfit_deg": 9.61480418074163,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1338.8485
+  },
+  {
+   "name": "frame_00260.jpg",
+   "eval": false,
+   "time_s": 24.4431,
+   "pos_err_m": 0.03719343936083227,
+   "rot_err_deg": 2.8374106444654124,
+   "rot_err_rotfit_deg": 9.555644957409674,
+   "fx_rs": 1338.746333896189,
+   "fx_arkit": 1339.3131
+  },
+  {
+   "name": "frame_00276.jpg",
+   "eval": false,
+   "time_s": 27.0775,
+   "pos_err_m": 0.03189018779374177,
+   "rot_err_deg": 25.394143077966344,
+   "rot_err_rotfit_deg": 30.8528562717429,
+   "fx_rs": 1363.246110755174,
+   "fx_arkit": 1357.3324
+  },
+  {
+   "name": "frame_00277.jpg",
+   "eval": false,
+   "time_s": 27.1942,
+   "pos_err_m": 0.03256960113426123,
+   "rot_err_deg": 25.335491555760047,
+   "rot_err_rotfit_deg": 30.78825537972641,
+   "fx_rs": 1363.246110755174,
+   "fx_arkit": 1355.1079
+  },
+  {
+   "name": "frame_00278.jpg",
+   "eval": false,
+   "time_s": 27.3443,
+   "pos_err_m": 0.03296149539401203,
+   "rot_err_deg": 25.296275322998998,
+   "rot_err_rotfit_deg": 30.75242584367612,
+   "fx_rs": 1363.246110755174,
+   "fx_arkit": 1353.2557
+  },
+  {
+   "name": "frame_00279.jpg",
+   "eval": false,
+   "time_s": 27.5277,
+   "pos_err_m": 0.03237555084199567,
+   "rot_err_deg": 25.316856937052616,
+   "rot_err_rotfit_deg": 30.7670285266826,
+   "fx_rs": 1363.246110755174,
+   "fx_arkit": 1351.1561
+  },
+  {
+   "name": "frame_00285.jpg",
+   "eval": true,
+   "time_s": 27.8278,
+   "pos_err_m": 0.08125841267298607,
+   "rot_err_deg": 25.43089303455703,
+   "rot_err_rotfit_deg": 30.84683931379515,
+   "fx_rs": 1363.246110755174,
+   "fx_arkit": 1348.3123
+  },
+  {
+   "name": "frame_00289.jpg",
+   "eval": false,
+   "time_s": 28.7448,
+   "pos_err_m": 0.033697483330762446,
+   "rot_err_deg": 2.2861977014311745,
+   "rot_err_rotfit_deg": 9.986836068283035,
+   "fx_rs": 347.2059347150704,
+   "fx_arkit": 1345.6233
+  },
+  {
+   "name": "frame_00293.jpg",
+   "eval": false,
+   "time_s": 29.0116,
+   "pos_err_m": 0.10140269795864025,
+   "rot_err_deg": 13.493164888570476,
+   "rot_err_rotfit_deg": 7.687184661198685,
+   "fx_rs": 347.2059347150704,
+   "fx_arkit": 1346.2158
+  },
+  {
+   "name": "frame_00296.jpg",
+   "eval": true,
+   "time_s": 29.5118,
+   "pos_err_m": 1.7592205410782225,
+   "rot_err_deg": 6.180898280350295,
+   "rot_err_rotfit_deg": 9.739163945848327,
+   "fx_rs": 482.254445457199,
+   "fx_arkit": 1348.0652
+  },
+  {
+   "name": "frame_00299.jpg",
+   "eval": false,
+   "time_s": 29.7285,
+   "pos_err_m": 0.027599622891390074,
+   "rot_err_deg": 1.8349831284934,
+   "rot_err_rotfit_deg": 8.610511297000613,
+   "fx_rs": 482.254445457199,
+   "fx_arkit": 1349.1788
+  },
+  {
+   "name": "frame_00310.jpg",
+   "eval": false,
+   "time_s": 30.6122,
+   "pos_err_m": 0.02580729071530289,
+   "rot_err_deg": 7.052196838434977,
+   "rot_err_rotfit_deg": 11.215511299660697,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1354.4915
+  },
+  {
+   "name": "frame_00311.jpg",
+   "eval": false,
+   "time_s": 30.7456,
+   "pos_err_m": 0.024054986385710363,
+   "rot_err_deg": 7.072769168460998,
+   "rot_err_rotfit_deg": 11.295075579416661,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1354.4795
+  },
+  {
+   "name": "frame_00313.jpg",
+   "eval": false,
+   "time_s": 30.829,
+   "pos_err_m": 0.02136376166938938,
+   "rot_err_deg": 7.060285948715634,
+   "rot_err_rotfit_deg": 11.249197652969176,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1353.744
+  },
+  {
+   "name": "frame_00314.jpg",
+   "eval": false,
+   "time_s": 30.929,
+   "pos_err_m": 0.021041531777191858,
+   "rot_err_deg": 7.053852725814528,
+   "rot_err_rotfit_deg": 11.259127550120839,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1352.7821
+  },
+  {
+   "name": "frame_00315.jpg",
+   "eval": false,
+   "time_s": 31.0457,
+   "pos_err_m": 0.02125598131472198,
+   "rot_err_deg": 7.028995472254145,
+   "rot_err_rotfit_deg": 11.207177686773893,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1351.4985
+  },
+  {
+   "name": "frame_00316.jpg",
+   "eval": false,
+   "time_s": 31.0957,
+   "pos_err_m": 0.021731107081295376,
+   "rot_err_deg": 7.050096905521611,
+   "rot_err_rotfit_deg": 11.212479609502505,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1351.6804
+  },
+  {
+   "name": "frame_00318.jpg",
+   "eval": false,
+   "time_s": 31.3458,
+   "pos_err_m": 0.02178642682500261,
+   "rot_err_deg": 6.995646202542194,
+   "rot_err_rotfit_deg": 11.185967804454702,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1350.364
+  },
+  {
+   "name": "frame_00319.jpg",
+   "eval": false,
+   "time_s": 31.4125,
+   "pos_err_m": 0.021231219594486313,
+   "rot_err_deg": 6.970287027549996,
+   "rot_err_rotfit_deg": 11.148556251803239,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1349.8192
+  },
+  {
+   "name": "frame_00320.jpg",
+   "eval": false,
+   "time_s": 31.4959,
+   "pos_err_m": 0.021636785807996398,
+   "rot_err_deg": 6.945926155606668,
+   "rot_err_rotfit_deg": 11.14619823533959,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1349.8578
+  },
+  {
+   "name": "frame_00322.jpg",
+   "eval": false,
+   "time_s": 31.696,
+   "pos_err_m": 0.0213688246030617,
+   "rot_err_deg": 6.9103605390660405,
+   "rot_err_rotfit_deg": 11.093185913197303,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1350.4802
+  },
+  {
+   "name": "frame_00324.jpg",
+   "eval": true,
+   "time_s": 31.9461,
+   "pos_err_m": 0.021166222254054057,
+   "rot_err_deg": 6.92012874797362,
+   "rot_err_rotfit_deg": 11.074387466471865,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1353.8453
+  },
+  {
+   "name": "frame_00326.jpg",
+   "eval": false,
+   "time_s": 32.1795,
+   "pos_err_m": 0.02244595523182033,
+   "rot_err_deg": 6.866873223389107,
+   "rot_err_rotfit_deg": 11.030110949992677,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1356.7635
+  },
+  {
+   "name": "frame_00328.jpg",
+   "eval": false,
+   "time_s": 32.563,
+   "pos_err_m": 0.020744749283139963,
+   "rot_err_deg": 6.859581797633659,
+   "rot_err_rotfit_deg": 11.041736086262118,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1358.6606
+  },
+  {
+   "name": "frame_00329.jpg",
+   "eval": false,
+   "time_s": 32.663,
+   "pos_err_m": 0.019180963568157475,
+   "rot_err_deg": 6.9374490535057,
+   "rot_err_rotfit_deg": 11.116031251036256,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1359.5807
+  },
+  {
+   "name": "frame_00330.jpg",
+   "eval": false,
+   "time_s": 32.7297,
+   "pos_err_m": 0.01942185825441291,
+   "rot_err_deg": 6.956320406053224,
+   "rot_err_rotfit_deg": 11.152173472711205,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1359.6016
+  },
+  {
+   "name": "frame_00331.jpg",
+   "eval": false,
+   "time_s": 32.7964,
+   "pos_err_m": 0.02025131230351393,
+   "rot_err_deg": 7.00322909051364,
+   "rot_err_rotfit_deg": 11.207317002481922,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1360.1316
+  },
+  {
+   "name": "frame_00333.jpg",
+   "eval": false,
+   "time_s": 32.9131,
+   "pos_err_m": 0.023433078139103076,
+   "rot_err_deg": 7.091224674064122,
+   "rot_err_rotfit_deg": 11.411503676177349,
+   "fx_rs": 1359.373442109132,
+   "fx_arkit": 1360.8256
+  },
+  {
+   "name": "frame_00341.jpg",
+   "eval": false,
+   "time_s": 34.5971,
+   "pos_err_m": 0.0036474835592730875,
+   "rot_err_deg": 8.398742213672216,
+   "rot_err_rotfit_deg": 1.9274012484875713,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1346.5137
+  },
+  {
+   "name": "frame_00342.jpg",
+   "eval": false,
+   "time_s": 34.7305,
+   "pos_err_m": 0.003976769189843358,
+   "rot_err_deg": 8.074537864996104,
+   "rot_err_rotfit_deg": 1.8655551939460882,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1345.3016
+  },
+  {
+   "name": "frame_00343.jpg",
+   "eval": false,
+   "time_s": 34.7805,
+   "pos_err_m": 0.005682792001846251,
+   "rot_err_deg": 8.047043470419007,
+   "rot_err_rotfit_deg": 1.8809639230232607,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1344.5929
+  },
+  {
+   "name": "frame_00345.jpg",
+   "eval": false,
+   "time_s": 34.9806,
+   "pos_err_m": 0.008461634126559937,
+   "rot_err_deg": 7.945875710047367,
+   "rot_err_rotfit_deg": 1.8510835940835155,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1342.9819
+  },
+  {
+   "name": "frame_00346.jpg",
+   "eval": false,
+   "time_s": 35.1306,
+   "pos_err_m": 0.008718994582567053,
+   "rot_err_deg": 7.886369329331109,
+   "rot_err_rotfit_deg": 1.8463473703802256,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1342.282
+  },
+  {
+   "name": "frame_00347.jpg",
+   "eval": false,
+   "time_s": 35.1806,
+   "pos_err_m": 0.009480105067786349,
+   "rot_err_deg": 7.873876546479287,
+   "rot_err_rotfit_deg": 1.8682510155178627,
+   "fx_rs": 1428.409807288876,
+   "fx_arkit": 1341.7877
+  },
+  {
+   "name": "frame_00475.jpg",
+   "eval": false,
+   "time_s": 44.6176,
+   "pos_err_m": 0.015797367214823714,
+   "rot_err_deg": 15.151014872042795,
+   "rot_err_rotfit_deg": 9.528841641514214,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.5
+  },
+  {
+   "name": "frame_00476.jpg",
+   "eval": false,
+   "time_s": 44.6676,
+   "pos_err_m": 0.014193173643892824,
+   "rot_err_deg": 15.525775072070163,
+   "rot_err_rotfit_deg": 9.599704617078462,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.8396
+  },
+  {
+   "name": "frame_00477.jpg",
+   "eval": false,
+   "time_s": 44.7177,
+   "pos_err_m": 0.009225839057125308,
+   "rot_err_deg": 15.697378626058457,
+   "rot_err_rotfit_deg": 9.652182186322673,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.2887
+  },
+  {
+   "name": "frame_00479.jpg",
+   "eval": false,
+   "time_s": 44.8177,
+   "pos_err_m": 0.009898030376137998,
+   "rot_err_deg": 16.21314606201349,
+   "rot_err_rotfit_deg": 9.766832218284735,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.2202
+  },
+  {
+   "name": "frame_00480.jpg",
+   "eval": false,
+   "time_s": 44.8677,
+   "pos_err_m": 0.008018867113361201,
+   "rot_err_deg": 16.49093082316242,
+   "rot_err_rotfit_deg": 9.90372639289935,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.2975
+  },
+  {
+   "name": "frame_00481.jpg",
+   "eval": false,
+   "time_s": 44.9177,
+   "pos_err_m": 0.011797071726739458,
+   "rot_err_deg": 17.05681459104608,
+   "rot_err_rotfit_deg": 10.239507162727588,
+   "fx_rs": 1189.207405033415,
+   "fx_arkit": 1338.1935
+  },
+  {
+   "name": "frame_00494.jpg",
+   "eval": false,
+   "time_s": 45.6514,
+   "pos_err_m": 0.011290016202054769,
+   "rot_err_deg": 37.77374883633785,
+   "rot_err_rotfit_deg": 31.42214942901883,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.3005
+  },
+  {
+   "name": "frame_00495.jpg",
+   "eval": false,
+   "time_s": 45.7681,
+   "pos_err_m": 0.019590005507194294,
+   "rot_err_deg": 37.96349688514529,
+   "rot_err_rotfit_deg": 31.558528493438907,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.3721
+  },
+  {
+   "name": "frame_00496.jpg",
+   "eval": false,
+   "time_s": 45.7847,
+   "pos_err_m": 0.021420887191293005,
+   "rot_err_deg": 38.00565517524204,
+   "rot_err_rotfit_deg": 31.592418113297057,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2917
+  },
+  {
+   "name": "frame_00498.jpg",
+   "eval": false,
+   "time_s": 45.9515,
+   "pos_err_m": 0.02007709620380429,
+   "rot_err_deg": 36.55298616983716,
+   "rot_err_rotfit_deg": 30.106420738938652,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2052
+  },
+  {
+   "name": "frame_00499.jpg",
+   "eval": false,
+   "time_s": 46.0348,
+   "pos_err_m": 0.01908110327320746,
+   "rot_err_deg": 36.283555980239754,
+   "rot_err_rotfit_deg": 29.850574748675296,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2052
+  },
+  {
+   "name": "frame_00500.jpg",
+   "eval": false,
+   "time_s": 46.0515,
+   "pos_err_m": 0.0190530381295189,
+   "rot_err_deg": 36.22617031431768,
+   "rot_err_rotfit_deg": 29.795315411745733,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2052
+  },
+  {
+   "name": "frame_00502.jpg",
+   "eval": false,
+   "time_s": 46.1849,
+   "pos_err_m": 0.01768367431762197,
+   "rot_err_deg": 35.69324055420176,
+   "rot_err_rotfit_deg": 29.239352823082836,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2856
+  },
+  {
+   "name": "frame_00503.jpg",
+   "eval": false,
+   "time_s": 46.2849,
+   "pos_err_m": 0.008697146137719809,
+   "rot_err_deg": 34.85321332065469,
+   "rot_err_rotfit_deg": 28.399635229096305,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2589
+  },
+  {
+   "name": "frame_00504.jpg",
+   "eval": false,
+   "time_s": 46.4016,
+   "pos_err_m": 0.007284714365131819,
+   "rot_err_deg": 33.72002959565248,
+   "rot_err_rotfit_deg": 27.2125586291748,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.3036
+  },
+  {
+   "name": "frame_00505.jpg",
+   "eval": false,
+   "time_s": 46.4517,
+   "pos_err_m": 0.014885627335834579,
+   "rot_err_deg": 33.22980259881103,
+   "rot_err_rotfit_deg": 26.702542369257714,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.2947
+  },
+  {
+   "name": "frame_00506.jpg",
+   "eval": false,
+   "time_s": 46.485,
+   "pos_err_m": 0.020680903071404726,
+   "rot_err_deg": 32.89636638202164,
+   "rot_err_rotfit_deg": 26.35520165979546,
+   "fx_rs": 1315.703690689422,
+   "fx_arkit": 1338.4614
+  },
+  {
+   "name": "frame_00546.jpg",
+   "eval": false,
+   "time_s": 50.0864,
+   "pos_err_m": 0.06227056577128467,
+   "rot_err_deg": 85.55687702976907,
+   "rot_err_rotfit_deg": 76.78957893672148,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1342.279
+  },
+  {
+   "name": "frame_00547.jpg",
+   "eval": false,
+   "time_s": 50.1197,
+   "pos_err_m": 0.05348727203428058,
+   "rot_err_deg": 85.38618100243902,
+   "rot_err_rotfit_deg": 76.61527014897868,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1342.5233
+  },
+  {
+   "name": "frame_00549.jpg",
+   "eval": false,
+   "time_s": 50.3198,
+   "pos_err_m": 0.04573824475055068,
+   "rot_err_deg": 84.85027149518521,
+   "rot_err_rotfit_deg": 76.07062295852432,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1341.8949
+  },
+  {
+   "name": "frame_00550.jpg",
+   "eval": false,
+   "time_s": 50.4032,
+   "pos_err_m": 0.05442946942243655,
+   "rot_err_deg": 84.46931018536567,
+   "rot_err_rotfit_deg": 75.68369452400573,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1341.1831
+  },
+  {
+   "name": "frame_00552.jpg",
+   "eval": true,
+   "time_s": 50.6032,
+   "pos_err_m": 0.06762282019848097,
+   "rot_err_deg": 84.06522271609622,
+   "rot_err_rotfit_deg": 75.28163824988613,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1341.2606
+  },
+  {
+   "name": "frame_00554.jpg",
+   "eval": false,
+   "time_s": 50.8033,
+   "pos_err_m": 0.06028374887139582,
+   "rot_err_deg": 83.58267569761766,
+   "rot_err_rotfit_deg": 74.81163073193395,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1340.7126
+  },
+  {
+   "name": "frame_00556.jpg",
+   "eval": false,
+   "time_s": 50.92,
+   "pos_err_m": 0.050453678141954304,
+   "rot_err_deg": 83.29284089021645,
+   "rot_err_rotfit_deg": 74.53010084682666,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1340.0486
+  },
+  {
+   "name": "frame_00557.jpg",
+   "eval": false,
+   "time_s": 51.0201,
+   "pos_err_m": 0.04177294335254605,
+   "rot_err_deg": 83.04343119628533,
+   "rot_err_rotfit_deg": 74.28758288945393,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1340.007
+  },
+  {
+   "name": "frame_00558.jpg",
+   "eval": false,
+   "time_s": 51.0701,
+   "pos_err_m": 0.03837199327772129,
+   "rot_err_deg": 82.91825174941106,
+   "rot_err_rotfit_deg": 74.16579628181832,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1340.0903
+  },
+  {
+   "name": "frame_00559.jpg",
+   "eval": false,
+   "time_s": 51.2202,
+   "pos_err_m": 0.038907559889130965,
+   "rot_err_deg": 82.62143049093943,
+   "rot_err_rotfit_deg": 73.87818081733298,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1339.4203
+  },
+  {
+   "name": "frame_00561.jpg",
+   "eval": false,
+   "time_s": 51.3702,
+   "pos_err_m": 0.04234244740334994,
+   "rot_err_deg": 82.35378459808472,
+   "rot_err_rotfit_deg": 73.61810196950402,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1339.471
+  },
+  {
+   "name": "frame_00562.jpg",
+   "eval": false,
+   "time_s": 51.4702,
+   "pos_err_m": 0.042725749713188564,
+   "rot_err_deg": 82.13097668513228,
+   "rot_err_rotfit_deg": 73.39433460894512,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.8605
+  },
+  {
+   "name": "frame_00564.jpg",
+   "eval": false,
+   "time_s": 51.587,
+   "pos_err_m": 0.03787157009935778,
+   "rot_err_deg": 82.08253093775802,
+   "rot_err_rotfit_deg": 73.34265722578668,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.9438
+  },
+  {
+   "name": "frame_00565.jpg",
+   "eval": false,
+   "time_s": 51.6703,
+   "pos_err_m": 0.030717271144925368,
+   "rot_err_deg": 82.07876220900086,
+   "rot_err_rotfit_deg": 73.3369499911407,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.8367
+  },
+  {
+   "name": "frame_00566.jpg",
+   "eval": false,
+   "time_s": 51.8037,
+   "pos_err_m": 0.020718284151947614,
+   "rot_err_deg": 82.16679981104734,
+   "rot_err_rotfit_deg": 73.41756857976547,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.8903
+  },
+  {
+   "name": "frame_00567.jpg",
+   "eval": false,
+   "time_s": 51.8537,
+   "pos_err_m": 0.01716983678163938,
+   "rot_err_deg": 82.19391579824605,
+   "rot_err_rotfit_deg": 73.44288219114767,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.9379
+  },
+  {
+   "name": "frame_00569.jpg",
+   "eval": false,
+   "time_s": 52.0705,
+   "pos_err_m": 0.013880128551043104,
+   "rot_err_deg": 82.21561047958035,
+   "rot_err_rotfit_deg": 73.45744881400303,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.1935
+  },
+  {
+   "name": "frame_00570.jpg",
+   "eval": false,
+   "time_s": 52.1038,
+   "pos_err_m": 0.015522358001527074,
+   "rot_err_deg": 82.19997139046093,
+   "rot_err_rotfit_deg": 73.4405709552905,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.2142
+  },
+  {
+   "name": "frame_00572.jpg",
+   "eval": false,
+   "time_s": 52.2872,
+   "pos_err_m": 0.029551892383824885,
+   "rot_err_deg": 82.20243560440898,
+   "rot_err_rotfit_deg": 73.43639717738884,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.232
+  },
+  {
+   "name": "frame_00573.jpg",
+   "eval": false,
+   "time_s": 52.3372,
+   "pos_err_m": 0.03433701994791097,
+   "rot_err_deg": 82.15545168827005,
+   "rot_err_rotfit_deg": 73.38774987895285,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.1814
+  },
+  {
+   "name": "frame_00574.jpg",
+   "eval": false,
+   "time_s": 52.454,
+   "pos_err_m": 0.04156020340719092,
+   "rot_err_deg": 82.09618309891697,
+   "rot_err_rotfit_deg": 73.32531553066758,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.2649
+  },
+  {
+   "name": "frame_00578.jpg",
+   "eval": true,
+   "time_s": 52.7374,
+   "pos_err_m": 0.06101564772194958,
+   "rot_err_deg": 81.64581849792071,
+   "rot_err_rotfit_deg": 72.87799850936618,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1338.25
+  },
+  {
+   "name": "frame_00582.jpg",
+   "eval": false,
+   "time_s": 53.0875,
+   "pos_err_m": 0.10138448120217701,
+   "rot_err_deg": 81.08182118898335,
+   "rot_err_rotfit_deg": 72.32084817442434,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1337.6842
+  },
+  {
+   "name": "frame_00583.jpg",
+   "eval": false,
+   "time_s": 53.1375,
+   "pos_err_m": 0.10088489721172611,
+   "rot_err_deg": 80.99510095882285,
+   "rot_err_rotfit_deg": 72.2329176277078,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1337.6573
+  },
+  {
+   "name": "frame_00584.jpg",
+   "eval": false,
+   "time_s": 53.2042,
+   "pos_err_m": 0.10081894414382728,
+   "rot_err_deg": 80.96232417451031,
+   "rot_err_rotfit_deg": 72.19706201783738,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1337.6454
+  },
+  {
+   "name": "frame_00585.jpg",
+   "eval": false,
+   "time_s": 53.321,
+   "pos_err_m": 0.0960842610148283,
+   "rot_err_deg": 80.8515961657993,
+   "rot_err_rotfit_deg": 72.08011925174657,
+   "fx_rs": 615.6884970767939,
+   "fx_arkit": 1337.0975
+  },
+  {
+   "name": "frame_00587.jpg",
+   "eval": false,
+   "time_s": 53.9545,
+   "pos_err_m": 0.018257028545341746,
+   "rot_err_deg": 2.9210081823054272,
+   "rot_err_rotfit_deg": 10.632415123411652,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.7407
+  },
+  {
+   "name": "frame_00588.jpg",
+   "eval": false,
+   "time_s": 54.0546,
+   "pos_err_m": 0.017524304342552952,
+   "rot_err_deg": 2.8833912041966454,
+   "rot_err_rotfit_deg": 10.608897009829567,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.6962
+  },
+  {
+   "name": "frame_00589.jpg",
+   "eval": false,
+   "time_s": 54.0879,
+   "pos_err_m": 0.017777251965464713,
+   "rot_err_deg": 2.876430947436275,
+   "rot_err_rotfit_deg": 10.604181030317612,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.708
+  },
+  {
+   "name": "frame_00590.jpg",
+   "eval": false,
+   "time_s": 54.188,
+   "pos_err_m": 0.015172814030482516,
+   "rot_err_deg": 2.8324889443314567,
+   "rot_err_rotfit_deg": 10.574279242959127,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1337.705
+  },
+  {
+   "name": "frame_00592.jpg",
+   "eval": true,
+   "time_s": 54.438,
+   "pos_err_m": 0.010194190628977117,
+   "rot_err_deg": 2.794690993746433,
+   "rot_err_rotfit_deg": 10.542194200737988,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1338.2947
+  },
+  {
+   "name": "frame_00595.jpg",
+   "eval": false,
+   "time_s": 54.9049,
+   "pos_err_m": 0.012208461610254124,
+   "rot_err_deg": 2.8043856068926183,
+   "rot_err_rotfit_deg": 10.52585079217689,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1339.4203
+  },
+  {
+   "name": "frame_00596.jpg",
+   "eval": false,
+   "time_s": 55.0049,
+   "pos_err_m": 0.012336972239962224,
+   "rot_err_deg": 2.8089704185837405,
+   "rot_err_rotfit_deg": 10.532078619227418,
+   "fx_rs": 1354.97111661502,
+   "fx_arkit": 1339.3638
+  },
+  {
+   "name": "frame_00602.jpg",
+   "eval": false,
+   "time_s": 55.8886,
+   "pos_err_m": 0.019240310656431343,
+   "rot_err_deg": 11.741897708816467,
+   "rot_err_rotfit_deg": 17.971325202086238,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1338.8903
+  },
+  {
+   "name": "frame_00603.jpg",
+   "eval": false,
+   "time_s": 55.9553,
+   "pos_err_m": 0.01361898274615569,
+   "rot_err_deg": 11.7042620788667,
+   "rot_err_rotfit_deg": 18.00295655969831,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1338.8574
+  },
+  {
+   "name": "frame_00604.jpg",
+   "eval": false,
+   "time_s": 55.9886,
+   "pos_err_m": 0.012112261589166218,
+   "rot_err_deg": 11.67573007626588,
+   "rot_err_rotfit_deg": 17.9951020297694,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1338.8663
+  },
+  {
+   "name": "frame_00606.jpg",
+   "eval": false,
+   "time_s": 56.0887,
+   "pos_err_m": 0.008158345453144084,
+   "rot_err_deg": 11.629486141099811,
+   "rot_err_rotfit_deg": 17.990057912330013,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1338.8276
+  },
+  {
+   "name": "frame_00607.jpg",
+   "eval": false,
+   "time_s": 56.1887,
+   "pos_err_m": 0.007556358598802248,
+   "rot_err_deg": 11.14166453315189,
+   "rot_err_rotfit_deg": 17.59197588615239,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1339.453
+  },
+  {
+   "name": "frame_00608.jpg",
+   "eval": false,
+   "time_s": 56.2387,
+   "pos_err_m": 0.010797754566134297,
+   "rot_err_deg": 10.95491750825404,
+   "rot_err_rotfit_deg": 17.41847866236196,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1339.4143
+  },
+  {
+   "name": "frame_00610.jpg",
+   "eval": false,
+   "time_s": 56.4221,
+   "pos_err_m": 0.013734740587456946,
+   "rot_err_deg": 10.997019767571173,
+   "rot_err_rotfit_deg": 17.39022743678009,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1339.9056
+  },
+  {
+   "name": "frame_00611.jpg",
+   "eval": false,
+   "time_s": 56.5055,
+   "pos_err_m": 0.013353715519764022,
+   "rot_err_deg": 10.993702636506695,
+   "rot_err_rotfit_deg": 17.369341257338444,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.0248
+  },
+  {
+   "name": "frame_00612.jpg",
+   "eval": false,
+   "time_s": 56.6556,
+   "pos_err_m": 0.01182179250075947,
+   "rot_err_deg": 11.072465936743985,
+   "rot_err_rotfit_deg": 17.422452755364404,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.6322
+  },
+  {
+   "name": "frame_00613.jpg",
+   "eval": false,
+   "time_s": 56.7389,
+   "pos_err_m": 0.009109681298759779,
+   "rot_err_deg": 11.077562376061952,
+   "rot_err_rotfit_deg": 17.417774716151346,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.5875
+  },
+  {
+   "name": "frame_00615.jpg",
+   "eval": false,
+   "time_s": 56.9057,
+   "pos_err_m": 0.0034936883711474656,
+   "rot_err_deg": 11.085846666638238,
+   "rot_err_rotfit_deg": 17.43627696874885,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.671
+  },
+  {
+   "name": "frame_00617.jpg",
+   "eval": true,
+   "time_s": 57.2391,
+   "pos_err_m": 0.005998763481601435,
+   "rot_err_deg": 11.160601408929598,
+   "rot_err_rotfit_deg": 17.53594223220484,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.5995
+  },
+  {
+   "name": "frame_00619.jpg",
+   "eval": false,
+   "time_s": 57.4392,
+   "pos_err_m": 0.01142227464410907,
+   "rot_err_deg": 11.171639723105404,
+   "rot_err_rotfit_deg": 17.553155345766267,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.6293
+  },
+  {
+   "name": "frame_00620.jpg",
+   "eval": false,
+   "time_s": 57.5892,
+   "pos_err_m": 0.01392540590561165,
+   "rot_err_deg": 11.154936925990995,
+   "rot_err_rotfit_deg": 17.533741734990585,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.6532
+  },
+  {
+   "name": "frame_00622.jpg",
+   "eval": false,
+   "time_s": 57.756,
+   "pos_err_m": 0.014796328542770907,
+   "rot_err_deg": 11.179681911050846,
+   "rot_err_rotfit_deg": 17.576301781247107,
+   "fx_rs": 1314.401505314208,
+   "fx_arkit": 1340.659
+  }
+ ]
+}

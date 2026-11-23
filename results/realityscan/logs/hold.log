@@ -1,0 +1,52 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-Mhn09fqVg4wpSm31GHL50c
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function deb_info.
+├── 🔨 Created function align.
+├── 🔨 Created function hold.
+└── 🔨 Created function exe_strings.
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+READY
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+READY
+[modal-client] 2026-11-23T18:27:09+0000 Loop attempt for _run_app.<locals>.heartbeat failed
+Traceback (most recent call last):
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_utils/async_utils.py", line 571, in loop_coro
+    await asyncio.wait_for(async_f(), timeout=timeout)
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/runner.py", line 66, in _heartbeat
+    await client.stub.AppHeartbeat(request, retry=Retry(attempt_timeout=HEARTBEAT_TIMEOUT))
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 129, in __call__
+    return await _retry_transient_errors(
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 604, in _retry_transient_errors
+    process_exception_before_retry(
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 460, in process_exception_before_retry
+    raise exc
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 531, in _retry_transient_errors
+    return await fn_callable(req, metadata=attempt_metadata, timeout=timeout)
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 159, in direct
+    return await self.client._call_unary(self.wrapped_method, req, timeout=timeout, metadata=metadata)
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/client.py", line 379, in _call_unary
+    return await self._call_safely(coro, grpclib_method.name)
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/modal/client.py", line 336, in _call_safely
+    return await request_task
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/grpclib/client.py", line 912, in __call__
+    await stream.send_message(message, end=True)
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/grpclib/client.py", line 242, in send_message
+    await self.send_request()
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/grpclib/client.py", line 175, in send_request
+    stream = protocol.processor.connection\
+  File "/Users/abyyworld/LiteReality/.venv/lib/python3.10/site-packages/grpclib/protocol.py", line 208, in create_stream
+    return Stream(self, self._connection, self._transport,
+AttributeError: 'Connection' object has no attribute '_transport'
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ 'Connection' object has no attribute '_transport'                            │
+╰──────────────────────────────────────────────────────────────────────────────╯

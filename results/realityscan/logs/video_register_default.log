@@ -1,0 +1,210 @@
+/Users/abyyworld/LiteReality/scripts/realityscan/video_register.py:62: RuntimeWarning: divide by zero encountered in matmul
+  depth.append(np.median((P - im.C) @ im.R[:, 2]))
+/Users/abyyworld/LiteReality/scripts/realityscan/video_register.py:62: RuntimeWarning: overflow encountered in matmul
+  depth.append(np.median((P - im.C) @ im.R[:, 2]))
+/Users/abyyworld/LiteReality/scripts/realityscan/video_register.py:62: RuntimeWarning: invalid value encountered in matmul
+  depth.append(np.median((P - im.C) @ im.R[:, 2]))
+36691 of 37832 points within 6.0 m of a camera
+scale guess: depth 0.0611 x height 1.7280 (camera 0.91 m above the floor -> 1.58 m); gravity 2.074 deg from guess
+  coarse scales: 0.786 (0.561), 0.721 (0.558), 0.857 (0.557)
+  start scale 0.79: scale 0.7248, yaw -13.6 deg, 37% wall_inliers, residual 1.8 cm
+  start scale 0.72: scale 0.6682, yaw -7.3 deg, 62% wall_inliers, residual 0.9 cm
+  start scale 0.86: scale 0.7953, yaw -7.2 deg, 58% wall_inliers, residual 0.9 cm
+{
+ "scale": 0.63509,
+ "yaw_deg": -7.199,
+ "translation_m": [
+  -0.2795,
+  -0.276,
+  0.8441
+ ],
+ "residual_m": 0.0089,
+ "residual_point_m": 0.0135,
+ "overlap": 0.718,
+ "inliers": 0.543,
+ "score": 0.608,
+ "score_kind": "wall_inliers",
+ "ambiguous": true,
+ "margin": 0.035,
+ "runner_up": {
+  "yaw_deg": 6.82,
+  "translation_m": [
+   0.4973,
+   -0.275,
+   1.0159
+  ],
+  "score": 0.249,
+  "inliers": 0.243,
+  "residual_m": 0.0215
+ },
+ "scale_spread": 0.2523,
+ "transform": [
+  [
+   0.630088,
+   0.0,
+   -0.079582,
+   -0.279486
+  ],
+  [
+   0.0,
+   0.635094,
+   0.0,
+   -0.27603
+  ],
+  [
+   0.079582,
+   0.0,
+   0.630088,
+   0.844116
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "seconds": 30.89
+}
+{
+ "registered": 102,
+ "input": 388,
+ "rs_points": 37832,
+ "n_cameras": 102,
+ "cameras": {
+  "86": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 1538.850069422393,
+   "fy": 1538.850069422393,
+   "cx": 542.1704506200372,
+   "cy": 960.7178080061095,
+   "dist": [
+    0.2014568627241302,
+    -0.7012474241552006,
+    0.0,
+    0.0,
+    0.7638011090943949,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "85": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 1538.850069422393,
+   "fy": 1538.850069422393,
+   "cx": 542.1704506200372,
+   "cy": 960.7178080061095,
+   "dist": [
+    0.2014568627241302,
+    -0.7012474241552006,
+    0.0,
+    0.0,
+    0.7638011090943949,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "84": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 1538.850069422393,
+   "fy": 1538.850069422393,
+   "cx": 542.1704506200372,
+   "cy": 960.7178080061095,
+   "dist": [
+    0.2014568627241302,
+    -0.7012474241552006,
+    0.0,
+    0.0,
+    0.7638011090943949,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "scale_guess": {
+  "depth": 0.06109600408634167,
+  "height": 1.7280361936485442,
+  "rs_camera_height_m": 0.9148930981798827,
+  "stray_camera_height_m": 1.5809683869740885
+ },
+ "gravity": {
+  "points": 23518,
+  "rounds": [
+   {
+    "horizontal": 4571,
+    "vertical": 11275,
+    "moved_deg": 2.072
+   },
+   {
+    "horizontal": 1334,
+    "vertical": 6398,
+    "moved_deg": 0.159
+   },
+   {
+    "horizontal": 406,
+    "vertical": 3643,
+    "moved_deg": 0.463
+   }
+  ],
+  "from_guess_deg": 2.074
+ },
+ "scale_rs_to_m": 0.06705071239367398,
+ "vs_mapanything": {
+  "pairs": 34,
+  "as_registered": {
+   "pos_m": {
+    "n": 34,
+    "median": 1.2305315657409286,
+    "mean": 1.2409559909910723,
+    "rmse": 1.2420684476003403,
+    "p90": 1.3175568662075148,
+    "max": 1.369304042035469
+   },
+   "rot_deg": {
+    "n": 34,
+    "median": 3.9132985239538884,
+    "mean": 4.2261937444614235,
+    "rmse": 4.631845646425752,
+    "p90": 7.089783698651618,
+    "max": 8.447079319102288
+   }
+  },
+  "after_own_sim3": {
+   "pos_m": {
+    "n": 34,
+    "median": 0.19372028358331814,
+    "mean": 0.20536999757604146,
+    "rmse": 0.22783136954911334,
+    "p90": 0.35251642997905663,
+    "max": 0.4112017226479156
+   },
+   "scale_ma_over_rs": 0.8920522406099113,
+   "rot_deg": {
+    "n": 34,
+    "median": 12.496634907969186,
+    "mean": 12.369728259856396,
+    "rmse": 12.552160595805098,
+    "p90": 14.744060816597798,
+    "max": 16.313812016446533
+   }
+  },
+  "mapanything_K_fx": 1029.9403474768815
+ },
+ "camera_height_m_after": {
+  "n": 102,
+  "median": 1.0222862298432727,
+  "mean": 0.9756559828640677,
+  "rmse": 1.0093467643982654,
+  "p90": 1.193564770660998,
+  "max": 1.3651143077031347
+ }
+}

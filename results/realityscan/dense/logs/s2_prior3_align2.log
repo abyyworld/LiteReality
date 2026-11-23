@@ -1,0 +1,45 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-RLPB8Hlg2ubQ4VYhSXKL21
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function deb_info.
+├── 🔨 Created function align.
+├── 🔨 Created function align_to_volume.
+├── 🔨 Created function hold.
+├── 🔨 Created function exe_strings.
+└── 🔨 Created function align_dir.
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+Container terminated due to preemption. Your Function will be restarted with the same input. For more details, see https://modal.com/docs/guide/preemption
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+$ cd /tmp && timeout 6600 /opt/realityscan/bin/wine --bottle realityscan --wait-children --workdir 'C:/Program Files/Epic Games/RealityScan' RealityScan.exe -headless -silent 'Z:\tmp\rs-aw6za11p\out\crash' -set "appQuitOnError=true" -set "PUS-1-323292754=1" -set "PUS-1-323301212=1" -newScene -addFolder 'Z:\tmp\rs-aw6za11p\images' -selectAllImages -editInputSelection "inpCalibrationGroup=0" -editInputSelection "inpLensGroup=0" -editInputSelection "inpDistortionModel=2" -editInputSelection "inpCalibration=1" -editInputSelection "inpFocal=25.1561" -set "sfmDetectorSensitivity=High" -set "sfmPreselectorFeatures=20000" -set "sfmMaxFeaturesPerMpx=20000" -set "sfmMaxFeaturesPerImage=60000" -set "sfmEnableCameraPrior=true" -set "sfmMergeGeoreferencedComponents=true" -set "sfmGeoRef=true" -set "sfmCameraPriorAccuracyX=0.03" -set "sfmCameraPriorAccuracyY=0.03" -set "sfmCameraPriorAccuracyZ=0.03" -set "sfmCameraPriorAccuracyYaw=3" -set "sfmCameraPriorAccuracyPitch=3" -set "sfmCameraPriorAccuracyRoll=3" -align -align -exportXMP -selectMaximalComponent -exportRegistration 'Z:\tmp\rs-aw6za11p\out\colmap\colmap' 'Z:\tmp\rs-aw6za11p\out\params.xml' -save 'Z:\tmp\rs-aw6za11p\out\scene.rsproj' -quit
+[0]  ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()
+ Function: Arch_ValidateAssumptions
+     File: D:\build\OpenUSD\pxr\base\arch\assumptions.cpp
+     Line: 138
+
+{
+ "tag": "s2_prior3_align2",
+ "src": "inputs/rs_dense_stray",
+ "images": 1095,
+ "xmp_priors_in": 1066,
+ "copy_s": 46.9,
+ "seconds": 732.5,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-aw6za11p\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-aw6za11p\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=25.1561\" -set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.03\" -set \"sfmCameraPriorAccuracyY=0.03\" -set \"sfmCameraPriorAccuracyZ=0.03\" -set \"sfmCameraPriorAccuracyYaw=3\" -set \"sfmCameraPriorAccuracyPitch=3\" -set \"sfmCameraPriorAccuracyRoll=3\" -align -align -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-aw6za11p\\out\\colmap\\colmap' 'Z:\\tmp\\rs-aw6za11p\\out\\params.xml' -save 'Z:\\tmp\\rs-aw6za11p\\out\\scene.rsproj' -quit",
+ "focal35": 25.1561,
+ "distortion_model": 2,
+ "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.03\" -set \"sfmCameraPriorAccuracyY=0.03\" -set \"sfmCameraPriorAccuracyZ=0.03\" -set \"sfmCameraPriorAccuracyYaw=3\" -set \"sfmCameraPriorAccuracyPitch=3\" -set \"sfmCameraPriorAccuracyRoll=3\"",
+ "post": "-align",
+ "cpu": 8,
+ "memory_mb": 16384
+}
+[modal-client] 2026-11-23T22:16:35+0000 Timed out waiting for final app logs.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-RLPB8Hlg2ubQ4VYhSXKL21

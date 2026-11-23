@@ -1,0 +1,25 @@
+{
+ "images": 10,
+ "seconds": 18.0,
+ "code": 0,
+ "files": [
+  "colmap/sparse/0/cameras.txt",
+  "colmap/sparse/0/images.txt",
+  "colmap/sparse/0/points3D.txt",
+  "params.xml",
+  "scene.rsproj",
+  "scene/animation0.dat",
+  "scene/appConfig0.dat",
+  "scene/controlpoints0.dat",
+  "scene/entities0.dat",
+  "scene/metadata0.dat",
+  "scene/sfm0.dat"
+ ],
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "setup": {
+  "cmd": "timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\\Software\\EpicGames.RealityScan\\RealityScan\\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f",
+  "code": 0,
+  "s": 9.2,
+  "out": "reg: The operation completed successfully\n"
+ }
+}

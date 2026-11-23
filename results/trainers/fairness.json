@@ -1,0 +1,91 @@
+{
+ "eval_frames": 29,
+ "eval_source": "results/stray_quality/eval_frames.txt",
+ "sets": {
+  "full_walk_q206": {
+   "dataset": "~/LiteReality/run/atrium_trainers/dataset_q206.tar.gz",
+   "train_photos": 188,
+   "unmapped_photos": [],
+   "eval_rows_in_train": [],
+   "min_row_gap": 7,
+   "min_time_gap_s": 0.2,
+   "median_time_gap_s": 0.233,
+   "used_by": "gsplat_v0, gsplat_nodepth5k, lfs_* (full walk)"
+  },
+  "rs_piece_rs_w960": {
+   "dataset": "~/LiteReality-scans/rs_stray/rs_w960.tar.gz",
+   "train_photos": 55,
+   "unmapped_photos": [],
+   "eval_rows_in_train": [],
+   "min_row_gap": 8,
+   "min_time_gap_s": 0.2,
+   "median_time_gap_s": 5.886,
+   "used_by": "RealityScan-piece runs"
+  },
+  "rs_piece_arkit_w960": {
+   "dataset": "~/LiteReality-scans/rs_stray/arkit_w960.tar.gz",
+   "train_photos": 55,
+   "unmapped_photos": [],
+   "eval_rows_in_train": [],
+   "min_row_gap": 8,
+   "min_time_gap_s": 0.2,
+   "median_time_gap_s": 5.886,
+   "used_by": "RealityScan-piece runs"
+  },
+  "rs_piece_rs_w1920": {
+   "dataset": "~/LiteReality-scans/rs_stray/rs_w1920.tar.gz",
+   "train_photos": 55,
+   "unmapped_photos": [],
+   "eval_rows_in_train": [],
+   "min_row_gap": 8,
+   "min_time_gap_s": 0.2,
+   "median_time_gap_s": 5.886,
+   "used_by": "RealityScan-piece runs"
+  },
+  "rs_piece_arkit_w1920": {
+   "dataset": "~/LiteReality-scans/rs_stray/arkit_w1920.tar.gz",
+   "train_photos": 55,
+   "unmapped_photos": [],
+   "eval_rows_in_train": [],
+   "min_row_gap": 8,
+   "min_time_gap_s": 0.2,
+   "median_time_gap_s": 5.886,
+   "used_by": "RealityScan-piece runs"
+  }
+ },
+ "eval_rows_in_realityscan_sfm_input": {
+  "count": 29,
+  "rows": [
+   32,
+   116,
+   224,
+   308,
+   366,
+   465,
+   547,
+   610,
+   692,
+   739,
+   844,
+   896,
+   981,
+   1078,
+   1149,
+   1219,
+   1321,
+   1495,
+   1547,
+   1655,
+   1698,
+   1799,
+   1866,
+   1956,
+   2010,
+   2070,
+   2153,
+   2224,
+   2371
+  ]
+ },
+ "fair": true
+}

@@ -1,0 +1,23 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-InK7vuHaDjSercntqbCLyi
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function deb_info.
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function align.
+└── 🔨 Created function hold.
+/Users/abyyworld/LiteReality-scans/rs_stray/rs_input/images: 93 MB tar
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+$ cd /tmp && timeout 3000 /opt/realityscan/bin/wine --bottle realityscan --wait-children --workdir 'C:/Program Files/Epic Games/RealityScan' RealityScan.exe -headless -silent 'Z:\tmp\rs-m350fp7z\out\crash' -set "appQuitOnError=true" -set "PUS-1-323292754=1" -set "PUS-1-323301212=1" -newScene -addFolder 'Z:\tmp\rs-m350fp7z\images' -selectAllImages -editInputSelection "inpCalibrationGroup=0" -editInputSelection "inpLensGroup=0" -editInputSelection "inpDistortionModel=2"  -align -selectMaximalComponent -exportRegistration 'Z:\tmp\rs-m350fp7z\out\colmap\colmap' 'Z:\tmp\rs-m350fp7z\out\params.xml' -save 'Z:\tmp\rs-m350fp7z\out\scene.rsproj' -quit
+[0]  ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()
+ Function: Arch_ValidateAssumptions
+     File: D:\build\OpenUSD\pxr\base\arch\assumptions.cpp
+     Line: 138
+
+images 400 seconds 151.3 code 0 ['colmap/sparse/0/cameras.txt', 'colmap/sparse/0/images.txt', 'colmap/sparse/0/points3D.txt', 'params.xml', 'scene.rsproj', 'scene/animation0.dat', 'scene/appConfig0.dat', 'scene/controlpoints0.dat', 'scene/entities0.dat', 'scene/metadata0.dat', 'scene/metadata1.dat', 'scene/sfm0.dat', 'scene/sfm1.dat', 'scene/sfm10.dat', 'scene/sfm11.dat', 'scene/sfm12.dat', 'scene/sfm13.dat', 'scene/sfm14.dat', 'scene/sfm15.dat', 'scene/sfm16.dat', 'scene/sfm17.dat', 'scene/sfm2.dat', 'scene/sfm3.dat', 'scene/sfm4.dat', 'scene/sfm5.dat', 'scene/sfm6.dat', 'scene/sfm7.dat', 'scene/sfm8.dat', 'scene/sfm9.dat']
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-InK7vuHaDjSercntqbCLyi

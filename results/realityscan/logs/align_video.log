@@ -1,0 +1,23 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-PC43rACt4gMu2sKLVLb2rW
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function deb_info.
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function align.
+└── 🔨 Created function hold.
+/Users/abyyworld/LiteReality-scans/rs_video/rs_input/images: 139 MB tar
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+$ cd /tmp && timeout 3000 /opt/realityscan/bin/wine --bottle realityscan --wait-children --workdir 'C:/Program Files/Epic Games/RealityScan' RealityScan.exe -headless -silent 'Z:\tmp\rs-rwwk971a\out\crash' -set "appQuitOnError=true" -set "PUS-1-323292754=1" -set "PUS-1-323301212=1" -newScene -addFolder 'Z:\tmp\rs-rwwk971a\images' -selectAllImages -editInputSelection "inpCalibrationGroup=0" -editInputSelection "inpLensGroup=0" -editInputSelection "inpDistortionModel=2"  -align -selectMaximalComponent -exportRegistration 'Z:\tmp\rs-rwwk971a\out\colmap\colmap' 'Z:\tmp\rs-rwwk971a\out\params.xml' -save 'Z:\tmp\rs-rwwk971a\out\scene.rsproj' -quit
+[0]  ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()
+ Function: Arch_ValidateAssumptions
+     File: D:\build\OpenUSD\pxr\base\arch\assumptions.cpp
+     Line: 138
+
+images 388 seconds 116.9 code 0 ['colmap/sparse/0/cameras.txt', 'colmap/sparse/0/images.txt', 'colmap/sparse/0/points3D.txt', 'params.xml', 'scene.rsproj', 'scene/animation0.dat', 'scene/appConfig0.dat', 'scene/controlpoints0.dat', 'scene/entities0.dat', 'scene/metadata0.dat', 'scene/metadata1.dat', 'scene/sfm0.dat', 'scene/sfm1.dat', 'scene/sfm2.dat', 'scene/sfm3.dat', 'scene/sfm4.dat', 'scene/sfm5.dat', 'scene/sfm6.dat']
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-PC43rACt4gMu2sKLVLb2rW

@@ -1,0 +1,276 @@
+[
+ {
+  "label": "v0",
+  "capture": "Stray walk",
+  "poses": "ARKit",
+  "frames": "188 (full walk)",
+  "trainer": "gsplat 5k, LiDAR/PromptDA dense depth",
+  "views": 29,
+  "all29": {
+   "psnr": 19.1482,
+   "psnr_cc": 21.6469,
+   "ssim": 0.7377,
+   "lpips": 0.2863,
+   "coverage": 0.9592
+  },
+  "piece5_arkit_pose": {
+   "psnr": 17.0799,
+   "psnr_cc": 19.1348,
+   "ssim": 0.637,
+   "lpips": 0.355
+  },
+  "trainer_heldout": {
+   "psnr": 21.690067291259766,
+   "ssim": 0.8215507864952087,
+   "lpips": 0.236454576253891,
+   "cc_psnr": 25.519996643066406,
+   "num_GS": 800000
+  },
+  "trainer_s": 151.6,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cost_est_usd": 0.191,
+  "scores": "results/stray_quality/v0_scores.json"
+ },
+ {
+  "label": "v2",
+  "capture": "Stray walk",
+  "poses": "ARKit",
+  "frames": "637 (full walk)",
+  "trainer": "gsplat 10k, dense depth (current best)",
+  "views": 29,
+  "all29": {
+   "psnr": 20.1938,
+   "psnr_cc": 22.5328,
+   "ssim": 0.7672,
+   "lpips": 0.2617,
+   "coverage": 0.9775
+  },
+  "piece5_arkit_pose": {
+   "psnr": 18.5981,
+   "psnr_cc": 20.8882,
+   "ssim": 0.6896,
+   "lpips": 0.3035
+  },
+  "trainer_heldout": {
+   "psnr": 22.81696128845215,
+   "ssim": 0.8775545358657837,
+   "lpips": 0.2088334560394287,
+   "cc_psnr": 27.571796417236328,
+   "num_GS": 2228000
+  },
+  "trainer_s": 588.4,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cost_est_usd": 0.65,
+  "scores": "results/stray_quality/v2_scores.json"
+ },
+ {
+  "label": "lfs_q206",
+  "capture": "Stray walk",
+  "poses": "ARKit",
+  "frames": "188 (full walk)",
+  "trainer": "LichtFeld mcmc 30k",
+  "views": 29,
+  "all29": {
+   "psnr": 18.7355,
+   "psnr_cc": 20.7623,
+   "ssim": 0.7267,
+   "lpips": 0.3323,
+   "coverage": 0.9561
+  },
+  "piece5_arkit_pose": {
+   "psnr": 15.2977,
+   "psnr_cc": 17.7927,
+   "ssim": 0.6341,
+   "lpips": 0.4323
+  },
+  "trainer_heldout": {
+   "psnr": 26.154615,
+   "ssim": 0.838668,
+   "lpips": 0.225569,
+   "cc_psnr": null,
+   "num_GS": 1000000
+  },
+  "trainer_s": 272.9,
+  "gpu": "NVIDIA L40S",
+  "cost_est_usd": 0.299,
+  "scores": "results/trainers/lfs_mcmc30k_nocal_scores.json"
+ },
+ {
+  "label": "arkit_gs5k",
+  "capture": "Stray RS piece",
+  "poses": "ARKit",
+  "frames": "55",
+  "trainer": "gsplat 5k, 960 px, no dense depth",
+  "views": 29,
+  "all29": {
+   "psnr": 12.1935,
+   "psnr_cc": 15.9122,
+   "ssim": 0.6309,
+   "lpips": 0.5736,
+   "coverage": 0.6309
+  },
+  "piece5_arkit_pose": {
+   "psnr": 19.5012,
+   "psnr_cc": 21.0323,
+   "ssim": 0.7167,
+   "lpips": 0.3178
+  },
+  "trainer_heldout": {
+   "psnr": 23.524654388427734,
+   "ssim": 0.8176355957984924,
+   "lpips": 0.24853220582008362,
+   "cc_psnr": 25.996936798095703,
+   "num_GS": 751532
+  },
+  "trainer_s": 57.6,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cost_est_usd": 0.063,
+  "scores": "results/realityscan/scores/arkit_stray_gs5k_e29_scores.json"
+ },
+ {
+  "label": "rs_gs5k",
+  "capture": "Stray RS piece",
+  "poses": "RealityScan",
+  "frames": "55",
+  "trainer": "gsplat 5k, 960 px, no dense depth",
+  "views": 29,
+  "all29": {
+   "psnr": 11.4414,
+   "psnr_cc": 15.4429,
+   "ssim": 0.5986,
+   "lpips": 0.5832,
+   "coverage": 0.612
+  },
+  "piece5_arkit_pose": {
+   "psnr": 17.2682,
+   "psnr_cc": 18.3665,
+   "ssim": 0.5494,
+   "lpips": 0.3498
+  },
+  "trainer_heldout": {
+   "psnr": 23.714962005615234,
+   "ssim": 0.8652899265289307,
+   "lpips": 0.22761192917823792,
+   "cc_psnr": 26.569982528686523,
+   "num_GS": 751532
+  },
+  "trainer_s": 57.5,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cost_est_usd": 0.063,
+  "scores": "results/realityscan/scores/rs_stray_gs5k_e29_scores.json",
+  "piece5_rs_pose": {
+   "psnr": 18.6301,
+   "psnr_cc": 20.1003,
+   "ssim": 0.7279,
+   "lpips": 0.3158
+  }
+ },
+ {
+  "label": "rs_gs5k_w1920",
+  "capture": "Stray RS piece",
+  "poses": "RealityScan",
+  "frames": "55",
+  "trainer": "gsplat 5k, 1920 px, no dense depth",
+  "views": 29,
+  "all29": {
+   "psnr": 11.6168,
+   "psnr_cc": 15.3898,
+   "ssim": 0.6009,
+   "lpips": 0.5835,
+   "coverage": 0.6177
+  },
+  "piece5_arkit_pose": {
+   "psnr": 17.5358,
+   "psnr_cc": 18.5075,
+   "ssim": 0.5545,
+   "lpips": 0.3489
+  },
+  "trainer_heldout": {
+   "psnr": 23.819490432739258,
+   "ssim": 0.8664596080780029,
+   "lpips": 0.23843027651309967,
+   "cc_psnr": 26.60409164428711,
+   "num_GS": 751532
+  },
+  "trainer_s": 101.8,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cost_est_usd": 0.112,
+  "scores": "results/realityscan/scores/rs_stray_gs5k_w1920_e29_scores.json",
+  "piece5_rs_pose": {
+   "psnr": 19.1034,
+   "psnr_cc": 20.4567,
+   "ssim": 0.7305,
+   "lpips": 0.3118
+  }
+ },
+ {
+  "label": "arkit_lfs",
+  "capture": "Stray RS piece",
+  "poses": "ARKit",
+  "frames": "55",
+  "trainer": "LichtFeld mcmc 30k, 960 px",
+  "views": 29,
+  "all29": {
+   "psnr": 12.5688,
+   "psnr_cc": 16.1418,
+   "ssim": 0.6339,
+   "lpips": 0.5599,
+   "coverage": 0.6889
+  },
+  "piece5_arkit_pose": {
+   "psnr": 18.9291,
+   "psnr_cc": 20.6672,
+   "ssim": 0.6998,
+   "lpips": 0.311
+  },
+  "trainer_heldout": {
+   "psnr": 28.406534,
+   "ssim": 0.85523,
+   "lpips": 0.168422,
+   "cc_psnr": null,
+   "num_GS": null
+  },
+  "trainer_s": 468.1,
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "cost_est_usd": 0.273,
+  "scores": "results/realityscan/scores/arkit_stray_pure_lfs_e29_scores.json"
+ },
+ {
+  "label": "rs_lfs",
+  "capture": "Stray RS piece",
+  "poses": "RealityScan",
+  "frames": "55",
+  "trainer": "LichtFeld mcmc 30k, 960 px",
+  "views": 29,
+  "all29": {
+   "psnr": 12.2091,
+   "psnr_cc": 15.7037,
+   "ssim": 0.6145,
+   "lpips": 0.5605,
+   "coverage": 0.6797
+  },
+  "piece5_arkit_pose": {
+   "psnr": 17.23,
+   "psnr_cc": 18.4008,
+   "ssim": 0.5692,
+   "lpips": 0.3377
+  },
+  "trainer_heldout": {
+   "psnr": 29.606497,
+   "ssim": 0.908648,
+   "lpips": 0.137017,
+   "cc_psnr": null,
+   "num_GS": null
+  },
+  "trainer_s": 475.8,
+  "gpu": "NVIDIA A100-SXM4-40GB",
+  "cost_est_usd": 0.278,
+  "scores": "results/realityscan/scores/rs_stray_pure_lfs_e29_scores.json",
+  "piece5_rs_pose": {
+   "psnr": 18.7501,
+   "psnr_cc": 20.1064,
+   "ssim": 0.7241,
+   "lpips": 0.3047
+  }
+ }
+]

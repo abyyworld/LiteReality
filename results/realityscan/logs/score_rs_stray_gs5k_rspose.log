@@ -1,0 +1,23 @@
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:140: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:140: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:140: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+rs_stray_gs5k_sub5_rspose: PSNR 18.6301 (cc 20.1003), SSIM 0.7279, LPIPS 0.3158, openings 18.8728, objects 21.0146, coverage 0.9352 over 5 views; render 371 s; alignment vs pool {'poses': 'RealityScan eval poses', 'dir': '/Users/abyyworld/LiteReality-scans/rs_stray/eval_rs'}

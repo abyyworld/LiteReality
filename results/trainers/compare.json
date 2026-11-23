@@ -1,0 +1,211 @@
+{
+ "wander": {
+  "desk_to_door": {
+   "eye": [
+    -1.0,
+    -0.1,
+    0.25
+   ],
+   "look": [
+    1.2,
+    0.9,
+    -0.5
+   ],
+   "what": "along the desk toward the door"
+  },
+  "windows": {
+   "eye": [
+    0.4,
+    -0.2,
+    0.3
+   ],
+   "look": [
+    -2.0,
+    0.9,
+    0.4
+   ],
+   "what": "at both windows (Wall2 right, Wall3 left)"
+  },
+  "chairs": {
+   "eye": [
+    0.47,
+    -0.15,
+    0.1
+   ],
+   "look": [
+    -0.33,
+    0.87,
+    -0.85
+   ],
+   "what": "down at the three chairs"
+  }
+ },
+ "eval_rows": [
+  224,
+  1149
+ ],
+ "runs": {
+  "gsplat | ARKit | full walk 188 (v0)": {
+   "dir": "run/atrium_stray_q/v0",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.969
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.971
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.879
+    },
+    {
+     "row": 224,
+     "psnr": 14.97,
+     "lpips": 0.459
+    },
+    {
+     "row": 1149,
+     "psnr": 13.07,
+     "lpips": 0.582
+    }
+   ]
+  },
+  "LichtFeld MRNF30k | ARKit | full walk 188": {
+   "dir": "run/atrium_trainers/lfs_mrnf30k_nocal",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.973
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.962
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.892
+    },
+    {
+     "row": 224,
+     "psnr": 12.87,
+     "lpips": 0.487
+    },
+    {
+     "row": 1149,
+     "psnr": 12.2,
+     "lpips": 0.652
+    }
+   ]
+  },
+  "gsplat | ARKit | RS piece 55": {
+   "dir": "run/realityscan/arkit_stray_gs5k",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.822
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.877
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.918
+    },
+    {
+     "row": 224,
+     "psnr": 18.27,
+     "lpips": 0.381
+    },
+    {
+     "row": 1149,
+     "psnr": 10.45,
+     "lpips": 0.731
+    }
+   ]
+  },
+  "gsplat | RealityScan | RS piece 55": {
+   "dir": "run/realityscan/rs_stray_gs5k",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.791
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.875
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.929
+    },
+    {
+     "row": 224,
+     "psnr": 16.47,
+     "lpips": 0.373
+    },
+    {
+     "row": 1149,
+     "psnr": 10.55,
+     "lpips": 0.74
+    }
+   ]
+  },
+  "LichtFeld MCMC30k | ARKit | RS piece 55": {
+   "dir": "run/realityscan/arkit_stray_pure_lfs",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.776
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.943
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.983
+    },
+    {
+     "row": 224,
+     "psnr": 18.52,
+     "lpips": 0.402
+    },
+    {
+     "row": 1149,
+     "psnr": 11.01,
+     "lpips": 0.714
+    }
+   ]
+  },
+  "LichtFeld MCMC30k | RealityScan | RS piece 55": {
+   "dir": "run/realityscan/rs_stray_pure_lfs",
+   "views": [
+    {
+     "wander": "desk_to_door",
+     "coverage": 0.741
+    },
+    {
+     "wander": "windows",
+     "coverage": 0.946
+    },
+    {
+     "wander": "chairs",
+     "coverage": 0.991
+    },
+    {
+     "row": 224,
+     "psnr": 17.01,
+     "lpips": 0.376
+    },
+    {
+     "row": 1149,
+     "psnr": 10.58,
+     "lpips": 0.737
+    }
+   ]
+  }
+ }
+}

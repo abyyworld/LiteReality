@@ -1,0 +1,30 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-PyiD971kkWh8B5T9YypsJJ
+✓ Created objects.
+├── 🔨 Created mount /Users/abyyworld/LiteReality/deploy/modal/lichtfeld/app.py
+├── 🔨 Created function build.
+├── 🔨 Created function smoke.
+└── 🔨 Created function train.
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+{'code': 0, 'seconds': {'unpacked': 5.73, 'train': 515.21}, 'gpu': 'NVIDIA A100-SXM4-40GB'}
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-PyiD971kkWh8B5T9YypsJJ
+dataset: {'photos': 188, 'held_out': 24, 'points': 799992, 'points_per_photo': 4878, 'dense_photos': 188, 'depth_maps': 0} (53.1 MB); v0 had {'photos': 188, 'held_out': 24, 'points': 799992, 'points_per_photo': 4878, 'dense_photos': 188, 'depth_maps': 164}
+code 0, {'unpacked': 5.73, 'train': 515.21}, gpu NVIDIA A100-SXM4-40GB, files ['eval_step_30000/frame_00000.png', 'eval_step_30000/frame_00008.png', 'eval_step_30000/frame_00016.png', 'eval_step_30000/frame_00024.png', 'eval_step_30000/frame_00032.png', 'eval_step_30000/frame_00040.png', 'eval_step_30000/frame_00048.png', 'eval_step_30000/frame_00056.png', 'eval_step_30000/frame_00064.png', 'eval_step_30000/frame_00072.png', 'eval_step_30000/frame_00080.png', 'eval_step_30000/frame_00088.png', 'eval_step_30000/frame_00096.png', 'eval_step_30000/frame_00104.png', 'eval_step_30000/frame_00112.png', 'eval_step_30000/frame_00120.png', 'eval_step_30000/frame_00128.png', 'eval_step_30000/frame_00136.png', 'eval_step_30000/frame_00144.png', 'eval_step_30000/frame_00152.png', 'eval_step_30000/frame_00160.png', 'eval_step_30000/frame_00168.png', 'eval_step_30000/frame_00176.png', 'eval_step_30000/frame_00184.png', 'eval_step_7000/frame_00000.png', 'eval_step_7000/frame_00008.png', 'eval_step_7000/frame_00016.png', 'eval_step_7000/frame_00024.png', 'eval_step_7000/frame_00032.png', 'eval_step_7000/frame_00040.png']
+{"trainer_s": 515.21, "total_s": 564.1, "cost_est_usd": 0.301, "stats": {"psnr": 26.659012, "ssim": 0.842197, "lpips": 0.193966, "num_GS": 1000000}}
+1,000,000 splats -> /Users/abyyworld/LiteReality/run/atrium_trainers/lfs_mrnf30k_nocal

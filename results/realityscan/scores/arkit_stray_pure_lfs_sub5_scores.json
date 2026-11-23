@@ -1,0 +1,135 @@
+{
+ "variant": "arkit_stray_pure_lfs_sub5",
+ "out_dir": "/Users/abyyworld/LiteReality/run/realityscan/arkit_stray_pure_lfs",
+ "scan": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool",
+ "spz": "raw.spz.bin",
+ "renderer": "playwright-chromium-spark 159.0.8154.6 (SwiftShader, Spark 2.3.1)",
+ "size": [
+  480,
+  360
+ ],
+ "render_scale": 2,
+ "views": 5,
+ "alignment_vs_pool": {
+  "translation_mm": 0.0,
+  "rotation_deg": 0.0
+ },
+ "render_s": 274.7,
+ "summary": {
+  "psnr": 18.845,
+  "psnr_cc": 20.5525,
+  "ssim": 0.691,
+  "lpips": 0.3183,
+  "coverage": 0.9771,
+  "psnr_openings": 21.7653,
+  "psnr_objects": 21.3874
+ },
+ "train": {
+  "frames": 55,
+  "dataset": {
+   "photos": 55,
+   "held_out": 7,
+   "points": 31532,
+   "poses": "arkit",
+   "lens": "original photos, ARKit K"
+  },
+  "options": {
+   "steps": 30000,
+   "strategy": "mcmc",
+   "iterations": 30000,
+   "max_cap": 1000000,
+   "extra": [
+    "--no-calibration-correction"
+   ],
+   "xvfb": false
+  },
+  "train_width": 960,
+  "trainer_s": 468.09,
+  "total_s": 514.6,
+  "gpu": "NVIDIA A100-SXM4-80GB",
+  "trainer_heldout": {
+   "psnr": 28.406534,
+   "ssim": 0.85523,
+   "lpips": 0.168422,
+   "cc_psnr": null,
+   "num_GS": null
+  },
+  "splats": 1000000,
+  "raw_mb": 16.61,
+  "bundle_mb": 16.61,
+  "gpu_s": {
+   "trainer": 468.09,
+   "depth_and_masks": 0.0
+  },
+  "cost_est_usd": 0.514,
+  "corrections": null,
+  "corrected_scene": null
+ },
+ "per_view": [
+  {
+   "row": 32,
+   "image": "frame_00002.jpg",
+   "psnr": 21.3502,
+   "psnr_cc": 21.6845,
+   "ssim": 0.7191,
+   "lpips": 0.3405,
+   "coverage": 0.989,
+   "frac_openings": 0.1439,
+   "psnr_openings": 22.7491,
+   "frac_objects": 0.1097,
+   "psnr_objects": 23.2805
+  },
+  {
+   "row": 116,
+   "image": "frame_00024.jpg",
+   "psnr": 22.9467,
+   "psnr_cc": 23.8583,
+   "ssim": 0.8027,
+   "lpips": 0.1884,
+   "coverage": 0.9961,
+   "frac_openings": 0.2262,
+   "psnr_openings": 21.7962,
+   "frac_objects": 0.5408,
+   "psnr_objects": 24.9513
+  },
+  {
+   "row": 224,
+   "image": "frame_00047.jpg",
+   "psnr": 17.3683,
+   "psnr_cc": 18.8066,
+   "ssim": 0.6036,
+   "lpips": 0.3716,
+   "coverage": 0.9793,
+   "frac_openings": 0.0,
+   "psnr_openings": null,
+   "frac_objects": 0.3413,
+   "psnr_objects": 20.1421
+  },
+  {
+   "row": 308,
+   "image": "frame_00067.jpg",
+   "psnr": 17.8385,
+   "psnr_cc": 22.2639,
+   "ssim": 0.766,
+   "lpips": 0.3094,
+   "coverage": 0.9986,
+   "frac_openings": 0.1664,
+   "psnr_openings": 24.1531,
+   "frac_objects": 0.1393,
+   "psnr_objects": 22.4836
+  },
+  {
+   "row": 981,
+   "image": "frame_00253.jpg",
+   "psnr": 14.7213,
+   "psnr_cc": 16.1491,
+   "ssim": 0.5634,
+   "lpips": 0.3817,
+   "coverage": 0.9227,
+   "frac_openings": 0.2783,
+   "psnr_openings": 18.3628,
+   "frac_objects": 0.2119,
+   "psnr_objects": 16.0795
+  }
+ ]
+}

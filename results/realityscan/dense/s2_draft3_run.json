@@ -1,0 +1,17 @@
+{
+ "tag": "s2_draft3",
+ "src": "inputs/rs_dense_stray",
+ "images": 1095,
+ "xmp_priors_in": 1066,
+ "copy_s": 228.0,
+ "seconds": 492.8,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-i69qhsid\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-i69qhsid\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=25.1561\" -set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.03\" -set \"sfmCameraPriorAccuracyY=0.03\" -set \"sfmCameraPriorAccuracyZ=0.03\" -set \"sfmCameraPriorAccuracyYaw=3\" -set \"sfmCameraPriorAccuracyPitch=3\" -set \"sfmCameraPriorAccuracyRoll=3\" -align  -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-i69qhsid\\out\\colmap\\colmap' 'Z:\\tmp\\rs-i69qhsid\\out\\params.xml' -save 'Z:\\tmp\\rs-i69qhsid\\out\\scene.rsproj' -quit",
+ "focal35": 25.1561,
+ "distortion_model": 2,
+ "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmEnableCameraPrior=true\" -set \"sfmMergeGeoreferencedComponents=true\" -set \"sfmGeoRef=true\" -set \"sfmCameraPriorAccuracyX=0.03\" -set \"sfmCameraPriorAccuracyY=0.03\" -set \"sfmCameraPriorAccuracyZ=0.03\" -set \"sfmCameraPriorAccuracyYaw=3\" -set \"sfmCameraPriorAccuracyPitch=3\" -set \"sfmCameraPriorAccuracyRoll=3\"",
+ "post": "",
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "cpu": 8,
+ "memory_mb": 16384
+}

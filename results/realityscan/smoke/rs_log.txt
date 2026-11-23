@@ -1,0 +1,50 @@
+RealityScan 2.2.0.119430 � 2026 Epic Games, Inc.
+Using 8 CPU cores and process 224.
+Executing command 'set' with parameter 'appQuitOnError=true'
+Executing command 'set' with parameter 'PUS-1-323292754=1'
+Executing command 'set' with parameter 'PUS-1-323301212=1'
+Executing command 'newScene'
+Executing command 'addFolder' with parameter 'Z:\tmp\rs-c_8vglpm\images'
+Added 10 images.
+Executing command 'selectAllImages'
+Executing command 'editInputSelection' with parameter 'inpCalibrationGroup=0'
+Executing command 'editInputSelection' with parameter 'inpLensGroup=0'
+Executing command 'editInputSelection' with parameter 'inpDistortionModel=2'
+Executing command 'editInputSelection' with parameter 'inpCalibration=1'
+Executing command 'editInputSelection' with parameter 'inpFocal=25.0300'
+Executing command 'align'
+Detected 2761 features in image 'frame_00008.jpg'.
+Detected 3253 features in image 'frame_00006.jpg'.
+Detected 3551 features in image 'frame_00010.jpg'.
+Detected 3741 features in image 'frame_00004.jpg'.
+Detected 6365 features in image 'frame_00002.jpg'.
+Detected 7935 features in image 'frame_00000.jpg'.
+Detected 20119 features in image 'frame_00012.jpg'.
+Detected 19867 features in image 'frame_00014.jpg'.
+Detected 12254 features in image 'frame_00016.jpg'.
+Detected 11926 features in image 'frame_00018.jpg'.
+Feature detection completed in 0 seconds.
+Finalizing 1 component
+Reconstruction completed in 2.352 seconds.
+Reconstruction completed in 2.464 seconds.
+Executing command 'selectMaximalComponent'
+Executing command 'exportRegistration' with parameters 'Z:\tmp\rs-c_8vglpm\out\colmap\colmap Z:\tmp\rs-c_8vglpm\out\params.xml'
+Popup suppressed due to silent mode:
+Title: Export Selection
+Message: You have an active selection. Only the selected items will be exported. Would you like to continue?
+Action: Yes
+Hint: You can set the default action by calling a CLI command: -set "PUS-1-323292754=<value from 1 to 3>"
+Yes: 1
+Export All: 2
+Cancel: 3
+Popup suppressed due to silent mode:
+Title: Export COLMAP Using FULL_OPENCV
+Message: The lens distortion model coefficients used during alignment fit only the FULL_OPENCV COLMAP camera model. Some software does not support all FULL_OPENCV parameters. If your target software does not support this camera model, export using undistorted images instead.Continue with current export?
+Action: &Yes
+Hint: You can set the default action by calling a CLI command: -set "PUS-1-323301212=<value from 1 to 2>"
+&Yes: 1
+&No: 2
+Exporting Registration completed in 0.148 seconds.
+Executing command 'save' with parameter 'Z:\tmp\rs-c_8vglpm\out\scene.rsproj'
+Saving Project completed in 0.047 seconds.
+Executing command 'quit'

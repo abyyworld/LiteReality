@@ -1,0 +1,26 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-1Uq0ETVxVVrmZoCUpo4klI
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function deb_info.
+├── 🔨 Created function align.
+├── 🔨 Created function align_to_volume.
+├── 🔨 Created function hold.
+├── 🔨 Created function exe_strings.
+└── 🔨 Created function align_dir.
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+Container terminated due to preemption. Your Function will be restarted with the same input. For more details, see https://modal.com/docs/guide/preemption
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+WARNING: Logs may not be continuous
+WARNING: Logs may not be continuous
+WARNING: Logs may not be continuous
+WARNING: Logs may not be continuous
+WARNING: Logs may not be continuous
+WARNING: Logs may not be continuous

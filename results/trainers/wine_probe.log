@@ -1,0 +1,45 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-nRpPtc9uBF4chEN86LkKlq
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function rs_probe.
+├── 🔨 Created function align.
+└── 🔨 Created function wine_probe.
+$ uname -a; nproc; /usr/lib/wine/wine64 --version; file /usr/lib/wine/wine /usr/lib/wine/wine64 2>/dev/null || ls -la /usr/lib/wine/
+[0] Linux modal 4.19.0-gvisor #1 SMP Sun Jan 10 15:06:54 PST 2016 x86_64 x86_64 x86_64 GNU/Linux
+2
+wine-9.0 (Ubuntu 9.0~repack-4build3)
+total 1338
+drwxr-xr-x 1 root root    111 Nov 23 16:17 .
+drwxr-xr-x 1 root root    158 Nov 23 16:17 ..
+-rwxr-xr-x 1 root root  13796 Apr  1  2024 wine
+-rwxr-xr-x 1 root root  14640 Apr  1  2024 wine64
+-rwxr-xr-x 1 root root    115 Apr  1  2024 wineapploader
+-rwxr-xr-x 1 root root    382 Apr  1  2024 wineserver
+-rwxr-xr-x 1 root root 695244 Apr  1  2024 wineserver32
+-rwxr-xr-x 1 root root 643080 Apr  1  2024 wineserver64
+
+$ timeout 240 /usr/lib/wine/wine64 wineboot --init; echo boot=$?
+[0] boot=0
+wine: created the configuration directory '/tmp/wp'
+wine: failed to open L"C:\\windows\\syswow64\\rundll32.exe": c0000135
+wine: configuration in L"/tmp/wp" has been updated.
+
+$ /usr/lib/wine/wine64 cmd /c echo hello-from-wine64
+[0] hello-from-wine64
+
+$ /usr/lib/wine/wine64 reg add 'HKCU\Software\Probe' /v x /t REG_DWORD /d 2 /f && /usr/lib/wine/wine64 reg query 'HKCU\Software\Probe'
+[0] reg: The operation completed successfully
+
+HKEY_CURRENT_USER\Software\Probe
+    x    REG_DWORD    0x2
+
+
+$ xvfb-run -a /usr/lib/wine/wine64 cmd /c echo with-xvfb
+[0] with-xvfb
+X connection to :99 broken (explicit kill or server shutdown).
+
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-nRpPtc9uBF4chEN86LkKlq

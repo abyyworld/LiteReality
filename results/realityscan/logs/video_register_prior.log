@@ -1,0 +1,125 @@
+/Users/abyyworld/LiteReality/src/litereality_agent/models/capture/sim3.py:221: RuntimeWarning: divide by zero encountered in matmul
+  step = np.linalg.solve(JW.T @ J + 1e-6 * np.eye(5), -JW.T @ r)
+/Users/abyyworld/LiteReality/src/litereality_agent/models/capture/sim3.py:221: RuntimeWarning: overflow encountered in matmul
+  step = np.linalg.solve(JW.T @ J + 1e-6 * np.eye(5), -JW.T @ r)
+/Users/abyyworld/LiteReality/src/litereality_agent/models/capture/sim3.py:221: RuntimeWarning: invalid value encountered in matmul
+  step = np.linalg.solve(JW.T @ J + 1e-6 * np.eye(5), -JW.T @ r)
+priors fit: scale 1.0182, 109 cameras, median residual 0.084 m; ICP: {'residual_m': 0.033030318076836436, 'overlap': 0.045101950354609927, 'inliers': 0.019171099290780143, 'points': 36096} -> {'residual_m': 0.03049694378144245, 'overlap': 0.07859596631205673, 'inliers': 0.03601507092198582, 'points': 36096}; cameras moved median 0.285 m; global search agrees within 0.791 m (inliers 0.45)
+{
+ "registered": 109,
+ "input": 179,
+ "rs_points": 52802,
+ "n_cameras": 109,
+ "cameras": {
+  "107": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 514.3341328565554,
+   "fy": 514.3341328565554,
+   "cx": 406.0075922878968,
+   "cy": 597.1204664764808,
+   "dist": [
+    0.1465208792864129,
+    -0.04666626977851498,
+    0.0,
+    0.0,
+    0.00806219807596858,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "109": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 514.3341328565554,
+   "fy": 514.3341328565554,
+   "cx": 406.0075922878968,
+   "cy": 597.1204664764808,
+   "dist": [
+    0.1465208792864129,
+    -0.04666626977851498,
+    0.0,
+    0.0,
+    0.00806219807596858,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "106": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "fx": 514.3341328565554,
+   "fy": 514.3341328565554,
+   "cx": 406.0075922878968,
+   "cy": 597.1204664764808,
+   "dist": [
+    0.1465208792864129,
+    -0.04666626977851498,
+    0.0,
+    0.0,
+    0.00806219807596858,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "init": "priors",
+ "scale_guess": null,
+ "gravity": null,
+ "scale_rs_to_m": 1.0438545899462857,
+ "vs_mapanything": {
+  "pairs": 109,
+  "as_registered": {
+   "pos_m": {
+    "n": 109,
+    "median": 0.3108536815180492,
+    "mean": 0.3225795377735039,
+    "rmse": 0.3468024578366251,
+    "p90": 0.5136338708945896,
+    "max": 0.7508056614313642
+   },
+   "rot_deg": {
+    "n": 109,
+    "median": 19.565946425761503,
+    "mean": 55.00926755789984,
+    "rmse": 75.1732042055231,
+    "p90": 138.65895406152967,
+    "max": 167.93137778630236
+   }
+  },
+  "after_own_sim3": {
+   "pos_m": {
+    "n": 109,
+    "median": 0.08436669667232156,
+    "mean": 0.10673320556426659,
+    "rmse": 0.132236350873936,
+    "p90": 0.22980380408527437,
+    "max": 0.32788493596848334
+   },
+   "scale_ma_over_rs": 0.975408805552102,
+   "rot_deg": {
+    "n": 109,
+    "median": 19.390234859214583,
+    "mean": 54.089741491377424,
+    "rmse": 77.64524826369268,
+    "p90": 133.15614516558043,
+    "max": 179.70203038009447
+   }
+  },
+  "mapanything_K_fx": 1029.9403474768815
+ },
+ "camera_height_m_after": {
+  "n": 109,
+  "median": 1.5011306016615822,
+  "mean": 1.3298964937914468,
+  "rmse": 1.400208926232181,
+  "p90": 1.7952117832492946,
+  "max": 2.130512019508287
+ }
+}

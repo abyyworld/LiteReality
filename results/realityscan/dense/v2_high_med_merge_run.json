@@ -1,0 +1,17 @@
+{
+ "tag": "v2_high_med_merge",
+ "src": "inputs/rs_dense_video",
+ "images": 1248,
+ "xmp_priors_in": 0,
+ "copy_s": 170.0,
+ "seconds": 683.6,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-_daw8wrx\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-_daw8wrx\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=29.0000\" -set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -align -mergeComponents -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-_daw8wrx\\out\\colmap\\colmap' 'Z:\\tmp\\rs-_daw8wrx\\out\\params.xml' -save 'Z:\\tmp\\rs-_daw8wrx\\out\\scene.rsproj' -quit",
+ "focal35": 29.0,
+ "distortion_model": 2,
+ "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\"",
+ "post": "-mergeComponents",
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "cpu": 8,
+ "memory_mb": 16384
+}

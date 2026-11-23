@@ -1,0 +1,26 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-IifcBpu7aEocIsG76YnBFi
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function deb_info.
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function align.
+├── 🔨 Created function align_to_volume.
+├── 🔨 Created function hold.
+└── 🔨 Created function exe_strings.
+/Users/abyyworld/LiteReality-scans/rs_stray_prior/rs_input/images: 94 MB tar -> runs/stray_prior2
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+$ cd /tmp && timeout 3000 /opt/realityscan/bin/wine --bottle realityscan --wait-children --workdir 'C:/Program Files/Epic Games/RealityScan' RealityScan.exe -headless -silent 'Z:\tmp\rs-a2pn0uf9\out\crash' -set "appQuitOnError=true" -set "PUS-1-323292754=1" -set "PUS-1-323301212=1" -newScene -addFolder 'Z:\tmp\rs-a2pn0uf9\images' -selectAllImages -editInputSelection "inpCalibrationGroup=0" -editInputSelection "inpLensGroup=0" -editInputSelection "inpDistortionModel=2" -set "sfmEnableCameraPrior=true" -set "sfmCameraPriorAccuracyX=0.1" -set "sfmCameraPriorAccuracyY=0.1" -set "sfmCameraPriorAccuracyZ=0.1" -set "sfmCameraPriorAccuracyYaw=5" -set "sfmCameraPriorAccuracyPitch=5" -set "sfmCameraPriorAccuracyRoll=5" -set "sfmMergeGeoreferencedComponents=true" -set "sfmGeoRef=true"  -align -selectMaximalComponent -exportRegistration 'Z:\tmp\rs-a2pn0uf9\out\colmap\colmap' 'Z:\tmp\rs-a2pn0uf9\out\params.xml' -save 'Z:\tmp\rs-a2pn0uf9\out\scene.rsproj' -quit
+[0]  ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()
+ Function: Arch_ValidateAssumptions
+     File: D:\build\OpenUSD\pxr\base\arch\assumptions.cpp
+     Line: 138
+
+/tools/runs/stray_prior2
+[modal-client] 2026-11-23T19:24:15+0000 Timed out waiting for final app logs.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-IifcBpu7aEocIsG76YnBFi

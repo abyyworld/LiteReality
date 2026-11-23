@@ -1,0 +1,10 @@
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+ARKit full walk 637f gsplat (v2) [{'row': 32, 'psnr': 18.53, 'lpips': 0.332}, {'row': 224, 'psnr': 18.25, 'lpips': 0.35}, {'row': 981, 'psnr': 15.69, 'lpips': 0.426}, {'row': 1149, 'psnr': 13.11, 'lpips': 0.539}]
+ARKit poses 55f gsplat [{'row': 32, 'psnr': 21.96, 'lpips': 0.302}, {'row': 224, 'psnr': 18.34, 'lpips': 0.362}, {'row': 981, 'psnr': 14.49, 'lpips': 0.444}, {'row': 1149, 'psnr': 10.08, 'lpips': 0.724}]
+RS poses 55f gsplat [{'row': 32, 'psnr': 18.09, 'lpips': 0.338}, {'row': 224, 'psnr': 16.52, 'lpips': 0.359}, {'row': 981, 'psnr': 13.12, 'lpips': 0.483}, {'row': 1149, 'psnr': 10.19, 'lpips': 0.727}]
+ARKit poses 55f LichtFeld [{'row': 32, 'psnr': 21.35, 'lpips': 0.34}, {'row': 224, 'psnr': 17.51, 'lpips': 0.368}, {'row': 981, 'psnr': 14.6, 'lpips': 0.388}, {'row': 1149, 'psnr': 10.43, 'lpips': 0.74}]
+RS poses 55f LichtFeld [{'row': 32, 'psnr': 18.3, 'lpips': 0.387}, {'row': 224, 'psnr': 16.75, 'lpips': 0.357}, {'row': 981, 'psnr': 13.98, 'lpips': 0.415}, {'row': 1149, 'psnr': 10.11, 'lpips': 0.745}]
+/Users/abyyworld/LiteReality/results/realityscan/compare.jpg

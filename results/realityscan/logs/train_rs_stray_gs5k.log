@@ -1,0 +1,11 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-QuN8eTBmCNd9QkzKpvtFzX
+✓ Created objects.
+{'kind': 'started', 'seconds': 1.5096399860000003, 'images': 55, 'depths': 0, 'gpu': 'NVIDIA H100 80GB HBM3'}
+{'kind': 'snapshot', 'step': 5000, 'seconds': 57.433939617, 'splats': 751532}
+{'kind': 'done', 'seconds': 57.468674859000004, 'stats': {'psnr': 23.714962005615234, 'ssim': 0.8652899265289307, 'lpips': 0.22761192917823792, 'cc_psnr': 26.569982528686523, 'cc_ssim': 0.8734195232391357, 'cc_lpips': 0.21607394516468048, 'ellipse_time': 0.004255362919398716, 'num_GS': 751532}, 'timing': {'launched': 1.58, 'data_loaded': 4.19, 'model_ready': 4.59, 'training': 4.99}}
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-QuN8eTBmCNd9QkzKpvtFzX
+done in 57.468674859000004 s: {'psnr': 23.714962005615234, 'ssim': 0.8652899265289307, 'lpips': 0.22761192917823792, 'cc_psnr': 26.569982528686523, 'cc_ssim': 0.8734195232391357, 'cc_lpips': 0.21607394516468048, 'ellipse_time': 0.004255362919398716, 'num_GS': 751532}
+{"trainer_s": 57.468674859000004, "total_s": 67.5, "cost_est_usd": 0.063, "stats": {"psnr": 23.714962005615234, "ssim": 0.8652899265289307, "lpips": 0.22761192917823792, "cc_psnr": 26.569982528686523, "cc_ssim": 0.8734195232391357, "cc_lpips": 0.21607394516468048, "ellipse_time": 0.004255362919398716, "num_GS": 751532}}

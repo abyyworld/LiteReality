@@ -1,0 +1,26 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-DG62R0frpGGN9uyIw8NNAk
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/realityscan/app.py
+├── 🔨 Created function deb_info.
+├── 🔨 Created function _install_deb.
+├── 🔨 Created function align.
+├── 🔨 Created function align_to_volume.
+├── 🔨 Created function hold.
+└── 🔨 Created function exe_strings.
+/Users/abyyworld/LiteReality-scans/rs_video_prior/rs_input/images: 47 MB tar -> runs/video_prior
+$ timeout 600 /opt/realityscan/bin/wine --bottle realityscan --wait-children reg.exe add 'HKCU\Software\EpicGames.RealityScan\RealityScan\Workspace' /v eosLoginType /t REG_DWORD /d 2 /f
+[0] reg: The operation completed successfully
+
+$ cd /tmp && timeout 3000 /opt/realityscan/bin/wine --bottle realityscan --wait-children --workdir 'C:/Program Files/Epic Games/RealityScan' RealityScan.exe -headless -silent 'Z:\tmp\rs-h7kwq8p2\out\crash' -set "appQuitOnError=true" -set "PUS-1-323292754=1" -set "PUS-1-323301212=1" -newScene -addFolder 'Z:\tmp\rs-h7kwq8p2\images' -selectAllImages -editInputSelection "inpCalibrationGroup=0" -editInputSelection "inpLensGroup=0" -editInputSelection "inpDistortionModel=2" -set "sfmEnableCameraPrior=true" -set "sfmCameraPriorAccuracyX=0.1" -set "sfmCameraPriorAccuracyY=0.1" -set "sfmCameraPriorAccuracyZ=0.1" -set "sfmCameraPriorAccuracyYaw=5" -set "sfmCameraPriorAccuracyPitch=5" -set "sfmCameraPriorAccuracyRoll=5" -set "sfmCameraPriorAccuracyX=0.3" -set "sfmCameraPriorAccuracyY=0.3" -set "sfmCameraPriorAccuracyZ=0.3" -set "sfmCameraPriorAccuracyYaw=10" -set "sfmCameraPriorAccuracyPitch=10" -set "sfmCameraPriorAccuracyRoll=10" -align -selectMaximalComponent -exportRegistration 'Z:\tmp\rs-h7kwq8p2\out\colmap\colmap' 'Z:\tmp\rs-h7kwq8p2\out\params.xml' -save 'Z:\tmp\rs-h7kwq8p2\out\scene.rsproj' -quit
+[0]  ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()
+ Function: Arch_ValidateAssumptions
+     File: D:\build\OpenUSD\pxr\base\arch\assumptions.cpp
+     Line: 138
+
+/tools/runs/video_prior
+[modal-client] 2026-11-23T19:18:01+0000 Timed out waiting for final app logs.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-DG62R0frpGGN9uyIw8NNAk

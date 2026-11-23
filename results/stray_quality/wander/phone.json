@@ -1,0 +1,46 @@
+{
+ "variant": "phone",
+ "out_dir": "/Users/abyyworld/LiteReality/run/atrium_phone/splat",
+ "source": "served bundle, bodies at scene_splat.xml",
+ "views": {
+  "desk_to_door": {
+   "eye": [
+    -1.0,
+    -0.1,
+    0.25
+   ],
+   "look": [
+    1.2,
+    0.9,
+    -0.5
+   ],
+   "what": "along the desk toward the door"
+  },
+  "windows": {
+   "eye": [
+    0.4,
+    -0.2,
+    0.3
+   ],
+   "look": [
+    -2.0,
+    0.9,
+    0.4
+   ],
+   "what": "at both windows (Wall2 right, Wall3 left)"
+  },
+  "chairs": {
+   "eye": [
+    0.47,
+    -0.15,
+    0.1
+   ],
+   "look": [
+    -0.33,
+    0.87,
+    -0.85
+   ],
+   "what": "down at the three chairs"
+  }
+ }
+}

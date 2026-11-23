@@ -1,0 +1,17 @@
+{
+ "tag": "s2_high_med_merge",
+ "src": "inputs/rs_dense_stray",
+ "images": 1095,
+ "xmp_priors_in": 0,
+ "copy_s": 158.7,
+ "seconds": 627.0,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-ylv34go5\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-ylv34go5\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=25.0400\" -set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -align -mergeComponents -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-ylv34go5\\out\\colmap\\colmap' 'Z:\\tmp\\rs-ylv34go5\\out\\params.xml' -save 'Z:\\tmp\\rs-ylv34go5\\out\\scene.rsproj' -quit",
+ "focal35": 25.04,
+ "distortion_model": 2,
+ "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\"",
+ "post": "-mergeComponents",
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "cpu": 8,
+ "memory_mb": 16384
+}

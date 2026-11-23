@@ -1,0 +1,113 @@
+{
+ "run": "/Users/abyyworld/LiteReality-scans/rs_dense_runs/v2_high_low_merge",
+ "tag": "v2_high_low_merge",
+ "input_frames": 1248,
+ "registered_largest": 190,
+ "largest_share": 0.1522,
+ "components_log": [
+  8,
+  8
+ ],
+ "xmp_files": 722,
+ "xmp_components": 0,
+ "xmp_component_sizes": [],
+ "xmp_registered_total": 0,
+ "eval_in_largest": 0,
+ "eval_total": 0,
+ "n_cameras": 190,
+ "points3D": 148503,
+ "cameras": {
+  "52": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "params": [
+    1547.575475,
+    1547.575475,
+    532.668726,
+    962.578597,
+    0.169365,
+    -0.609539,
+    0.0,
+    0.0,
+    0.636527,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "72": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "params": [
+    1547.575475,
+    1547.575475,
+    532.668726,
+    962.578597,
+    0.169365,
+    -0.609539,
+    0.0,
+    0.0,
+    0.636527,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "73": {
+   "model": "FULL_OPENCV",
+   "w": 1080,
+   "h": 1920,
+   "params": [
+    1547.575475,
+    1547.575475,
+    532.668726,
+    962.578597,
+    0.169365,
+    -0.609539,
+    0.0,
+    0.0,
+    0.636527,
+    0.0,
+    0.0,
+    0.0
+   ]
+  }
+ },
+ "seconds": 751.2,
+ "reconstruction_s": [
+  521.96,
+  522.824,
+  149.144,
+  149.523
+ ],
+ "settings": {
+  "focal35": 29.0,
+  "distortion_model": 2,
+  "extra": "-set \"sfmDetectorSensitivity=High\" -set \"sfmPreselectorFeatures=20000\" -set \"sfmMaxFeaturesPerMpx=20000\" -set \"sfmMaxFeaturesPerImage=60000\" -set \"sfmImagesOverlap=Low\"",
+  "post": "-mergeComponents"
+ },
+ "missing_stretches_s": [
+  [
+   0.0,
+   21.71,
+   621
+  ],
+  [
+   23.2433,
+   27.98,
+   135
+  ],
+  [
+   33.915,
+   45.5883,
+   296
+  ],
+  [
+   45.655,
+   45.755,
+   4
+  ]
+ ]
+}

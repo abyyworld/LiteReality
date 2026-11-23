@@ -1,0 +1,599 @@
+{
+ "note": "RealityScan 2.2 (CPU, gVisor, Modal) vs ARKit, atrium. INTERNAL RESEARCH ONLY.",
+ "stray": {
+  "pure_default": {
+   "desc": "400 frames, default alignment settings: largest of 23 components",
+   "registered": 60,
+   "eval_registered": 5,
+   "rs_points": 43964,
+   "n_cameras": 60,
+   "fx_rel_diff_first_camera": -0.0035638621119254976,
+   "pos_err_m": {
+    "n": 60,
+    "median": 0.0111,
+    "mean": 0.0138,
+    "rmse": 0.0164,
+    "p90": 0.0239,
+    "max": 0.048
+   },
+   "rot_err_deg": {
+    "n": 60,
+    "median": 1.8797,
+    "mean": 1.8631,
+    "rmse": 1.8725,
+    "p90": 2.164,
+    "max": 2.2203
+   },
+   "rot_err_rotfit_deg": {
+    "n": 60,
+    "median": 0.9119,
+    "mean": 0.9596,
+    "rmse": 1.0445,
+    "p90": 1.5774,
+    "max": 2.0156
+   },
+   "rpe_1s_rot_deg": {
+    "n": 51,
+    "median": 0.5856,
+    "mean": 0.7832,
+    "rmse": 1.0174,
+    "p90": 2.2645,
+    "max": 2.4337
+   },
+   "rpe_1s_pos_m": {
+    "n": 51,
+    "median": 0.0155,
+    "mean": 0.0227,
+    "rmse": 0.0302,
+    "p90": 0.0663,
+    "max": 0.0766
+   }
+  },
+  "pure_robust": {
+   "desc": "400 frames, Ultra detector + Low overlap + 2nd align with component rematch: largest of 25 components",
+   "registered": 75,
+   "eval_registered": 6,
+   "rs_points": 70396,
+   "n_cameras": 75,
+   "fx_rel_diff_first_camera": -0.001306175368797624,
+   "pos_err_m": {
+    "n": 75,
+    "median": 0.0596,
+    "mean": 0.0753,
+    "rmse": 0.0822,
+    "p90": 0.1169,
+    "max": 0.177
+   },
+   "rot_err_deg": {
+    "n": 75,
+    "median": 11.0036,
+    "mean": 11.623,
+    "rmse": 11.67,
+    "p90": 13.1963,
+    "max": 13.342
+   },
+   "rot_err_rotfit_deg": {
+    "n": 75,
+    "median": 6.277,
+    "mean": 8.2321,
+    "rmse": 8.8306,
+    "p90": 12.8308,
+    "max": 13.5666
+   },
+   "rpe_1s_rot_deg": {
+    "n": 66,
+    "median": 0.68,
+    "mean": 2.7466,
+    "rmse": 6.3535,
+    "p90": 10.372,
+    "max": 19.4701
+   },
+   "rpe_1s_pos_m": {
+    "n": 66,
+    "median": 0.028,
+    "mean": 0.0784,
+    "rmse": 0.1571,
+    "p90": 0.2692,
+    "max": 0.4728
+   }
+  },
+  "prior": {
+   "desc": "400 frames, ARKit pose priors (XMP, +-10 cm / 5 deg, 29 eval frames without) + merge georeferenced components: 22 components merged by priors",
+   "registered": 221,
+   "eval_registered": 18,
+   "rs_points": 87837,
+   "n_cameras": 221,
+   "fx_rel_diff_first_camera": -0.0009429528123716668,
+   "pos_err_m": {
+    "n": 221,
+    "median": 0.0178,
+    "mean": 0.0313,
+    "rmse": 0.1222,
+    "p90": 0.0418,
+    "max": 1.7592
+   },
+   "rot_err_deg": {
+    "n": 221,
+    "median": 3.3167,
+    "mean": 17.3141,
+    "rmse": 30.7836,
+    "p90": 81.0818,
+    "max": 85.5569
+   },
+   "rot_err_rotfit_deg": {
+    "n": 221,
+    "median": 11.3944,
+    "mean": 20.3302,
+    "rmse": 28.8088,
+    "p90": 72.3208,
+    "max": 76.7896
+   },
+   "rpe_1s_rot_deg": {
+    "n": 216,
+    "median": 1.2131,
+    "mean": 13.0839,
+    "rmse": 24.0946,
+    "p90": 36.552,
+    "max": 83.1837
+   },
+   "rpe_1s_pos_m": {
+    "n": 216,
+    "median": 0.0238,
+    "mean": 0.0693,
+    "rmse": 0.1553,
+    "p90": 0.162,
+    "max": 1.7363
+   }
+  },
+  "training_on_pure_default_component": {
+   "what": "same 55 photos (pure-RS default component minus 5 eval frames), same RS sparse seeds (Sim3 into room frame): RS poses+RS lens (undistorted) vs ARKit poses+K (original photos)",
+   "runs": {
+    "rs_stray_pure_gs": {
+     "trainer": "gsplat 1.5.3 (deploy/modal/splat)",
+     "photos": 55,
+     "steps": 6000,
+     "gpu": "NVIDIA H100 80GB HBM3",
+     "trainer_s": 86.9,
+     "cost_est_usd": 0.095,
+     "own_heldout": {
+      "psnr": 23.9031,
+      "ssim": 0.8695,
+      "lpips": 0.2154,
+      "cc_psnr": 27.1317
+     }
+    },
+    "arkit_stray_pure_gs": {
+     "trainer": "gsplat 1.5.3 (deploy/modal/splat)",
+     "photos": 55,
+     "steps": 6000,
+     "gpu": "NVIDIA H100 80GB HBM3",
+     "trainer_s": 71.5,
+     "cost_est_usd": 0.078,
+     "own_heldout": {
+      "psnr": 23.677,
+      "ssim": 0.8201,
+      "lpips": 0.2368,
+      "cc_psnr": 26.2891
+     }
+    },
+    "rs_stray_pure_lfs": {
+     "trainer": "LichtFeld Studio v0.5.4.3 06c9a0406",
+     "photos": 55,
+     "steps": 30000,
+     "gpu": "NVIDIA A100-SXM4-40GB",
+     "trainer_s": 475.8,
+     "cost_est_usd": 0.278,
+     "own_heldout": {
+      "psnr": 29.6065,
+      "ssim": 0.9086,
+      "lpips": 0.137
+     }
+    },
+    "arkit_stray_pure_lfs": {
+     "trainer": "LichtFeld Studio v0.5.4.3 06c9a0406",
+     "photos": 55,
+     "steps": 30000,
+     "gpu": "NVIDIA A100-SXM4-80GB",
+     "trainer_s": 468.1,
+     "cost_est_usd": 0.273,
+     "own_heldout": {
+      "psnr": 28.4065,
+      "ssim": 0.8552,
+      "lpips": 0.1684
+     }
+    }
+   },
+   "eval_5_registered_frames": {
+    "rs_stray_pure_gs_sub5_rspose": {
+     "psnr": 18.6358,
+     "psnr_cc": 20.1193,
+     "ssim": 0.7306,
+     "lpips": 0.3089,
+     "coverage": 0.9386,
+     "psnr_openings": 19.2648,
+     "psnr_objects": 21.5686
+    },
+    "arkit_stray_pure_gs_sub5": {
+     "psnr": 19.16,
+     "psnr_cc": 20.6901,
+     "ssim": 0.7115,
+     "lpips": 0.3186,
+     "coverage": 0.9442,
+     "psnr_openings": 19.5856,
+     "psnr_objects": 20.9484
+    },
+    "rs_stray_pure_gs_sub5": {
+     "psnr": 17.1408,
+     "psnr_cc": 18.2484,
+     "ssim": 0.5432,
+     "lpips": 0.3491,
+     "coverage": 0.9371,
+     "psnr_openings": 17.529,
+     "psnr_objects": 17.8841
+    },
+    "rs_stray_pure_lfs_sub5_rspose": {
+     "psnr": 18.7501,
+     "psnr_cc": 20.1064,
+     "ssim": 0.7241,
+     "lpips": 0.3047,
+     "coverage": 0.9759,
+     "psnr_openings": 21.4583,
+     "psnr_objects": 21.7045
+    },
+    "arkit_stray_pure_lfs_sub5": {
+     "psnr": 18.845,
+     "psnr_cc": 20.5525,
+     "ssim": 0.691,
+     "lpips": 0.3183,
+     "coverage": 0.9771,
+     "psnr_openings": 21.7653,
+     "psnr_objects": 21.3874
+    }
+   },
+   "scoring_note": "_rspose = eval frames at RealityScan's own poses (undistorted photos, RS K); no suffix = ARKit poses (score.py protocol). Only 5 of the 29 eval frames are in the RS component."
+  }
+ },
+ "video": {
+  "pure_default": {
+   "registered": 102,
+   "input": 388,
+   "rs_points": 37832,
+   "n_cameras": 102,
+   "alignment": {
+    "residual_m": 0.0089,
+    "overlap": 0.718,
+    "inliers": 0.543,
+    "ambiguous": true,
+    "margin": 0.035,
+    "scale": 0.63509
+   },
+   "camera_height_m_median": 1.022,
+   "vs_mapanything": {
+    "pairs": 34,
+    "pos_m_median": 1.231,
+    "rot_deg_median": 3.91,
+    "after_own_sim3_pos_m_median": 0.194,
+    "after_own_sim3_rot_deg_median": 12.5
+   }
+  },
+  "pure_robust": {
+   "registered": 96,
+   "input": 388,
+   "rs_points": 55177,
+   "n_cameras": 96,
+   "alignment": {
+    "residual_m": 0.024,
+    "overlap": 0.488,
+    "inliers": 0.278,
+    "ambiguous": true,
+    "margin": 0.124,
+    "scale": 0.6313
+   },
+   "camera_height_m_median": 0.791,
+   "vs_mapanything": {
+    "pairs": 31,
+    "pos_m_median": 1.707,
+    "rot_deg_median": 30.98,
+    "after_own_sim3_pos_m_median": 0.171,
+    "after_own_sim3_rot_deg_median": 11.78
+   }
+  },
+  "prior": {
+   "registered": 109,
+   "input": 179,
+   "rs_points": 52802,
+   "n_cameras": 109,
+   "alignment": {
+    "residual_m": 0.03049694378144245,
+    "overlap": 0.07859596631205673,
+    "inliers": 0.03601507092198582
+   },
+   "camera_height_m_median": 1.501,
+   "vs_mapanything": {
+    "pairs": 109,
+    "pos_m_median": 0.311,
+    "rot_deg_median": 19.57,
+    "after_own_sim3_pos_m_median": 0.084,
+    "after_own_sim3_rot_deg_median": 19.39
+   }
+  },
+  "training": "not run: no RealityScan reconstruction of the video could be registered to the atrium (ambiguous fits, wrong camera heights, mixed per-component focal lengths)"
+ },
+ "final_table": [
+  {
+   "label": "v0",
+   "capture": "Stray walk",
+   "poses": "ARKit",
+   "frames": "188 (full walk)",
+   "trainer": "gsplat 5k, LiDAR/PromptDA dense depth",
+   "views": 29,
+   "all29": {
+    "psnr": 19.1482,
+    "psnr_cc": 21.6469,
+    "ssim": 0.7377,
+    "lpips": 0.2863,
+    "coverage": 0.9592
+   },
+   "piece5_arkit_pose": {
+    "psnr": 17.0799,
+    "psnr_cc": 19.1348,
+    "ssim": 0.637,
+    "lpips": 0.355
+   },
+   "trainer_heldout": {
+    "psnr": 21.690067291259766,
+    "ssim": 0.8215507864952087,
+    "lpips": 0.236454576253891,
+    "cc_psnr": 25.519996643066406,
+    "num_GS": 800000
+   },
+   "trainer_s": 151.6,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "cost_est_usd": 0.191,
+   "scores": "results/stray_quality/v0_scores.json"
+  },
+  {
+   "label": "v2",
+   "capture": "Stray walk",
+   "poses": "ARKit",
+   "frames": "637 (full walk)",
+   "trainer": "gsplat 10k, dense depth (current best)",
+   "views": 29,
+   "all29": {
+    "psnr": 20.1938,
+    "psnr_cc": 22.5328,
+    "ssim": 0.7672,
+    "lpips": 0.2617,
+    "coverage": 0.9775
+   },
+   "piece5_arkit_pose": {
+    "psnr": 18.5981,
+    "psnr_cc": 20.8882,
+    "ssim": 0.6896,
+    "lpips": 0.3035
+   },
+   "trainer_heldout": {
+    "psnr": 22.81696128845215,
+    "ssim": 0.8775545358657837,
+    "lpips": 0.2088334560394287,
+    "cc_psnr": 27.571796417236328,
+    "num_GS": 2228000
+   },
+   "trainer_s": 588.4,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "cost_est_usd": 0.65,
+   "scores": "results/stray_quality/v2_scores.json"
+  },
+  {
+   "label": "lfs_q206",
+   "capture": "Stray walk",
+   "poses": "ARKit",
+   "frames": "188 (full walk)",
+   "trainer": "LichtFeld mcmc 30k",
+   "views": 29,
+   "all29": {
+    "psnr": 18.7355,
+    "psnr_cc": 20.7623,
+    "ssim": 0.7267,
+    "lpips": 0.3323,
+    "coverage": 0.9561
+   },
+   "piece5_arkit_pose": {
+    "psnr": 15.2977,
+    "psnr_cc": 17.7927,
+    "ssim": 0.6341,
+    "lpips": 0.4323
+   },
+   "trainer_heldout": {
+    "psnr": 26.154615,
+    "ssim": 0.838668,
+    "lpips": 0.225569,
+    "cc_psnr": null,
+    "num_GS": 1000000
+   },
+   "trainer_s": 272.9,
+   "gpu": "NVIDIA L40S",
+   "cost_est_usd": 0.299,
+   "scores": "results/trainers/lfs_mcmc30k_nocal_scores.json"
+  },
+  {
+   "label": "arkit_gs5k",
+   "capture": "Stray RS piece",
+   "poses": "ARKit",
+   "frames": "55",
+   "trainer": "gsplat 5k, 960 px, no dense depth",
+   "views": 29,
+   "all29": {
+    "psnr": 12.1935,
+    "psnr_cc": 15.9122,
+    "ssim": 0.6309,
+    "lpips": 0.5736,
+    "coverage": 0.6309
+   },
+   "piece5_arkit_pose": {
+    "psnr": 19.5012,
+    "psnr_cc": 21.0323,
+    "ssim": 0.7167,
+    "lpips": 0.3178
+   },
+   "trainer_heldout": {
+    "psnr": 23.524654388427734,
+    "ssim": 0.8176355957984924,
+    "lpips": 0.24853220582008362,
+    "cc_psnr": 25.996936798095703,
+    "num_GS": 751532
+   },
+   "trainer_s": 57.6,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "cost_est_usd": 0.063,
+   "scores": "results/realityscan/scores/arkit_stray_gs5k_e29_scores.json"
+  },
+  {
+   "label": "rs_gs5k",
+   "capture": "Stray RS piece",
+   "poses": "RealityScan",
+   "frames": "55",
+   "trainer": "gsplat 5k, 960 px, no dense depth",
+   "views": 29,
+   "all29": {
+    "psnr": 11.4414,
+    "psnr_cc": 15.4429,
+    "ssim": 0.5986,
+    "lpips": 0.5832,
+    "coverage": 0.612
+   },
+   "piece5_arkit_pose": {
+    "psnr": 17.2682,
+    "psnr_cc": 18.3665,
+    "ssim": 0.5494,
+    "lpips": 0.3498
+   },
+   "trainer_heldout": {
+    "psnr": 23.714962005615234,
+    "ssim": 0.8652899265289307,
+    "lpips": 0.22761192917823792,
+    "cc_psnr": 26.569982528686523,
+    "num_GS": 751532
+   },
+   "trainer_s": 57.5,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "cost_est_usd": 0.063,
+   "scores": "results/realityscan/scores/rs_stray_gs5k_e29_scores.json",
+   "piece5_rs_pose": {
+    "psnr": 18.6301,
+    "psnr_cc": 20.1003,
+    "ssim": 0.7279,
+    "lpips": 0.3158
+   }
+  },
+  {
+   "label": "rs_gs5k_w1920",
+   "capture": "Stray RS piece",
+   "poses": "RealityScan",
+   "frames": "55",
+   "trainer": "gsplat 5k, 1920 px, no dense depth",
+   "views": 29,
+   "all29": {
+    "psnr": 11.6168,
+    "psnr_cc": 15.3898,
+    "ssim": 0.6009,
+    "lpips": 0.5835,
+    "coverage": 0.6177
+   },
+   "piece5_arkit_pose": {
+    "psnr": 17.5358,
+    "psnr_cc": 18.5075,
+    "ssim": 0.5545,
+    "lpips": 0.3489
+   },
+   "trainer_heldout": {
+    "psnr": 23.819490432739258,
+    "ssim": 0.8664596080780029,
+    "lpips": 0.23843027651309967,
+    "cc_psnr": 26.60409164428711,
+    "num_GS": 751532
+   },
+   "trainer_s": 101.8,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "cost_est_usd": 0.112,
+   "scores": "results/realityscan/scores/rs_stray_gs5k_w1920_e29_scores.json",
+   "piece5_rs_pose": {
+    "psnr": 19.1034,
+    "psnr_cc": 20.4567,
+    "ssim": 0.7305,
+    "lpips": 0.3118
+   }
+  },
+  {
+   "label": "arkit_lfs",
+   "capture": "Stray RS piece",
+   "poses": "ARKit",
+   "frames": "55",
+   "trainer": "LichtFeld mcmc 30k, 960 px",
+   "views": 29,
+   "all29": {
+    "psnr": 12.5688,
+    "psnr_cc": 16.1418,
+    "ssim": 0.6339,
+    "lpips": 0.5599,
+    "coverage": 0.6889
+   },
+   "piece5_arkit_pose": {
+    "psnr": 18.9291,
+    "psnr_cc": 20.6672,
+    "ssim": 0.6998,
+    "lpips": 0.311
+   },
+   "trainer_heldout": {
+    "psnr": 28.406534,
+    "ssim": 0.85523,
+    "lpips": 0.168422,
+    "cc_psnr": null,
+    "num_GS": null
+   },
+   "trainer_s": 468.1,
+   "gpu": "NVIDIA A100-SXM4-80GB",
+   "cost_est_usd": 0.273,
+   "scores": "results/realityscan/scores/arkit_stray_pure_lfs_e29_scores.json"
+  },
+  {
+   "label": "rs_lfs",
+   "capture": "Stray RS piece",
+   "poses": "RealityScan",
+   "frames": "55",
+   "trainer": "LichtFeld mcmc 30k, 960 px",
+   "views": 29,
+   "all29": {
+    "psnr": 12.2091,
+    "psnr_cc": 15.7037,
+    "ssim": 0.6145,
+    "lpips": 0.5605,
+    "coverage": 0.6797
+   },
+   "piece5_arkit_pose": {
+    "psnr": 17.23,
+    "psnr_cc": 18.4008,
+    "ssim": 0.5692,
+    "lpips": 0.3377
+   },
+   "trainer_heldout": {
+    "psnr": 29.606497,
+    "ssim": 0.908648,
+    "lpips": 0.137017,
+    "cc_psnr": null,
+    "num_GS": null
+   },
+   "trainer_s": 475.8,
+   "gpu": "NVIDIA A100-SXM4-40GB",
+   "cost_est_usd": 0.278,
+   "scores": "results/realityscan/scores/rs_stray_pure_lfs_e29_scores.json",
+   "piece5_rs_pose": {
+    "psnr": 18.7501,
+    "psnr_cc": 20.1064,
+    "ssim": 0.7241,
+    "lpips": 0.3047
+   }
+  }
+ ],
+ "final_note": "29-frame means use score.py at ARKit eval poses; piece5 = rows 32,116,224,308,981 (the only eval frames inside RealityScan's 60-frame piece). Video: not trained (no unambiguous Sim(3) to the room)."
+}

@@ -1,0 +1,28 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-R1H049iIjJjKvF6OPUDCmK
+✓ Created objects.
+├── 🔨 Created mount /Users/abyyworld/LiteReality/deploy/modal/lichtfeld/app.py
+├── 🔨 Created function build.
+├── 🔨 Created function smoke.
+└── 🔨 Created function train.
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+{'code': 0, 'seconds': {'unpacked': 5.34, 'train': 475.79}, 'gpu': 'NVIDIA A100-SXM4-40GB'}
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-R1H049iIjJjKvF6OPUDCmK
+LichtFeld v0.5.4.3 06c9a0406: 1000000 splats, {'unpacked': 5.34, 'train': 475.79}, NVIDIA A100-SXM4-40GB
+{"trainer_s": 475.79, "total_s": 514.1, "cost_est_usd": 0.278, "stats": {"psnr": 29.606497, "ssim": 0.908648, "lpips": 0.137017}}

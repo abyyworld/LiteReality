@@ -1,0 +1,30 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-eFqjurLuqxq0wgHQbyxWCr
+✓ Created objects.
+├── 🔨 Created mount /Users/abyyworld/LiteReality/deploy/modal/lichtfeld/app.py
+├── 🔨 Created function build.
+├── 🔨 Created function smoke.
+└── 🔨 Created function train.
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.8.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+{'code': 0, 'seconds': {'unpacked': 5.06, 'train': 169.85}, 'gpu': 'NVIDIA L40S'}
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-eFqjurLuqxq0wgHQbyxWCr
+dataset: {'photos': 188, 'held_out': 24, 'points': 799992, 'points_per_photo': 4878, 'dense_photos': 188, 'depth_maps': 0} (53.1 MB); v0 had {'photos': 188, 'held_out': 24, 'points': 799992, 'points_per_photo': 4878, 'dense_photos': 188, 'depth_maps': 164}
+code 0, {'unpacked': 5.06, 'train': 169.85}, gpu NVIDIA L40S, files ['eval_step_5000/frame_00000.png', 'eval_step_5000/frame_00008.png', 'eval_step_5000/frame_00016.png', 'eval_step_5000/frame_00024.png', 'eval_step_5000/frame_00032.png', 'eval_step_5000/frame_00040.png', 'eval_step_5000/frame_00048.png', 'eval_step_5000/frame_00056.png', 'eval_step_5000/frame_00064.png', 'eval_step_5000/frame_00072.png', 'eval_step_5000/frame_00080.png', 'eval_step_5000/frame_00088.png', 'eval_step_5000/frame_00096.png', 'eval_step_5000/frame_00104.png', 'eval_step_5000/frame_00112.png', 'eval_step_5000/frame_00120.png', 'eval_step_5000/frame_00128.png', 'eval_step_5000/frame_00136.png', 'eval_step_5000/frame_00144.png', 'eval_step_5000/frame_00152.png', 'eval_step_5000/frame_00160.png', 'eval_step_5000/frame_00168.png', 'eval_step_5000/frame_00176.png', 'eval_step_5000/frame_00184.png', 'metrics.csv', 'metrics_report.txt', 'per_image_metrics.json', 'project.licht', 'splat_5000.ply', 'training_config.json']
+{"trainer_s": 169.85, "total_s": 218.3, "cost_est_usd": 0.092, "stats": {}}
+1,000,000 splats -> /Users/abyyworld/LiteReality/run/atrium_trainers/lfs_mcmc5k_nocal

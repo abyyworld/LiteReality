@@ -1,0 +1,17 @@
+{
+ "tag": "s2_def_dm2",
+ "src": "inputs/rs_dense_stray",
+ "images": 1095,
+ "xmp_priors_in": 0,
+ "copy_s": 122.7,
+ "seconds": 431.1,
+ "code": 0,
+ "cmd": "-headless -silent 'Z:\\tmp\\rs-pqum83bq\\out\\crash' -set \"appQuitOnError=true\" -set \"PUS-1-323292754=1\" -set \"PUS-1-323301212=1\" -newScene -addFolder 'Z:\\tmp\\rs-pqum83bq\\images' -selectAllImages -editInputSelection \"inpCalibrationGroup=0\" -editInputSelection \"inpLensGroup=0\" -editInputSelection \"inpDistortionModel=2\" -editInputSelection \"inpCalibration=1\" -editInputSelection \"inpFocal=25.0400\"  -align  -exportXMP -selectMaximalComponent -exportRegistration 'Z:\\tmp\\rs-pqum83bq\\out\\colmap\\colmap' 'Z:\\tmp\\rs-pqum83bq\\out\\params.xml' -save 'Z:\\tmp\\rs-pqum83bq\\out\\scene.rsproj' -quit",
+ "focal35": 25.04,
+ "distortion_model": 2,
+ "extra": "",
+ "post": "",
+ "stdout": " ArchWarn: ARCH_CACHE_LINE_SIZE != Arch_ObtainCacheLineSize()\n Function: Arch_ValidateAssumptions\n     File: D:\\build\\OpenUSD\\pxr\\base\\arch\\assumptions.cpp\n     Line: 138\n",
+ "cpu": 8,
+ "memory_mb": 16384
+}
