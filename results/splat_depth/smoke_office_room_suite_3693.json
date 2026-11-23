@@ -1,0 +1,38 @@
+{
+ "office_room": {
+  "frames": 59,
+  "dense": 59,
+  "seconds": 17.4,
+  "stats": {
+   "frames": 59,
+   "cached": 0,
+   "refined": 59,
+   "failed": 0,
+   "seconds": 17.36,
+   "gpu_ms_median": 658.4
+  },
+  "median_abs_cm": 1.8,
+  "p90_abs_cm": 7.6,
+  "median_rel_pct": 0.9,
+  "median_abs_cm_conf2": 1.5,
+  "frac_within_5cm_or_5pct": 0.929
+ },
+ "suite_3693": {
+  "frames": 63,
+  "dense": 63,
+  "seconds": 16.7,
+  "stats": {
+   "frames": 63,
+   "cached": 0,
+   "refined": 63,
+   "failed": 0,
+   "seconds": 16.71,
+   "gpu_ms_median": 656.9
+  },
+  "median_abs_cm": 1.9,
+  "p90_abs_cm": 5.6,
+  "median_rel_pct": 1.73,
+  "median_abs_cm_conf2": 1.8,
+  "frac_within_5cm_or_5pct": 0.944
+ }
+}

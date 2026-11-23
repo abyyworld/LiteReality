@@ -1,0 +1,78 @@
+{
+ "tea_room/faint_only": {
+  "input": 800000,
+  "faint": 137014,
+  "outside": 0,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 662986,
+  "seconds": 0.002
+ },
+ "tea_room/outside_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 16183,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 783817,
+  "seconds": 0.114
+ },
+ "tea_room/carve_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 0,
+  "carved": 31270,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 768730,
+  "seconds": 1.778
+ },
+ "tea_room/carve3_outside": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 16183,
+  "carved": 23346,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 760471,
+  "seconds": 1.867
+ },
+ "office_room/faint_only": {
+  "input": 800000,
+  "faint": 155156,
+  "outside": 0,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 644844,
+  "seconds": 0.001
+ },
+ "office_room/outside_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 19590,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 780410,
+  "seconds": 0.105
+ },
+ "office_room/carve_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 0,
+  "carved": 55103,
+  "carve_frames": 51,
+  "held_out_frames": 8,
+  "kept": 744897,
+  "seconds": 2.357
+ },
+ "office_room/carve3_outside": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 19590,
+  "carved": 51571,
+  "carve_frames": 51,
+  "held_out_frames": 8,
+  "kept": 728839,
+  "seconds": 2.175
+ }
+}

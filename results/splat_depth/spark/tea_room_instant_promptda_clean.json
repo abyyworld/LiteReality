@@ -1,0 +1,199 @@
+{
+ "scan": "/Users/abyyworld/LiteReality-Agent/example-scans/tea_room",
+ "scene": "splat",
+ "views": 8,
+ "size": [
+  320,
+  240
+ ],
+ "render_scale": 2,
+ "renderer": "playwright-chromium-spark",
+ "renderer_version": "159.0.8154.6",
+ "object_mask": {
+  "depth": 8,
+  "box": 0
+ },
+ "sources": {
+  "recorded": true,
+  "frames": {
+   "training": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    49,
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    57,
+    58,
+    59,
+    60,
+    61
+   ]
+  },
+  "notes": []
+ },
+ "views_seen": {
+  "seen": 0,
+  "unseen": 8,
+  "unknown": 0
+ },
+ "summary": {
+  "psnr": {
+   "mean": 18.9279,
+   "median": 19.3942,
+   "n": 8
+  },
+  "ssim": {
+   "mean": 0.6998,
+   "median": 0.6789,
+   "n": 8
+  },
+  "psnr_gain": {
+   "mean": 19.5116,
+   "median": 19.407,
+   "n": 8
+  },
+  "psnr_baseline": {
+   "mean": 13.5038,
+   "median": 13.1852,
+   "n": 8
+  },
+  "psnr_static": {
+   "mean": 19.8877,
+   "median": 20.327,
+   "n": 8
+  },
+  "ssim_static": {
+   "mean": 0.726,
+   "median": 0.6907,
+   "n": 8
+  },
+  "psnr_objects": {
+   "mean": 17.8339,
+   "median": 18.2254,
+   "n": 7
+  },
+  "ssim_objects": {
+   "mean": 0.6022,
+   "median": 0.612,
+   "n": 7
+  },
+  "coverage": {
+   "mean": 0.8558,
+   "median": 0.9914,
+   "n": 8
+  }
+ },
+ "splits": {
+  "seen": null,
+  "unseen": {
+   "psnr": {
+    "mean": 18.9279,
+    "median": 19.3942,
+    "n": 8
+   },
+   "ssim": {
+    "mean": 0.6998,
+    "median": 0.6789,
+    "n": 8
+   },
+   "psnr_gain": {
+    "mean": 19.5116,
+    "median": 19.407,
+    "n": 8
+   },
+   "psnr_baseline": {
+    "mean": 13.5038,
+    "median": 13.1852,
+    "n": 8
+   },
+   "psnr_static": {
+    "mean": 19.8877,
+    "median": 20.327,
+    "n": 8
+   },
+   "ssim_static": {
+    "mean": 0.726,
+    "median": 0.6907,
+    "n": 8
+   },
+   "psnr_objects": {
+    "mean": 17.8339,
+    "median": 18.2254,
+    "n": 7
+   },
+   "ssim_objects": {
+    "mean": 0.6022,
+    "median": 0.612,
+    "n": 7
+   },
+   "coverage": {
+    "mean": 0.8558,
+    "median": 0.9914,
+    "n": 8
+   }
+  }
+ },
+ "seconds": {
+  "render": 426.26,
+  "total": 428.25
+ },
+ "definitions": {
+  "views": "every capture frame with a pose and a photo (frame_*.json + frame_*.jpg)",
+  "render": "geometry.build_scene_assets glb drawn by three.js 0.168 in headless Chromium (SwiftShader) with the room call's lights, tone mapping and colour space, from the frame's own pose and intrinsics, at 2x and box-filtered to the metric size, over the call's background colour; bodies at their authored (scanned) pose, as the call shows them before its first state frame (the settle moves them by millimetres; see the physics audit's settle_shift)",
+  "psnr": "10 log10(1 / MSE) over RGB in [0, 1], photo vs render, both at the metric size",
+  "ssim": "mean SSIM on luma (Gaussian window sigma 1.5, K1 0.01, K2 0.03)",
+  "psnr_gain": "PSNR after scaling the render by its least-squares gain to the photo (removes the camera's per-frame exposure)",
+  "psnr_baseline": "PSNR of the photo against a flat image of its own mean colour",
+  "objects": "pixels whose LiDAR point (the frame's own depth map, medium or high confidence) lies within 3 cm of a RoomPlan object box and not within 3 cm of the floor or ceiling or 5 cm of a wall plane: the object as the camera saw it, occlusion included; where a pixel has no depth, inside a projected box silhouette (object_mask counts the views that had depth). Furniture RoomPlan did not box counts as static",
+  "static": "every pixel that is no object and no door/window (a door/window box's silhouette, unless the depth puts something in front of it): walls, floor, ceiling",
+  "coverage": "fraction of the render the room drew (the rest is background: outside the room, or a surface the stage lacks)",
+  "seen": "whether the stage's build read that frame (quick room: the texture and colour frames its deterministic selectors pick; objects stage: also its crop views); None when the build kept no record (the full pipeline)",
+  "splits": "the as-built numbers over the views the build read (seen) and those it did not",
+  "holdout": "k-fold held-out views (quick room): the capture's photo frames in k folds (interleaved: every k-th frame; block: contiguous stretches of the trajectory); per fold the quick room is rebuilt with the same options from the capture with that fold's frames removed, and only that fold's views are scored against it; gap = as-built mean - held-out mean over the same views"
+ },
+ "contact_sheet": "contact_sheet.jpg"
+}

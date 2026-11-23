@@ -58,6 +58,8 @@ const sessionStorage = { setItem() {}, getItem() { return null; } };
 const $ = () => null;
 const toast = (m) => toasts.push(m);
 const showStageTag = () => {};
+const applySplatView = () => {};
+const retrySplat = () => {};
 const console = { warn() {}, info() {}, log() {} };
 const keys = new Set();
 let capture = null, joined = true, welcomed = true, grab = null, sceneReady = false, bodies = new Map();
@@ -287,3 +289,40 @@ def test_a_reconnect_into_a_room_moved_meanwhile_goes_in_as_another_room(run: di
     assert run["rejoinV"] == "f1"
     assert run["rejoinSpawn"] is True and run["rejoinToasts"] == ["Now in Loft"]
     assert run["rejoinSplat"] == {"room": False, "v": None, "wallShown": True, "bodies": []}
+
+
+VIEW_HARNESS = r"""
+const out = {};
+let eyeY = 1.6;
+const vec = (x, y, z) => ({ x, y, z, distanceTo(o) { return Math.hypot(this.x - o.x, this.y - o.y, this.z - o.z); } });
+const walker = { pos: vec(0, 1.6, 0), yaw: 0, pitch: 0, spawnFrom: null };
+const mjToThree = (x, y, z, o) => { o.x = x; o.y = z; o.z = -y; return o; };   // MuJoCo z-up -> three y-up
+const clampWalker = () => {};
+__FUNCTIONS__
+const view = { pos: [2, 3, 0.1], yaw: 1.2, pitch: -0.9 };
+applySplatView({ view });
+out.noSpawn = [walker.pos.x, walker.yaw];                 // never spawned: stays put
+walker.spawnFrom = vec(0, 1.6, 0);
+applySplatView({ view: { pos: [2, 3], yaw: 1, pitch: 0 } });
+out.badView = walker.spawnFrom !== null && walker.pos.x === 0;   // malformed: ignored, still armed
+applySplatView({ view });
+out.moved = { near: Math.hypot(walker.pos.x - 2, -walker.pos.z - 3) <= 0.31,
+              y: walker.pos.y, yaw: walker.yaw, pitch: walker.pitch, once: walker.spawnFrom === null };
+walker.spawnFrom = vec(5, 1.6, 5);                        // spawned, then walked away
+applySplatView({ view });
+out.walked = walker.spawnFrom !== null;
+process.stdout.write(JSON.stringify(out));
+"""
+
+
+def test_a_newcomer_starts_at_the_scans_best_view_until_they_walk(tmp_path) -> None:
+    functions = "\n".join([_line("const clamp = "), _line("const finite = "),
+                           _function("applySplatView")])
+    path = tmp_path / "view.cjs"
+    path.write_text(VIEW_HARNESS.replace("__FUNCTIONS__", functions), "utf-8")
+    done = subprocess.run([NODE, str(path)], capture_output=True, text=True, timeout=60)
+    assert done.returncode == 0, done.stderr
+    got = json.loads(done.stdout)
+    assert got["noSpawn"] == [0, 0] and got["badView"] is True
+    assert got["moved"] == {"near": True, "y": 1.6, "yaw": 1.2, "pitch": -0.35, "once": True}
+    assert got["walked"] is True

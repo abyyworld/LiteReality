@@ -10,11 +10,11 @@ deploying or redeploying it never touches the pipeline's models.
 `train(dataset_tar, options)` is a GENERATOR (call it with ``.remote_gen``). The dataset is the
 tar `litereality_agent.models.splat.dataset.build(...).tar()` writes: a COLMAP model of the scan
 in the room's frame, made from ARKit's poses and the LiDAR (no COLMAP run). It runs gsplat
-1.5.3's `examples/simple_trainer.py` unchanged (MCMC densification, LiDAR depth loss, a bilateral
-grid per photo for the phone's exposure changes, antialiased rasterisation, the world NOT
-renormalised so the splats stay in metres in the room's frame) and yields, in order:
+1.5.3's `examples/simple_trainer.py` (MCMC densification, LiDAR depth loss, a bilateral grid per
+photo for the phone's exposure changes, antialiased rasterisation, the world NOT renormalised so the
+splats stay in metres in the room's frame) and yields, in order:
 
-    {"kind": "started", "seconds", "images", "gpu"}
+    {"kind": "started", "seconds", "images", "depths", "gpu"}   # depths: dense maps in the tar
     {"kind": "snapshot", "step", "seconds", "splats", "spz"}     # at each of options["snapshots"]
     {"kind": "done", "seconds", "stats"}                          # held-out PSNR / SSIM / LPIPS
     {"kind": "error", "error", "log"}                             # instead of "done"
@@ -23,6 +23,14 @@ Each snapshot is an SPZ file (models/splat/spz.py) that Spark draws as it is. Th
 instant LiDAR room until the first one, then sharpens with each. tea_room on an H100, 1250 steps of
 4 photos (results/tea_room/splat_speed.md): first snapshot ~22 s and the final one ~46 s after the
 container starts (33 s of training), held-out PSNR 20.2 dB; ~$0.10 a room.
+
+Dense depth (all off by default, so an unflagged run is gsplat's trainer as released): with
+options["dense_depth"] the tar also carries `depths/<image name>.png` (uint16 mm at the training
+resolution, 0 = none; PromptDA's refinement of the LiDAR) and the trainer adds an L1 loss of its
+rendered expected depth against it (weight "dense_depth_lambda"); options["normal_lambda"] > 0
+adds DN-Splatter's normal loss (rendered vs sensor depth normals). The trainer learns both from a
+small patch applied at image build (patch_trainer.py, litereality_dense.py beside this file);
+evaluation is untouched, so held-out PSNR / SSIM / LPIPS stay comparable with plain runs.
 
 `train(b"")` (an empty dataset) only boots a container and yields one "done" with "warm": True:
 sent when the scan arrives, it hides the GPU container's cold start behind the instant room.
@@ -53,6 +61,12 @@ GSPLAT_INDEX = "https://docs.gsplat.studio/whl/pt24cu124"
 GSPLAT_REPO = "https://github.com/nerfstudio-project/gsplat"
 GSPLAT_DIR = Path("/opt/gsplat")
 TRAINER = GSPLAT_DIR / "examples" / "simple_trainer.py"
+# The dense-depth patch and its helpers, read only on the deploying machine (`add_local_file` is
+# lazy): inside a container this module is /root/app.py alone, where these paths do not exist.
+HERE = Path(__file__).resolve().parent
+PATCH_LOCAL = HERE / "patch_trainer.py"
+DENSE_LOCAL = HERE / "litereality_dense.py"
+PATCH = "/opt/litereality/patch_trainer.py"
 GPU = "H100"
 MAX_CONTAINERS = 2
 TIMEOUT_SECONDS = 1800
@@ -81,6 +95,12 @@ DEFAULTS = {
     # are gsplat's, tuned for SCHEDULE_STEPS; True scales them to `steps`, so a short run still
     # reaches the splat budget and SH degree 3 at the same fraction of its run.
     "scale_schedule": True,
+    # Dense sensor depth (depths/ in the dataset, models/splat/promptda.py): an L1 of the rendered
+    # expected depth against it on every pixel both have, beside the sparse LiDAR loss above.
+    "dense_depth": False,
+    "dense_depth_lambda": 0.1,
+    # DN-Splatter's normal loss against the dense depth's normals; 0 = off. Needs depths/ too.
+    "normal_lambda": 0.0,
     "trainer_args": [],           # any further simple_trainer.py flags, as given
 }
 SCHEDULE_STEPS = 7000
@@ -117,6 +137,12 @@ image = (
         " L(net_type='alex')\"",
         gpu=GPU,
     )
+    # After the GPU builds above, so changing the patch rebuilds only these layers. The patch
+    # checks its anchors: a gsplat that does not match fails the build, not the training.
+    .add_local_file(DENSE_LOCAL, str(TRAINER.parent / "litereality_dense.py"), copy=True)
+    .add_local_file(PATCH_LOCAL, PATCH, copy=True)
+    .run_commands(f"python {PATCH} {TRAINER}",
+                  f"cd {TRAINER.parent} && python -c 'import litereality_dense'")
     .add_local_python_source("litereality_agent")
 )
 app = modal.App(APP_NAME)
@@ -131,7 +157,19 @@ def _options(given: dict | None) -> dict:
     out["steps"] = int(out["steps"])
     out["snapshots"] = sorted({int(s) for s in out["snapshots"] if 0 < int(s) <= out["steps"]}
                               | {out["steps"]})
+    if not isinstance(out["dense_depth"], bool):
+        raise ValueError(f"dense_depth must be true or false, not {out['dense_depth']!r}")
+    for key in ("dense_depth_lambda", "normal_lambda"):
+        value = out[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value < 1e3:
+            raise ValueError(f"{key} must be a number from 0, not {value!r}")
+        out[key] = float(value)
     return out
+
+
+def _wants_dense(opt: dict) -> bool:
+    """Whether the run needs the dataset's dense depth maps (depths/)."""
+    return bool(opt["dense_depth"]) or opt["normal_lambda"] > 0
 
 
 def _command(data_dir: Path, result_dir: Path, opt: dict) -> list[str]:
@@ -162,6 +200,10 @@ def _command(data_dir: Path, result_dir: Path, opt: dict) -> list[str]:
         cmd += ["--strategy.refine-start-iter", str(max(1, round(500 * f))),
                 "--strategy.refine-every", str(max(1, round(100 * f))),
                 "--sh-degree-interval", str(max(1, round(1000 * f)))]
+    if opt["dense_depth"]:
+        cmd += ["--dense-depth", "--dense-depth-lambda", str(opt["dense_depth_lambda"])]
+    if opt["normal_lambda"] > 0:
+        cmd += ["--normal-lambda", str(opt["normal_lambda"])]
     cmd += ["--tb-every", "0"]                    # no tensorboard: a GPU sync every 100 steps
     return cmd + [str(a) for a in opt["trainer_args"]]
 
@@ -224,6 +266,9 @@ def train(dataset_tar: bytes, options: dict | None = None):
                     raise ValueError(f"unexpected entry in the dataset: {member.name}")
             tf.extractall(data_dir)
         images = len(list((data_dir / "images").glob("*")))
+        depths = len(list((data_dir / "depths").glob("*.png")))
+        if _wants_dense(opt) and not depths:
+            raise ValueError("dense_depth / normal_lambda need depths/ in the dataset; it has none")
         with open(log_path, "w") as log:
             proc = subprocess.Popen(_command(data_dir, result_dir, opt), cwd=TRAINER.parent,
                                     stdout=log, stderr=subprocess.STDOUT,
@@ -232,7 +277,7 @@ def train(dataset_tar: bytes, options: dict | None = None):
             import torch
 
             yield {"kind": "started", "seconds": time.perf_counter() - t0, "images": images,
-                   "gpu": torch.cuda.get_device_name(0)}
+                   "depths": depths, "gpu": torch.cuda.get_device_name(0)}
             pending = list(opt["snapshots"])
             marks = dict(MARKS)
             timing: dict[str, float] = {"launched": round(time.perf_counter() - t0, 2)}

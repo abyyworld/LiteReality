@@ -1,0 +1,5 @@
+== tea_room base_v2_r2 23:36:59
+  instant: 639,815 splats, 5 objects cut out, 6.25 MB, at 8.7 s
+  trainer up on NVIDIA H100 80GB HBM3 at 15.23 s
+  done in 49.5 s; report: run/tea_room/splat_abl_base_v2_r2/report.json
+== tea_room rec_v2_r2 23:37:50

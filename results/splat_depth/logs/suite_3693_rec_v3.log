@@ -1,0 +1,11 @@
+splatroom  suite_3693: /Users/abyyworld/LiteReality-scans/suite_3693 -> run/suite_3693/splat_abl_rec_v3  (physics: run/suite_3693/objects/scene.xml)
+Traceback (most recent call last):
+  File "/Users/abyyworld/LiteReality/.venv/bin/litereality", line 10, in <module>
+    sys.exit(main())
+  File "/Users/abyyworld/LiteReality/src/litereality_agent/cli.py", line 1330, in main
+    return args.handler(args)
+  File "/Users/abyyworld/LiteReality/src/litereality_agent/cli.py", line 800, in _splatroom
+    report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,
+  File "/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/__init__.py", line 204, in build
+    first_view = views.best_view(frames)
+UnboundLocalError: local variable 'views' referenced before assignment

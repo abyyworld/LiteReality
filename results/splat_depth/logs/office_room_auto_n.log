@@ -1,0 +1,76 @@
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: divide by zero encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: overflow encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: invalid value encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: divide by zero encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: overflow encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: invalid value encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: divide by zero encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: overflow encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: invalid value encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:300: RuntimeWarning: divide by zero encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:300: RuntimeWarning: overflow encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:300: RuntimeWarning: invalid value encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:315: RuntimeWarning: divide by zero encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:315: RuntimeWarning: overflow encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:315: RuntimeWarning: invalid value encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/dataset.py:158: RuntimeWarning: divide by zero encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/dataset.py:158: RuntimeWarning: overflow encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/Users/abyyworld/LiteReality/src/litereality_agent/models/splat/dataset.py:158: RuntimeWarning: invalid value encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:509: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:157: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: divide by zero encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: overflow encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/splatroom/split.py:555: RuntimeWarning: invalid value encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+splatroom  office_room: /Users/abyyworld/LiteReality-Agent/example-scans/office_room -> run/office_room/splat_abl_auto_n  (physics: run/office_room/objects/scene.xml)
+  instant: 1,230,443 splats, 6 objects cut out, 12.95 MB, at 16.63 s
+  training set: 59 photos, 65.9 MB; training on Modal (gsplat-modal)
+  trainer up on NVIDIA H100 80GB HBM3 at 35.24 s
+  trained step 400: 800,000 splats, 6 objects cut out, 13.54 MB, at 82.32 s
+  trained step 800: 800,000 splats, 6 objects cut out, 13.98 MB, at 100.23 s
+  trained step 1250: 800,000 splats, 6 objects cut out, 14.28 MB, at 119.77 s
+  held-out photos: PSNR 19.20 dB, SSIM 0.658, LPIPS 0.346
+  done in 119.78 s; report: run/office_room/splat_abl_auto_n/report.json
+  walk it: uv run litereality roomcall run/office_room/objects/scene.xml --splat run/office_room/splat_abl_auto_n

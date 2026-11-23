@@ -55,6 +55,24 @@ function place(view) {
   camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
 }
 
+// Whether the canvas holds anything drawn, read through a small 2D canvas (a WebGL readPixels
+// would collide with the pixel-pack buffer Spark keeps bound for its own readback).
+const probe = document.createElement('canvas');
+probe.width = 64; probe.height = 48;
+const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+function drawn() {
+  probeCtx.clearRect(0, 0, probe.width, probe.height);
+  probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
+  const px = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+  for (let k = 3; k < px.length; k += 4) if (px[k]) return true;
+  return false;
+}
+// Right after a load Spark draws nothing until its first sort comes back from its worker: those
+// renders return in milliseconds, and six of them pass before it does. The first view used to be
+// read then, blank. So a view whose usual renders left nothing keeps rendering, up to this long
+// (a view that truly sees no splat costs only this wait).
+const DRAW_WAIT_MS = 60000;
+
 window.renderViews = async (job) => {
   await load(job.glb);
   renderer.setSize(job.width, job.height, false);
@@ -63,6 +81,19 @@ window.renderViews = async (job) => {
     place(view);
     for (let i = 0; i < 6; i++) { renderer.render(scene, camera); await frame(); }
     renderer.render(scene, camera);
+    if (!drawn()) {
+      const until = performance.now() + DRAW_WAIT_MS;
+      while (performance.now() < until) {
+        await frame();
+        renderer.render(scene, camera);
+        if (drawn()) {
+          // Drawn once, with the sort it had; once more, sorted for this very view.
+          await frame();
+          renderer.render(scene, camera);
+          break;
+        }
+      }
+    }
     out.push(canvas.toDataURL('image/png'));
   }
   return out;

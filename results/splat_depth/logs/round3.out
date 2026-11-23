@@ -1,0 +1,51 @@
+== tea_room rec_v2 23:18:07
+  instant: 639,815 splats, 5 objects cut out, 6.25 MB, at 8.5 s
+dense depth: 62/62 frames refined on Modal in 27.2 s (8 MB up, 659 ms a frame on the GPU), 0 cached
+  instant: 883,857 splats, 5 objects cut out, 9.13 MB, at 40.97 s
+  trainer up on NVIDIA H100 80GB HBM3 at 53.38 s
+  held-out photos: PSNR 20.54 dB, SSIM 0.779, LPIPS 0.361
+  done in 118.12 s; report: run/tea_room/splat_abl_rec_v2/report.json
+== tea_room base_v2 23:20:06
+  instant: 639,815 splats, 5 objects cut out, 6.25 MB, at 8.16 s
+  trainer up on NVIDIA H100 80GB HBM3 at 13.02 s
+  held-out photos: PSNR 20.24 dB, SSIM 0.790, LPIPS 0.362
+  done in 61.62 s; report: run/tea_room/splat_abl_base_v2/report.json
+== tea_room fullmaps_v2 23:21:08
+  instant: 883,857 splats, 5 objects cut out, 9.13 MB, at 12.07 s
+  trainer up on NVIDIA H100 80GB HBM3 at 24.14 s
+  held-out photos: PSNR 20.48 dB, SSIM 0.779, LPIPS 0.361
+  done in 94.1 s; report: run/tea_room/splat_abl_fullmaps_v2/report.json
+== office_room rec_v2 23:22:43
+  instant: 900,688 splats, 6 objects cut out, 8.66 MB, at 8.2 s
+dense depth: 59/59 frames refined on Modal in 26.5 s (15 MB up, 658 ms a frame on the GPU), 0 cached
+  instant: 1,230,466 splats, 6 objects cut out, 12.95 MB, at 39.12 s
+  trainer up on NVIDIA H100 80GB HBM3 at 50.81 s
+  held-out photos: PSNR 19.15 dB, SSIM 0.659, LPIPS 0.350
+  done in 122.8 s; report: run/office_room/splat_abl_rec_v2/report.json
+== office_room base_v2 23:24:47
+  instant: 900,688 splats, 6 objects cut out, 8.66 MB, at 8.09 s
+  trainer up on NVIDIA H100 80GB HBM3 at 14.88 s
+  held-out photos: PSNR 19.18 dB, SSIM 0.661, LPIPS 0.382
+  done in 67.41 s; report: run/office_room/splat_abl_base_v2/report.json
+== office_room fullmaps_v2 23:25:55
+  instant: 1,230,466 splats, 6 objects cut out, 12.95 MB, at 12.95 s
+  trainer up on NVIDIA H100 80GB HBM3 at 25.27 s
+  held-out photos: PSNR 19.16 dB, SSIM 0.660, LPIPS 0.350
+  done in 92.09 s; report: run/office_room/splat_abl_fullmaps_v2/report.json
+== suite_3693 rec_v2 23:27:27
+  instant: 765,858 splats, 4 objects cut out, 7.31 MB, at 8.17 s
+dense depth: 63/63 frames refined on Modal in 26.1 s (9 MB up, 639 ms a frame on the GPU), 0 cached
+  instant: 938,424 splats, 4 objects cut out, 9.58 MB, at 36.97 s
+  trainer up on NVIDIA H100 80GB HBM3 at 47.4 s
+  held-out photos: PSNR 19.15 dB, SSIM 0.771, LPIPS 0.461
+  done in 112.97 s; report: run/suite_3693/splat_abl_rec_v2/report.json
+== suite_3693 base_v2 23:29:21
+  instant: 765,858 splats, 4 objects cut out, 7.31 MB, at 8.12 s
+  trainer up on NVIDIA H100 80GB HBM3 at 13.59 s
+  held-out photos: PSNR 18.37 dB, SSIM 0.762, LPIPS 0.484
+  done in 58.02 s; report: run/suite_3693/splat_abl_base_v2/report.json
+== suite_3693 fullmaps_v2 23:30:20
+  instant: 938,424 splats, 4 objects cut out, 9.58 MB, at 11.24 s
+  trainer up on NVIDIA H100 80GB HBM3 at 23.01 s
+  held-out photos: PSNR 19.02 dB, SSIM 0.771, LPIPS 0.463
+  done in 82.67 s; report: run/suite_3693/splat_abl_fullmaps_v2/report.json

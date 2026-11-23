@@ -14,8 +14,27 @@ What it writes, in ``run/<scan>/splat/`` (`DEFAULT_DIR`):
     room-<hash>.spz            files are named by their content, so a browser caches them forever
     body-<name>-<hash>.spz     and a bundle never points at a half-written file
     report.json                timings, splat counts and the trainer's held-out PSNR/SSIM/LPIPS
+    raw.spz.bin                the latest trained snapshot, uncut and uncleaned (`SavedTrainer`)
+    raw.clean.spz.bin          the same after `clean` (with ``clean=True``): what was cut and served
+
+Two optional improvements for the views the scan barely saw (both off by default):
+
+    dense depth  a `refiner` (PromptDA on Modal, `models.splat.promptda`; cached in the scan's
+                 ``depth_dense/``) turns each 256 x 192 LiDAR map into a 960-wide metric map. The
+                 instant room is built from it, the training set draws more points from it, and the
+                 trainer may fit its depth and normals (options "dense_depth", "normal_lambda").
+                 Uncached, it is fetched while the LiDAR room is already on screen: the first
+                 room is never later than without it. Its GPU is woken at the start, beside the
+                 trainer's, and training waits for it at most `DEPTH_DEADLINE` seconds from then:
+                 past that the room trains on the LiDAR, and the depth still lands in the cache
+                 for the next run. When it arrives during the run, the dense instant room is
+                 fused while the training set is sent and the trainer starts, not before them:
+                 the trainer never waits for it.
+    clean        every snapshot loses its faint splats, the ones outside RoomPlan's room and the
+                 floaters the depth maps see through (`models.splat.clean`) before it is cut.
 
     litereality splatroom <scan> [--scene run/<scan>/objects/scene.xml] [--instant-only]
+                         [--depth promptda] [--depth-loss-dense] [--normal-lambda F] [--clean]
 """
 
 from __future__ import annotations
@@ -30,8 +49,10 @@ from pathlib import Path
 
 import mujoco
 
+from litereality_agent.models.splat import clean as splat_clean
 from litereality_agent.models.splat import dataset as splat_dataset
-from litereality_agent.models.splat import rgbd, spz
+from litereality_agent.models.splat import promptda, rgbd, spz
+from litereality_agent.models.splat import views as splat_views
 from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, split
 
 DEFAULT_DIR = "splat"
@@ -39,8 +60,45 @@ BUNDLE = "splat.json"
 REPORT = "report.json"
 SPLAT_SCENE = "scene_splat.xml"  # the physics with the bodies moved, beside the scene cut against
 RAW = "raw.spz.bin"            # the latest snapshot uncut (not a bundle file: never served)
+RAW_CLEAN = "raw.clean.spz.bin"  # the same cleaned, as it was cut (with `clean`)
 INSTANT_VOXEL = 0.016          # ~640k splats, ~6 MB for tea_room: on screen in seconds
+# Points per photo drawn from dense depth: up to this many, but no more in all than the trainer's
+# splat budget (MCMC never prunes its starting points, so 20000 x 300 photos would start it at 6M).
+DENSE_POINTS_MAX = 20_000
+CAP_MAX = 800_000              # the trainer's default splat budget (deploy/modal/splat "cap_max")
+TEST_EVERY = 8                 # the trainer's default hold-out ("test_every")
+# Seconds from the start of a build that training waits for dense depth. A warm 60-photo scan
+# takes ~17 s, a cold one ~32 s; no free GPU, or a stalled upload, must not hold the H100 for the
+# Modal call's own 10-minute limit while the LiDAR would have trained the room in ~75 s.
+DEPTH_DEADLINE = 90.0
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
+
+
+def dense_points_for(photos: int, cap_max: int = CAP_MAX) -> int:
+    """The dense training set's points per photo when none is asked for: the splat budget shared
+    out over the photos, between the LiDAR's own `POINTS_PER_FRAME` and `DENSE_POINTS_MAX`."""
+    share = int(cap_max) // max(1, photos)
+    return int(min(DENSE_POINTS_MAX, max(splat_dataset.POINTS_PER_FRAME, share)))
+
+
+def wants_dense_maps(options: dict | None) -> bool:
+    """Whether trainer `options` ask for the dense depth maps in the dataset (`depths/`)."""
+    options = options or {}
+    return bool(options.get("dense_depth")) or float(options.get("normal_lambda") or 0) > 0
+
+
+def room_bounds(scan_dir: Path, log: Callable[[str], None] = print):
+    """RoomPlan's room (`clean.Room`) for the walls rule, or None (no room.usdz, unreadable)."""
+    from litereality_agent.pipeline.quickroom.roomplan import find_room_usdz, parse_room
+
+    usdz = find_room_usdz(scan_dir)
+    if usdz is None:
+        return None
+    try:
+        return splat_clean.room_from_plan(parse_room(usdz))
+    except Exception as exc:  # noqa: BLE001 — carving still runs without the walls
+        log(f"  clean: no room bounds ({type(exc).__name__}: {exc}); carving only")
+        return None
 
 
 def _name(prefix: str, data: bytes) -> str:
@@ -48,7 +106,7 @@ def _name(prefix: str, data: bytes) -> str:
 
 
 def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = None,
-                 antialiased: bool = True) -> dict:
+                 antialiased: bool = True, view: dict | None = None) -> dict:
     """Write one bundle (files first, then `splat.json` atomically) and drop older files. The
     previous bundle's files are kept one bundle longer: an upload of it may still be reading them
     (`BundleUploader`), and a browser may still be fetching them."""
@@ -70,6 +128,8 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
               "counts": {"room": len(parts.room), **parts.counts},
               "bytes": sum((out_dir / f).stat().st_size for f in keep),
               "created": round(time.time(), 3)}
+    if view is not None:
+        bundle["view"] = view          # where a newcomer first stands (`views.best_view`)
     tmp = out_dir / (BUNDLE + ".tmp")
     tmp.write_text(json.dumps(bundle, indent=1))
     os.replace(tmp, out_dir / BUNDLE)
@@ -79,6 +139,22 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
     for old in out_dir.glob("*.spz"):
         if old.name not in keep and old.name not in spare:
             old.unlink(missing_ok=True)
+    return bundle
+
+
+def add_view(out_dir: Path, scan_dir: Path) -> dict | None:
+    """Give the bundle in `out_dir` its first view (`views.best_view`) if it has none yet, for
+    bundles written before views existed. Rewrites `splat.json` atomically; returns the bundle."""
+    bundle = read_bundle(out_dir)
+    if bundle is None or "view" in bundle:
+        return bundle
+    view = splat_views.best_view(rgbd.load_frames(scan_dir))
+    if view is None:
+        return bundle
+    bundle["view"] = view
+    tmp = out_dir / (BUNDLE + ".tmp")
+    tmp.write_text(json.dumps(bundle, indent=1))
+    os.replace(tmp, out_dir / BUNDLE)
     return bundle
 
 
@@ -96,7 +172,9 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
           on_bundle: Callable[[dict], None] | None = None,
           segment: Callable[[dict], dict] | None = None,
           on_scene: Callable[[Path], None] | None = None,
-          move_bodies: bool = True) -> dict:
+          move_bodies: bool = True, refiner=None, dense_points: int | None = None,
+          clean: bool = False, clean_options: dict | None = None,
+          depth_deadline: float = DEPTH_DEADLINE) -> dict:
     """The instant room, then (with a `trainer`) each trained snapshot, each written as a bundle
     the moment it exists. Returns the report (also written to `REPORT`).
 
@@ -104,24 +182,67 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     corrections, and `corrected_scene` writes the physics with the bodies moved to match
     (``scene_splat.xml`` beside `scene_xml`: serve that one). With `segment` (the SAM 2 function,
     `models.splat.remote.segment_call`), each body's outline in the photos is fetched while the GPU trains, and
-    every bundle after it arrives is cut by the photos' masks (`masks`)."""
+    every bundle after it arrives is cut by the photos' masks (`masks`).
+
+    With a `refiner` (`promptda.ModalDepthRefiner`: ``refine(frames, width) -> {frame index:
+    metres}``) the scan's depth is made dense once (see the module docstring); `dense_points` is
+    then the training set's points per photo (default `dense_points_for`). Dense trainer losses
+    asked for in `options` are dropped, with a line in the report, when no dense depth came back
+    (or none within `depth_deadline` seconds of the start: ``report["depth"]["fallback"]``).
+    With `clean`, every snapshot goes through `clean.clean` (keywords `clean_options`) first."""
     import threading
 
     from litereality_agent.pipeline.splatroom import masks as object_masks
 
     t0 = time.perf_counter()
-    if trainer is not None and not instant_only and hasattr(trainer, "warm"):
+    training = trainer is not None and not instant_only
+    if training and hasattr(trainer, "warm"):
         trainer.warm()                 # the GPU boots while the instant room is computed
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     frames = rgbd.load_frames(scan_dir)
     if not frames:
         raise ValueError(f"{scan_dir}: no frames with a pose, a photo and depth")
+    first_view = splat_views.best_view(frames)
     report: dict = {"scan": str(scan_dir), "scene": str(scene_xml), "frames": len(frames),
+                    "view": first_view,
+                    "depth": {"source": "promptda" if refiner is not None else "lidar"},
                     "bundles": []}
+    options = dict(options or {})
+    test_every = int(options.get("test_every", TEST_EVERY))
+    clean_kw = dict(clean_options or {})
+    if clean:
+        clean_kw.setdefault("bounds", room_bounds(scan_dir, log))
+        report["clean"] = {"margin": clean_kw.get("margin", splat_clean.MARGIN),
+                           "carve_frames": clean_kw.get("carve_frames",
+                                                        splat_clean.CARVE_FRAMES),
+                           "min_opacity": clean_kw.get("min_opacity", splat_clean.MIN_OPACITY),
+                           "carve_votes": clean_kw.get("carve_votes", splat_clean.CARVE_VOTES),
+                           "room_bounds": clean_kw["bounds"] is not None,
+                           "test_every": test_every}
 
-    state: dict = {"corrections": None, "masks": None}
+    state: dict = {"corrections": None, "masks": None, "dense": None}
+    clean_kw.setdefault("depth_cache", {})     # each frame's carving depth, read once per build
+
+    def cleaned(splats: spz.Splats, dense: dict | None,
+                image_names=None) -> tuple[spz.Splats, dict]:
+        """`splats` through `clean.clean` (when on), carving with the training photos only: the
+        trainer scores its held-out photos, so their depth must not decide what stays."""
+        if not clean:
+            return splats, {}
+        out, stats = splat_clean.clean(splats, frames, dense=dense or None,
+                                       test_every=test_every, image_names=image_names,
+                                       **clean_kw)
+        log(f"  clean: {stats['kept']:,} of {stats['input']:,} kept ({stats['faint']:,} faint, "
+            f"{stats['outside']:,} outside, {stats['carved']:,} carved), {stats['seconds']} s")
+        return out, {"clean": stats}
+
+    publishing = threading.RLock()     # the dense instant room is published from its own thread
 
     def publish(splats: spz.Splats, stage: str, step: int | None, extra: dict) -> None:
+        with publishing:
+            _publish(splats, stage, step, extra)
+
+    def _publish(splats: spz.Splats, stage: str, step: int | None, extra: dict) -> None:
         t = time.perf_counter()
         # Before the masks: boxes only, and no snapping when masks are on their way (the photos
         # will say where each object is). The first split with masks fixes the corrections.
@@ -146,12 +267,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
             elif moved_before and on_scene:
                 log(f"  no object moved this time: the physics as scanned again ({scene_xml})")
                 on_scene(Path(scene_xml))
-        bundle = write_bundle(out_dir, parts, stage=stage, step=step)
-        if stage == "trained" and not extra.get("replayed"):
-            # The trained snapshot, uncut, for evaluation and for cutting again (`SavedTrainer`).
-            raw = out_dir / RAW
-            raw.with_suffix(".tmp").write_bytes(spz.encode(splats))
-            os.replace(raw.with_suffix(".tmp"), raw)
+        bundle = write_bundle(out_dir, parts, stage=stage, step=step, view=first_view)
         entry = {"stage": stage, "step": step, "at": round(time.perf_counter() - t0, 2),
                  "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
                  "bodies": len(parts.bodies), "masks": state["masks"] is not None,
@@ -163,8 +279,98 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         if on_bundle:
             on_bundle(bundle)
 
-    instant = rgbd.instant_splats(frames, voxel=INSTANT_VOXEL)
-    publish(instant, "instant", None, {})
+    def fuse(dense: dict | None, image_names=None) -> tuple[spz.Splats, dict]:
+        # Cleaned once: the masks' re-cuts below publish this same room again. Before the
+        # training set exists its carving cannot know which photos it drops: by name alone.
+        splats = rgbd.instant_splats(frames, voxel=INSTANT_VOXEL, dense=dense or None)
+        splats, extra = cleaned(splats, dense, image_names)
+        if dense:
+            extra["depth"] = "promptda"
+        return splats, extra
+
+    def show_instant(splats: spz.Splats, extra: dict) -> None:
+        with publishing:
+            state["instant"] = (splats, extra)
+            publish(splats, "instant", None, extra)
+
+    def instant_room(dense: dict | None) -> None:
+        show_instant(*fuse(dense, report.get("images")))
+
+    def dense_instant_in_background(dense: dict) -> None:
+        """Fuse the dense instant room beside the training set's upload and the trainer's start:
+        the trainer must not wait ~12 s for a room its first snapshot soon replaces. Published
+        from its thread the moment it is fused, never once a trained room is up; the event loop
+        waits for it (`join_dense_instant`) only before the first snapshot, by when it is done."""
+        names = report.get("images")
+
+        def run() -> None:
+            try:
+                room = fuse(dense, names)
+            except Exception as exc:  # noqa: BLE001 — the LiDAR room stays on screen
+                log(f"  dense instant room failed ({type(exc).__name__}: {exc}); "
+                    "the LiDAR one stays")
+                return
+            with publishing:
+                if any(b["stage"] == "trained" for b in report["bundles"]):
+                    return             # a trained room is already better than this one
+                show_instant(*room)
+                report["instant_dense_s"] = report["bundles"][-1]["at"]
+        thread = threading.Thread(target=run, daemon=True, name="dense-instant")
+        thread.start()
+        state["dense_instant"] = thread
+
+    def join_dense_instant() -> None:
+        thread = state.pop("dense_instant", None)
+        if thread is not None:
+            thread.join()
+
+    def instant_again() -> None:
+        with publishing:
+            splats, extra = state["instant"]
+            publish(splats, "instant", None, extra)
+
+    def write_raw(name: str, splats: spz.Splats) -> None:
+        raw = out_dir / name
+        tmp = raw.with_name(raw.name + ".tmp")
+        tmp.write_bytes(spz.encode(splats))
+        os.replace(tmp, raw)
+
+    if isinstance(trainer, SavedTrainer) and not instant_only:
+        report["images"] = trainer.report.get("images")   # the photos it was trained on
+
+    refining = None
+    refined: dict = {}                 # the refine thread's result, read only once it is done
+    if refiner is not None:
+        def refine() -> None:
+            t = time.perf_counter()
+            try:
+                got = refiner.refine(frames, width=splat_dataset.TRAIN_WIDTH) or {}
+            except Exception as exc:  # noqa: BLE001 — refine never should; LiDAR carries on
+                log(f"  dense depth failed ({type(exc).__name__}: {exc}); LiDAR only")
+                got = {}
+            refined.update(dense=got, report={
+                "frames": len(got), "s": round(time.perf_counter() - t, 2),
+                **dict(getattr(refiner, "last_stats", None) or {})})
+
+        def take_refined() -> None:
+            state["dense"] = refined["dense"]
+            report["depth"].update(refined["report"])
+            if not state["dense"]:
+                report["depth"]["fallback"] = "lidar"
+
+        # Already refined (the scan's depth_dense/ cache): no wait, the first room is dense.
+        # Otherwise the LiDAR room goes on screen while PromptDA works, and is replaced.
+        if all(promptda.is_cached(f, splat_dataset.TRAIN_WIDTH) for f in frames):
+            refine()
+            take_refined()
+            report["depth"]["cached"] = True
+        else:
+            if hasattr(refiner, "warm"):
+                refiner.warm()         # its GPU boots while the scan is read and fused
+            refining = threading.Thread(target=refine, daemon=True, name="dense-depth")
+            refining.start()
+
+    instant_room(state["dense"])
     report["instant_s"] = report["bundles"][-1]["at"]
 
     mask_thread = None
@@ -198,21 +404,46 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
 
         mask_thread = threading.Thread(target=fetch, daemon=True)
         mask_thread.start()
-        if trainer is None or instant_only:
-            mask_thread.join()
-            mask_thread = None
-            if state["masks"] is None:
-                segment = None                     # failed: snap by the boxes after all
-            publish(instant, "instant", None, {})
 
-    if trainer is not None and not instant_only:
+    if refining is not None:
+        refining.join(timeout=max(0.0, depth_deadline - (time.perf_counter() - t0)))
+        if refining.is_alive():
+            # Train on the LiDAR now; the thread carries on and fills the cache for next time.
+            state["dense"] = {}
+            report["depth"].update(fallback="timeout", deadline_s=depth_deadline)
+            log(f"  dense depth not back within {depth_deadline:.0f} s: training on the LiDAR")
+        else:
+            take_refined()
+            report["depth"]["at"] = round(time.perf_counter() - t0, 2)
+        if state["dense"] and not training:
+            instant_room(state["dense"])
+            report["instant_dense_s"] = report["bundles"][-1]["at"]
+    if mask_thread is not None and not training:
+        mask_thread.join()
+        mask_thread = None
+        if state["masks"] is None:
+            segment = None                     # failed: snap by the boxes after all
+        instant_again()
+
+    if training:
         t = time.perf_counter()
-        tar = b"" if isinstance(trainer, SavedTrainer) else splat_dataset.build(frames).tar()
+        if isinstance(trainer, SavedTrainer):
+            tar = b""
+        else:
+            tar = training_set(frames, state["dense"] or {}, options, dense_points, report, log)
         report["dataset_s"] = round(time.perf_counter() - t, 2)
         report["dataset_mb"] = round(len(tar) / 1e6, 1)
+        if refining is not None and state["dense"]:
+            # Only now: fused beside the set's build, the two shared one core (the GIL) and the
+            # trainer started ~8 s later; beside the upload and the GPU's start it waits on the
+            # network, not on the fuse.
+            dense_instant_in_background(state["dense"])
+        report["options"] = dict(options)
         log(f"  training set: {len(frames)} photos, {report['dataset_mb']} MB; "
             f"training on Modal ({trainer.name})")
         for event in trainer.stream(tar, options):
+            if event["kind"] == "snapshot":
+                join_dense_instant()   # on screen before the first trained room, not after it
             if mask_thread is not None and event["kind"] == "snapshot":
                 mask_thread.join()              # cut every trained room by the photos
                 mask_thread = None
@@ -221,16 +452,26 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                 # Where the objects really are comes from the LiDAR room, whose splats lie on
                 # the surfaces; trained splats are free to float. It is published again, cut by
                 # the photos, just before the trained one.
-                publish(instant, "instant", None, {})
+                instant_again()
             kind = event["kind"]
             if kind == "started":
                 report["trainer_started_s"] = round(time.perf_counter() - t0, 2)
                 report["gpu"] = event.get("gpu")
+                if event.get("depths"):         # dense depth maps the trainer found in the tar
+                    report["trainer_depths"] = event["depths"]
                 log(f"  trainer up on {event.get('gpu')} at {report['trainer_started_s']} s")
             elif kind == "snapshot":
                 splats = spz.decode(event["spz"])
+                if not event.get("replayed"):
+                    # Uncut and uncleaned, for evaluation and for cutting again (`SavedTrainer`).
+                    write_raw(RAW, splats)
+                splats, extra = cleaned(splats, state["dense"], report.get("images"))
+                if clean:
+                    write_raw(RAW_CLEAN, splats)
+                else:                   # an earlier run's: evaluate must not score it as this one
+                    (out_dir / RAW_CLEAN).unlink(missing_ok=True)
                 publish(splats, "trained", int(event["step"]),
-                        {"trainer_s": round(float(event["seconds"]), 1),
+                        {"trainer_s": round(float(event["seconds"]), 1), **extra,
                          **({"replayed": True} if event.get("replayed") else {})})
             elif kind == "done":
                 report["stats"] = event.get("stats") or {}
@@ -244,6 +485,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                 report["error"] = event.get("error")
                 report["trainer_log"] = (event.get("log") or "")[-4000:]
                 log(f"  training failed: {event.get('error')}")
+        join_dense_instant()           # done before the report is written
     if mask_thread is not None:
         # The trainer ended without a snapshot (it failed, or never started): the masks are still
         # used, or the boxes snap the bodies, so the room left behind is never the unsnapped
@@ -252,16 +494,51 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         mask_thread = None
         if state["masks"] is None:
             segment = None
-        publish(instant, "instant", None, {})
+        instant_again()
     if isinstance(trainer, SavedTrainer) and not instant_only:
         # A re-cut trains nothing: the report keeps what the training run measured.
-        for key in ("dataset_s", "dataset_mb", "trainer_started_s", "gpu", "trainer_s"):
+        for key in ("dataset_s", "dataset_mb", "trainer_started_s", "gpu", "trainer_s",
+                    "dataset", "options"):
             if key in trainer.report:
                 report[key] = trainer.report[key]
         report["recut"] = True
     report["total_s"] = round(time.perf_counter() - t0, 2)
     (out_dir / REPORT).write_text(json.dumps(report, indent=1))
     return report
+
+
+def training_set(frames: list, dense: dict, options: dict, dense_points: int | None,
+                 report: dict, log: Callable[[str], None] = print) -> bytes:
+    """The trainer's dataset tar, from dense depth where there is some (`dataset.build`).
+
+    Dense losses asked for in `options` are taken out of it (in place) when no photo has a dense
+    map to fit, rather than failing the run: the trainer refuses them without ``depths/``. The
+    photos it holds go in ``report["images"]`` (they set the trainer's hold-out order) and its
+    make-up in ``report["dataset"]``."""
+    maps = wants_dense_maps(options)
+    per_photo = splat_dataset.POINTS_PER_FRAME
+    test_every = int(options.get("test_every", TEST_EVERY))
+    if dense:
+        # Shared over the photos that seed it: the held-out ones give no points.
+        seeding = len(frames) - (-(-len(frames) // test_every) if test_every > 0 else 0)
+        per_photo = int(dense_points or dense_points_for(seeding,
+                                                         options.get("cap_max", CAP_MAX)))
+    # The trainer's hold-out photos give no starting points: they score the room.
+    ds = splat_dataset.build(frames, points_per_frame=per_photo, dense=dense or None,
+                             depth_maps=maps and bool(dense),
+                             test_every=test_every)
+    depth_maps = sum(1 for n in ds.files if n.startswith(splat_dataset.DEPTH_DIR + "/"))
+    if maps and not depth_maps:
+        dropped = {k: options.pop(k) for k in ("dense_depth", "dense_depth_lambda",
+                                               "normal_lambda") if k in options}
+        report["dense_losses_dropped"] = dropped
+        log("  no dense depth to fit: training without the dense depth and normal losses")
+    report["images"] = sorted(n[len("images/"):] for n in ds.files if n.startswith("images/"))
+    report["dataset"] = {"photos": ds.images, "held_out": getattr(ds, "held_out", 0),
+                         "points": ds.points,
+                         "points_per_photo": per_photo, "dense_photos": ds.dense_images,
+                         "depth_maps": depth_maps}
+    return ds.tar()
 
 
 class SavedTrainer:

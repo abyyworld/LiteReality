@@ -24,6 +24,7 @@ Where a room's bundle is:
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -136,9 +137,13 @@ class SplatSource:
         if raw is None:
             return None
         base = f"splat/{url_name}/"
-        return {"name": url_name, "stage": raw.get("stage"), "step": raw.get("step"),
-                "created": raw.get("created"), "room": base + raw["room"],
-                "bodies": {body: base + file for body, file in raw["bodies"].items()}}
+        out = {"name": url_name, "stage": raw.get("stage"), "step": raw.get("step"),
+               "created": raw.get("created"), "room": base + raw["room"],
+               "bodies": {body: base + file for body, file in raw["bodies"].items()}}
+        view = _view(raw.get("view"))
+        if view is not None:
+            out["view"] = view
+        return out
 
     def file(self, name: str | None, file: str) -> bytes | None:
         """One SPZ file of `name`'s room, if the name is a bundle file name at all."""
@@ -159,6 +164,20 @@ class SplatSource:
         """What changes when `name`'s bundle does (its ``created``)."""
         raw = self.bundle(name)
         return None if raw is None else raw.get("created")
+
+
+def _view(raw) -> dict | None:
+    """A bundle's first view (where a newcomer stands: the scan's best camera spot) if it is
+    well formed: ``{"pos": [x, y, z], "yaw": rad, "pitch": rad}``, all finite."""
+    if not isinstance(raw, dict):
+        return None
+    pos, yaw, pitch = raw.get("pos"), raw.get("yaw"), raw.get("pitch")
+    nums = [*(pos if isinstance(pos, list) else []), yaw, pitch]
+    if not (isinstance(pos, list) and len(pos) == 3 and all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+            for v in nums)):
+        return None
+    return {"pos": [float(v) for v in pos], "yaw": float(yaw), "pitch": float(pitch)}
 
 
 def _valid(raw) -> bool:

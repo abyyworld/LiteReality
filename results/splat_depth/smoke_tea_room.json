@@ -1,0 +1,20 @@
+{
+ "tea_room": {
+  "frames": 62,
+  "dense": 62,
+  "seconds": 32.3,
+  "stats": {
+   "frames": 62,
+   "cached": 0,
+   "refined": 62,
+   "failed": 0,
+   "seconds": 32.26,
+   "gpu_ms_median": 659.1
+  },
+  "median_abs_cm": 1.0,
+  "p90_abs_cm": 4.9,
+  "median_rel_pct": 0.66,
+  "median_abs_cm_conf2": 0.9,
+  "frac_within_5cm_or_5pct": 0.95
+ }
+}

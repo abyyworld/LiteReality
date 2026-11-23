@@ -51,6 +51,9 @@ STAGE_FOLDERS = {"quick": "quick", "objects": "objects", "mujoco_seed": "full", 
 STAGE_ORDER = ("demo", "quick", "objects", "splat", "full")
 # The photoreal room (`pipeline/splatroom`): its uncut trained snapshot, and the physics it rides on.
 SPLAT_RAW = Path("splat") / "raw.spz.bin"
+# The same snapshot after `models.splat.clean` (splatroom --clean), scored as stage "splat-clean"
+# beside it: one training run, both rooms, the same held-out photos.
+SPLAT_CLEAN = Path("splat") / "raw.clean.spz.bin"
 REPORT_JSON, REPORT_MD = "report.json", "report.md"
 COMPARISON = "comparison"
 
@@ -96,15 +99,18 @@ def find_scenes(target: Path | str) -> list[tuple[str, Path]]:
                                           target / "quick" / SCENE_NAME) if p.is_file()), None)
         if physics_scene is not None:
             found.append(("splat", physics_scene))
+            if (target / SPLAT_CLEAN).is_file():
+                found.append(("splat-clean", physics_scene))
     if not found:
         raise ValueError(f"{target}: no scene.xml, and none of "
                          f"{', '.join(f + '/scene.xml' for f in STAGE_FOLDERS)}")
     return found
 
 
-def _splat_raw(scene: Path) -> Path | None:
-    """The splat snapshot beside a run's physics scene (run/<scan>/objects/scene*.xml)."""
-    raw = Path(scene).parent.parent / SPLAT_RAW
+def _splat_raw(scene: Path, cleaned: bool = False) -> Path | None:
+    """The splat snapshot beside a run's physics scene (run/<scan>/objects/scene*.xml), or with
+    `cleaned` the cleaned one."""
+    raw = Path(scene).parent.parent / (SPLAT_CLEAN if cleaned else SPLAT_RAW)
     return raw if raw.is_file() else None
 
 
@@ -218,7 +224,9 @@ def evaluate_scene(scene: Path | str, out_dir: Path | str, *, name: str | None =
     ``render``). Returns the report. Fidelity needs the scan (given, or `infer_scan`); without one,
     or when it cannot be measured, the report says why rather than losing the physics it did."""
     scene = Path(scene).expanduser().resolve()
-    splat_raw = _splat_raw(scene) if name == "splat" or (name or "").endswith("/splat") else None
+    label = (name or "").rsplit("/", 1)[-1]
+    splat_raw = _splat_raw(scene, cleaned=label == "splat-clean") if label in (
+        "splat", "splat-clean") else None
     stage = "splat" if splat_raw is not None else stage_of(scene)
     name = name or _name(scene)
     folder = Path(out_dir) / name

@@ -1,0 +1,90 @@
+{
+ "tea_room/instant_lidar": {
+  "frames": 54,
+  "splats": 572857,
+  "fuse_s": 5.58,
+  "clean": {
+   "input": 572857,
+   "faint": 0,
+   "outside": 13634,
+   "carved": 16988,
+   "carve_frames": 54,
+   "held_out_frames": 8,
+   "kept": 542235,
+   "seconds": 0.678
+  }
+ },
+ "tea_room/instant_promptda": {
+  "frames": 54,
+  "splats": 790060,
+  "fuse_s": 11.71,
+  "clean": {
+   "input": 790060,
+   "faint": 0,
+   "outside": 51590,
+   "carved": 45199,
+   "carve_frames": 54,
+   "held_out_frames": 8,
+   "kept": 693271,
+   "seconds": 5.37
+  }
+ },
+ "tea_room/base_v2_clean": {
+  "input": 800000,
+  "faint": 106550,
+  "outside": 7948,
+  "carved": 43381,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 642121,
+  "seconds": 1.325
+ },
+ "tea_room/rec_v2_clean": {
+  "input": 800000,
+  "faint": 134425,
+  "outside": 15429,
+  "carved": 20378,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 629768,
+  "seconds": 0.872
+ },
+ "tea_room/rule_outside_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 17243,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 782757,
+  "seconds": 0.098
+ },
+ "tea_room/rule_carve_only": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 0,
+  "carved": 30479,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 769521,
+  "seconds": 1.149
+ },
+ "tea_room/rule_carve3_outside": {
+  "input": 800000,
+  "faint": 0,
+  "outside": 17243,
+  "carved": 22794,
+  "carve_frames": 54,
+  "held_out_frames": 8,
+  "kept": 759963,
+  "seconds": 1.228
+ },
+ "tea_room/rule_faint_only": {
+  "input": 800000,
+  "faint": 134425,
+  "outside": 0,
+  "carved": 0,
+  "carve_frames": 0,
+  "kept": 665575,
+  "seconds": 0.001
+ }
+}

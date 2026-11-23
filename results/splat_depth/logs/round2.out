@@ -1,0 +1,36 @@
+== tea_room auto_n 18:12:44
+  instant: 883,851 splats, 5 objects cut out, 9.13 MB, at 15.8 s
+  held-out photos: PSNR 20.68 dB, SSIM 0.781, LPIPS 0.353
+  done in 111.0 s; report: run/tea_room/splat_abl_auto_n/report.json
+== tea_room base_r2 18:14:36
+  instant: 639,815 splats, 5 objects cut out, 6.25 MB, at 10.16 s
+  held-out photos: PSNR 20.21 dB, SSIM 0.784, LPIPS 0.363
+  done in 74.96 s; report: run/tea_room/splat_abl_base_r2/report.json
+== tea_room auto_dl_n_r2 18:15:52
+  instant: 883,851 splats, 5 objects cut out, 9.13 MB, at 15.76 s
+  held-out photos: PSNR 20.63 dB, SSIM 0.778, LPIPS 0.353
+  done in 110.01 s; report: run/tea_room/splat_abl_auto_dl_n_r2/report.json
+== office_room auto_n 18:17:43
+  instant: 1,230,443 splats, 6 objects cut out, 12.95 MB, at 16.63 s
+  held-out photos: PSNR 19.20 dB, SSIM 0.658, LPIPS 0.346
+  done in 119.78 s; report: run/office_room/splat_abl_auto_n/report.json
+== office_room base_r2 18:19:44
+  instant: 900,688 splats, 6 objects cut out, 8.66 MB, at 10.24 s
+  held-out photos: PSNR 19.23 dB, SSIM 0.661, LPIPS 0.374
+  done in 79.29 s; report: run/office_room/splat_abl_base_r2/report.json
+== office_room auto_dl_n_r2 18:21:04
+  instant: 1,230,443 splats, 6 objects cut out, 12.95 MB, at 16.69 s
+  held-out photos: PSNR 19.23 dB, SSIM 0.658, LPIPS 0.343
+  done in 121.06 s; report: run/office_room/splat_abl_auto_dl_n_r2/report.json
+== suite_3693 auto_n 18:23:06
+  instant: 938,404 splats, 4 objects cut out, 9.58 MB, at 14.33 s
+  held-out photos: PSNR 18.78 dB, SSIM 0.767, LPIPS 0.460
+  done in 109.31 s; report: run/suite_3693/splat_abl_auto_n/report.json
+== suite_3693 base_r2 18:24:56
+  instant: 765,858 splats, 4 objects cut out, 7.31 MB, at 11.92 s
+  held-out photos: PSNR 18.37 dB, SSIM 0.749, LPIPS 0.496
+  done in 80.03 s; report: run/suite_3693/splat_abl_base_r2/report.json
+== suite_3693 auto_dl_n_r2 18:26:18
+  instant: 938,404 splats, 4 objects cut out, 9.58 MB, at 14.85 s
+  held-out photos: PSNR 19.18 dB, SSIM 0.768, LPIPS 0.460
+  done in 95.86 s; report: run/suite_3693/splat_abl_auto_dl_n_r2/report.json

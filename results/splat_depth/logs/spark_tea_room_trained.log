@@ -1,0 +1,44 @@
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:452: RuntimeWarning: divide by zero encountered in matmul
+  denom = float(x @ x)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:452: RuntimeWarning: overflow encountered in matmul
+  denom = float(x @ x)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:452: RuntimeWarning: invalid value encountered in matmul
+  denom = float(x @ x)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:453: RuntimeWarning: divide by zero encountered in matmul
+  gain = float(x @ real.reshape(-1)) / denom if denom > 0 else 1.0
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:453: RuntimeWarning: overflow encountered in matmul
+  gain = float(x @ real.reshape(-1)) / denom if denom > 0 else 1.0
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:453: RuntimeWarning: invalid value encountered in matmul
+  gain = float(x @ real.reshape(-1)) / denom if denom > 0 else 1.0
+tea_room base 423s {'psnr': 17.8635, 'ssim': 0.7007}
+tea_room auto_dl_n 392s {'psnr': 18.5389, 'ssim': 0.7175}

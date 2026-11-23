@@ -1,0 +1,2 @@
+# Splat snapshots (about 200 MB) are scratch for the Spark scores; the numbers are in the JSON files.
+*.spz.bin

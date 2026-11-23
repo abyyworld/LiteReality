@@ -583,6 +583,24 @@ function placeSpawn(man) {
     const dx = (bmin[0] + bmax[0]) / 2 - sp[0], dy = (bmin[1] + bmax[1]) / 2 - sp[1];
     if (Math.hypot(dx, dy) > 0.5) walker.yaw = Math.atan2(dy, dx);
   }
+  walker.spawnFrom = walker.pos.clone();          // until they walk, the photoreal view may move them
+}
+
+/** A newcomer stands where the scan's best photo was taken, looking where the phone looked
+ *  (the bundle's `view`): the photoreal room is sharpest there, and the spawn point above can be
+ *  a door 30 cm away. Only right after a spawn, once, and only if they have not walked yet. */
+function applySplatView(man) {
+  const v = man?.view;
+  if (!v || !finite(v.pos) || v.pos.length !== 3 || !Number.isFinite(v.yaw) || !Number.isFinite(v.pitch)) return;
+  const from = walker.spawnFrom;
+  if (!from || walker.pos.distanceTo(from) > 0.3) return;
+  walker.spawnFrom = null;
+  // A little apart, so people who join together do not stand inside one another.
+  const a = Math.random() * Math.PI * 2, r = Math.random() * 0.3;
+  mjToThree(v.pos[0] + Math.cos(a) * r, v.pos[1] + Math.sin(a) * r, eyeY, walker.pos);
+  clampWalker();
+  walker.yaw = v.yaw;
+  walker.pitch = clamp(v.pitch, -0.35, 0.25);
 }
 
 function setHighlight(id, on) {
@@ -1150,7 +1168,7 @@ function sparkFailed(err) {
 // shown. Bundles change on their own clock (the instant room, then sharper trained snapshots):
 // the server says {"t": "splat"} and the new files load beside the old, then replace them.
 const SPLAT_URL = /^splat\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]{1,140}\.spz$/;
-const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map() };
+const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map(), retries: new Map() };
 try { const s = sessionStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
 
 const photoShown = () => photo.want && !!photo.room;
@@ -1252,12 +1270,24 @@ async function refreshSplat() {
     photo.bodies = new Map(loaded);
     Object.assign(photo, { v, created: man.created ?? null, stage: String(man.stage || ''), step: man.step ?? null });
     attachBodySplats();
+    applySplatView(man);
     if (first && photo.want) toast('Photoreal room on (P switches)');
   } catch (err) {
     made.forEach(disposeSplat);
     console.warn('the photoreal room could not be loaded:', err?.message || err);
     failed();
+    retrySplat(photo.gen, v);                      // after failed(), which may have cleared
   }
+}
+
+/** A download that failed on a flaky connection is tried again (5 s, 15 s, 45 s) rather than
+ *  leaving the room without its photoreal layer for good; a newer refresh or room cancels it. */
+function retrySplat(gen, v) {
+  const n = photo.retries.get(v) || 0;
+  if (n >= 3) return;
+  photo.retries.set(v, n + 1);
+  setTimeout(() => { if (gen === photo.gen && shown?.v === v && !photo.room) refreshSplat(); },
+    5000 * 3 ** n);
 }
 
 // ?debug=1: a read-only view of what this page shows, and a camera that can be put exactly

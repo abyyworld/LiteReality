@@ -724,6 +724,32 @@ def _splatroom(args) -> int:
     options = {"steps": args.steps} if args.steps else {}
     if args.no_holdout:
         options["test_every"] = 100000
+    # The dense losses are sent only when asked for: an older deployed trainer refuses the names.
+    if args.depth_loss_dense:
+        options["dense_depth"] = True
+        if args.dense_depth_lambda is not None:
+            options["dense_depth_lambda"] = args.dense_depth_lambda
+    if args.normal_lambda:
+        options["normal_lambda"] = args.normal_lambda
+    if (args.depth_loss_dense or args.normal_lambda) and args.depth != "promptda":
+        raise SystemExit("--depth-loss-dense and --normal-lambda fit the dense depth: "
+                         "add --depth promptda")
+    refiner = None
+    if args.depth == "promptda":
+        from litereality_agent.models.splat import promptda
+
+        if ambient:
+            import modal as modal_sdk
+
+            refiner = promptda.ModalDepthRefiner(function=modal_sdk.Function.from_name(
+                promptda.APP_NAME, promptda.FUNCTION_NAME), log=print)
+        else:
+            refiner = promptda.ModalDepthRefiner(environment_name=modal["environment"] or "main",
+                                                 profile=modal["profile"],
+                                                 credentials=modal["credentials"], log=print)
+    clean_options = {}
+    if args.carve_votes is not None:
+        clean_options["carve_votes"] = args.carve_votes
     on_bundle = on_scene = None
     segment = None
     # SAM 2 runs on a Modal GPU: an instant-only room ("no GPU, free") is cut by the boxes.
@@ -764,7 +790,7 @@ def _splatroom(args) -> int:
                                       stage="objects")
                 print(f"    physics published ({fixed.name}): {done.version}")
         if args.upload_only:
-            bundle = splatroom.read_bundle(out)
+            bundle = splatroom.add_view(out, scan_dir)
             if not args.publish or bundle is None:
                 raise SystemExit(f"--upload-only needs --publish and a bundle in {out}")
             on_bundle(bundle)
@@ -774,7 +800,9 @@ def _splatroom(args) -> int:
         report = splatroom.build(scan_dir, out, scene, trainer=trainer, options=options,
                                  instant_only=args.instant_only, on_bundle=on_bundle,
                                  segment=segment, on_scene=on_scene,
-                                 move_bodies=not args.keep_physics)
+                                 move_bodies=not args.keep_physics, refiner=refiner,
+                                 dense_points=args.dense_points, clean=args.clean,
+                                 clean_options=clean_options)
     print(f"  done in {report['total_s']} s; report: {console.short(out / splatroom.REPORT)}")
     if not args.publish:
         served = Path(report["corrected_scene"]) if report.get("corrected_scene") else scene
@@ -1076,6 +1104,27 @@ def _parser() -> argparse.ArgumentParser:
     splat.add_argument("--upload-only", action="store_true",
                        help="with --publish: put the bundle already in --out on the link, build "
                             "nothing")
+    splat.add_argument("--depth", choices=("lidar", "promptda"), default="lidar",
+                       help="the depth the room is built from: the 256x192 LiDAR (default), or "
+                            "PromptDA's 960-wide refinement of it on a Modal GPU (once per scan: "
+                            "cached in the scan's depth_dense/)")
+    splat.add_argument("--dense-points", type=int, default=None, metavar="N",
+                       help="with --depth promptda: training points per photo (default: the "
+                            "splat budget shared over the photos, 4000..20000)")
+    splat.add_argument("--depth-loss-dense", action="store_true",
+                       help="with --depth promptda: the trainer also fits its rendered depth to "
+                            "the dense depth on every pixel")
+    splat.add_argument("--dense-depth-lambda", type=float, default=None, metavar="F",
+                       help="the dense depth loss's weight (default 0.1)")
+    splat.add_argument("--normal-lambda", type=float, default=0.0, metavar="F",
+                       help="with --depth promptda: weight of a DN-Splatter normal loss against "
+                            "the dense depth's normals (default 0: off; try 0.05)")
+    splat.add_argument("--clean", action=argparse.BooleanOptionalAction, default=False,
+                       help="drop faint splats, splats outside the room and floaters the depth "
+                            "sees through, before each snapshot is cut (default: off)")
+    splat.add_argument("--carve-votes", type=int, default=None, metavar="N",
+                       help="with --clean: photos that must see through a splat to drop it "
+                            "(default 2; 0 = no carving)")
     splat.set_defaults(handler=_splatroom)
 
     quick = commands.add_parser(

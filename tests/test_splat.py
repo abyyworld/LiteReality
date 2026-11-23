@@ -401,6 +401,10 @@ def test_evaluate_finds_the_splat_stage_and_the_trainers_held_out_photos(tmp_pat
     assert [s for s, _ in find_scenes(run)] == ["objects", "splat"]
     (run / "objects" / "scene_splat.xml").write_text(SCENE.format(x=1.1))
     assert dict(find_scenes(run))["splat"] == run / "objects" / "scene_splat.xml"
+    (run / "splat" / "raw.clean.spz.bin").write_bytes(spz.encode(random_splats(8)))
+    assert [s for s, _ in find_scenes(run)] == ["objects", "splat", "splat-clean"]
+    from litereality_agent.pipeline.evaluate.report import _splat_raw
+    assert _splat_raw(run / "objects" / "scene_splat.xml", cleaned=True).name == "raw.clean.spz.bin"
 
     for i in range(1, 17):                                  # 17 frames: 0..16
         _frame_looking_down(scan, index=i)
