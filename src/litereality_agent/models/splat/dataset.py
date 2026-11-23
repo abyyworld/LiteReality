@@ -60,6 +60,10 @@ from litereality_agent.models.splat.rgbd import (
 )
 
 TRAIN_WIDTH = 960
+# A run's own photo width (`litereality splatroom --train-width`), for the process; None keeps
+# TRAIN_WIDTH. Only the photos change: dense depth stays at TRAIN_WIDTH (PromptDA sees at most
+# 1008 px anyway, `promptda.MODEL_SIDE`) and is resampled to the photos, so its cache is shared.
+train_width_override: int | None = None
 POINTS_PER_FRAME = 4000
 MAX_DEPTH = 5.0
 MIN_CONFIDENCE = 2
@@ -128,11 +132,11 @@ def _lidar_points(frame: Frame, rng: np.random.Generator, count: int, width: int
     vv, uu = np.nonzero(valid)
     if len(vv) == 0:
         return None
-    vv, uu = _pick(rng, vv, uu, count)
+    vv, uu, uses = _pick(rng, vv, uu, count)
     # Depth-map pixel centre -> photo pixel coordinates.
     px = (uu + 0.5) * frame.size[0] / w
     py = (vv + 0.5) * frame.size[1] / h
-    return _points(frame, px, py, depth[vv, uu], width, height, rgb)
+    return (*_points(frame, px, py, depth[vv, uu], width, height, rgb), uses)
 
 
 def _dense_points(frame: Frame, dense: np.ndarray, rng: np.random.Generator, count: int,
@@ -146,18 +150,31 @@ def _dense_points(frame: Frame, dense: np.ndarray, rng: np.random.Generator, cou
     vv, uu = np.nonzero(ok)
     if len(vv) < MIN_FRAME_POINTS:
         return None
-    vv, uu = _pick(rng, vv, uu, count)
+    vv, uu, uses = _pick(rng, vv, uu, count)
     # Training pixel centre -> photo pixel coordinates.
     px = (uu + 0.5) * frame.size[0] / width
     py = (vv + 0.5) * frame.size[1] / height
-    return (*_points(frame, px, py, d[vv, uu], width, height, rgb), np.where(ok, d, 0.0))
+    return (*_points(frame, px, py, d[vv, uu], width, height, rgb), uses,
+            np.where(ok, d, 0.0))
 
 
 def _pick(rng: np.random.Generator, vv: np.ndarray, uu: np.ndarray, count: int):
-    # Exactly `count` per photo: gsplat batches photos, and its collate needs every photo's depth
-    # points to be the same length (a close-up of a bare wall has fewer: some repeat).
-    pick = rng.choice(len(vv), size=count, replace=len(vv) < count)
-    return vv[pick], uu[pick]
+    """Up to `count` distinct samples (rows, cols), and how many of the photo's `count` depth
+    observations each one stands for (1 each, unless the photo has fewer samples than that).
+
+    Exactly `count` observations per photo: gsplat batches photos, and its collate needs every
+    photo's depth points to be the same length. A photo with fewer usable samples (a close-up of
+    a bare wall, or a phone video's sparse model depth: some have a few dozen) uses all of them
+    and observes some again, but a repeat is the SAME 3D point listed again, never a point of its
+    own: every 3D point also starts a splat, sized by the distance to its nearest neighbours.
+    Copies give log(0) = -inf; copies nudged within their pixel pile up to hundreds of splats
+    into one depth pixel at ~1e-5 m (atrium_phone: 3e-5 m nearest neighbours, 1e-3 m without)."""
+    n = len(vv)
+    if n >= count:
+        pick = rng.choice(n, size=count, replace=False)
+        return vv[pick], uu[pick], np.ones(count, np.int64)
+    uses = 1 + np.bincount(rng.choice(n, size=count - n), minlength=n)
+    return vv, uu, uses
 
 
 def _points(frame: Frame, px: np.ndarray, py: np.ndarray, z: np.ndarray, width: int, height: int,
@@ -172,6 +189,27 @@ def _points(frame: Frame, px: np.ndarray, py: np.ndarray, z: np.ndarray, width: 
     ix = np.clip(tx.astype(int), 0, width - 1)
     iy = np.clip(ty.astype(int), 0, height - 1)
     return world, rgb[iy, ix], np.stack([tx, ty], 1)
+
+
+def _points3d(ids: np.ndarray, xyz: np.ndarray, rgb: np.ndarray, image_id: int,
+              uses: np.ndarray) -> bytes:
+    """One photo's points as COLMAP points3D.bin records: each point's track lists the photo once
+    per observation (`uses`), at the observations' indices in its images.bin entry, where a
+    point's observations are consecutive. All tracks of length 1 (the usual LiDAR case): one
+    fixed-size record per point, in id order."""
+    first = np.concatenate([[0], np.cumsum(uses)[:-1]])
+    out = []
+    for k in np.unique(uses):
+        sel = np.nonzero(uses == k)[0]
+        rec = np.zeros(len(sel), dtype=[("id", "<u8"), ("xyz", "<f8", 3), ("rgb", "u1", 3),
+                                        ("err", "<f8"), ("len", "<u8"),
+                                        ("track", [("img", "<i4"), ("idx", "<i4")], (int(k),))])
+        rec["id"], rec["xyz"], rec["rgb"] = ids[sel], xyz[sel], rgb[sel]
+        rec["err"], rec["len"] = 0.01, k
+        rec["track"]["img"] = image_id
+        rec["track"]["idx"] = first[sel, None] + np.arange(k)
+        out.append(rec.tobytes())
+    return b"".join(out)
 
 
 def depth_png(depth: np.ndarray) -> bytes:
@@ -202,7 +240,7 @@ def _half(depth: np.ndarray) -> np.ndarray:
     return np.where(ok, d.mean(axis=(1, 3)), 0.0).astype(np.float32)
 
 
-def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: int = POINTS_PER_FRAME,
+def build(frames: list[Frame], *, width: int | None = None, points_per_frame: int = POINTS_PER_FRAME,
           seed: int = 0, dense: dict[int, np.ndarray] | None = None,
           depth_maps: bool = False, test_every: int = 0) -> Dataset:
     """The COLMAP-format training set for `frames` (see the module docstring). Frames with fewer
@@ -220,6 +258,7 @@ def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: in
 
     if not frames:
         raise ValueError("no frames to train on")
+    width = int(width or train_width_override or TRAIN_WIDTH)
     rng = np.random.default_rng(seed)
     dense = dense or {}
     # Every photo's points first: which photos are kept sets the trainer's name order, and so
@@ -254,7 +293,7 @@ def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: in
     files: dict[str, bytes] = {}
     cameras: list[bytes] = []
     images: list[bytes] = []
-    pts_xyz, pts_rgb, pts_track = [], [], []
+    points3d: list[bytes] = []
     next_point = 1
     dense_images = 0
     for frame, scale, size, jpeg, obs, trusted in kept:
@@ -279,34 +318,23 @@ def build(frames: list[Frame], *, width: int = TRAIN_WIDTH, points_per_frame: in
         head = struct.pack("<i4d3di", image_id, *q, *t, image_id) + name.encode() + b"\0"
         n = 0 if held_out else len(obs[0])
         if n:
+            world, colours, pix, uses = obs
             ids = np.arange(next_point, next_point + n, dtype=np.int64)
             next_point += n
-            p2d = np.zeros(n, dtype=[("x", "<f8"), ("y", "<f8"), ("id", "<i8")])
-            world, colours, pix = obs
-            p2d["x"], p2d["y"], p2d["id"] = pix[:, 0], pix[:, 1], ids
-            pts_xyz.append(world)
-            pts_rgb.append(colours)
-            track = np.zeros(n, dtype=[("img", "<i4"), ("idx", "<i4")])
-            track["img"], track["idx"] = image_id, np.arange(n)
-            pts_track.append((ids, track))
-            images.append(head + struct.pack("<Q", n) + p2d.tobytes())
+            # One observation per use: a point the photo observes again is listed again, under
+            # its own id, and its track names the photo once per listing.
+            point = np.repeat(np.arange(n), uses)
+            p2d = np.zeros(len(point), dtype=[("x", "<f8"), ("y", "<f8"), ("id", "<i8")])
+            p2d["x"], p2d["y"], p2d["id"] = pix[point, 0], pix[point, 1], ids[point]
+            images.append(head + struct.pack("<Q", len(point)) + p2d.tobytes())
+            points3d.append(_points3d(ids, world, colours, image_id, uses))
         else:
             images.append(head + struct.pack("<Q", 0))   # listed and scored, never a seed
 
     total = next_point - 1
-    rec = np.zeros(total, dtype=[("id", "<u8"), ("xyz", "<f8", 3), ("rgb", "u1", 3),
-                                 ("err", "<f8"), ("len", "<u8"), ("img", "<i4"), ("idx", "<i4")])
-    if total:
-        rec["id"] = np.concatenate([ids for ids, _ in pts_track])
-        rec["xyz"] = np.concatenate(pts_xyz)
-        rec["rgb"] = np.concatenate(pts_rgb)
-        rec["err"] = 0.01
-        rec["len"] = 1
-        tracks = np.concatenate([track for _, track in pts_track])
-        rec["img"], rec["idx"] = tracks["img"], tracks["idx"]
     count = struct.pack("<Q", len(images))
     files["sparse/0/cameras.bin"] = count + b"".join(cameras)
     files["sparse/0/images.bin"] = count + b"".join(images)
-    files["sparse/0/points3D.bin"] = struct.pack("<Q", total) + rec.tobytes()
+    files["sparse/0/points3D.bin"] = struct.pack("<Q", total) + b"".join(points3d)
     return Dataset(files=files, images=len(images), points=total, size=kept[0][2],
                    dense_images=dense_images, held_out=len(held))

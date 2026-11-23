@@ -106,12 +106,28 @@ def _read_colmap(root: Path):
                             offset=at)
         at += pts.nbytes
         images.append((iid, np.array([qw, qx, qy, qz]), np.array([tx, ty, tz]), cid, name, pts))
-    raw = (sparse / "points3D.bin").read_bytes()
-    (n,) = struct.unpack_from("<Q", raw)
-    rec = np.frombuffer(raw, dtype=[("id", "<u8"), ("xyz", "<f8", 3), ("rgb", "u1", 3),
-                                    ("err", "<f8"), ("len", "<u8"), ("img", "<i4"),
-                                    ("idx", "<i4")], count=n, offset=8)
+    rec, _tracks = _read_points3d(sparse)
     return cams, images, rec
+
+
+def _read_points3d(sparse: Path):
+    """points3D.bin record by record, as gsplat's pycolmap reads it (a track's length varies):
+    one row per point (its track's first entry in img / idx) and every point's whole track."""
+    raw = (sparse / "points3D.bin").read_bytes()
+    (n,), at = struct.unpack_from("<Q", raw), 8
+    head = struct.Struct("<Q3d3BdQ")
+    rec = np.zeros(n, dtype=[("id", "<u8"), ("xyz", "<f8", 3), ("rgb", "u1", 3), ("err", "<f8"),
+                             ("len", "<u8"), ("img", "<i4"), ("idx", "<i4")])
+    tracks = []
+    for i in range(n):
+        pid, x, y, z, r, g, b, err, k = head.unpack_from(raw, at)
+        at += head.size
+        track = np.frombuffer(raw, dtype="<i4", count=2 * k, offset=at).reshape(k, 2)
+        at += track.nbytes
+        rec[i] = (pid, (x, y, z), (r, g, b), err, k, *track[0])
+        tracks.append(track)
+    assert at == len(raw)
+    return rec, tracks
 
 
 def _qvec_matrix(q):
@@ -182,9 +198,30 @@ def test_a_photo_with_few_lidar_points_still_gets_the_full_count(scan, tmp_path)
     depth[:6, :8] = keep                          # 48 usable samples, fewer than asked for
     Image.fromarray(depth).save(path)
     ds = dataset.build(rgbd.load_frames(scan), width=160, points_per_frame=300)
-    _cams, images, points = _read_colmap(ds.write(tmp_path / "ds"))
+    root = ds.write(tmp_path / "ds")
+    _cams, images, points = _read_colmap(root)
     assert ds.images == 2 and [len(im[5]) for im in images] == [300, 300]
-    assert len(points) == ds.points == 600
+    # ...but a repeat observes the same 3D point again: never a copy of it, nor a copy nudged
+    # within its LiDAR pixel. Every 3D point starts a splat sized by its nearest neighbours:
+    # copies start at log(0) = -inf, nudged copies pile into one pixel at ~1e-5 m (atrium_phone).
+    few, full = images[0][0], images[1][0]
+    usable = int((points["img"] == few).sum())
+    assert 20 <= usable < 48 and len(points) == ds.points == usable + 300
+    # gsplat's depth loss takes each photo's points one per entry of their tracks naming it:
+    # 300 for each photo, every usable sample of the sparse one among them.
+    _rec, tracks = _read_points3d(root / "sparse" / "0")
+    seen: dict[int, list[int]] = {}
+    for p, track in enumerate(tracks):
+        for img, idx in track:
+            seen.setdefault(int(img), []).append(p)
+            pts = images[0][5] if img == few else images[1][5]
+            assert pts["id"][idx] == points["id"][p]          # the entry is that observation
+    assert {img: len(v) for img, v in seen.items()} == {few: 300, full: 300}
+    assert len(set(seen[few])) == usable
+    # The neighbour distance a splat starts from: a LiDAR sample's spacing, not a sliver of it.
+    own = points["xyz"][points["img"] == few]
+    gaps = np.linalg.norm(own[:, None] - own[None], axis=-1) + np.eye(len(own))
+    assert gaps.min() > 1e-3
 
 SCENE = """<mujoco>
   <worldbody>

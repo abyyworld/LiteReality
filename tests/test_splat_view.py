@@ -88,3 +88,48 @@ def test_the_bundle_carries_the_view_it_is_given(tmp_path):
     assert read_bundle(tmp_path)["view"] == view
     write_bundle(tmp_path, parts, stage="trained")
     assert "view" not in read_bundle(tmp_path)
+
+
+def test_the_server_passes_well_formed_capture_spots_and_drops_bad_ones(tmp_path):
+    """The bundle's capture spots (the walk zone in the browser) reach browsers only well formed:
+    a list of at most 400 finite [x, y, z]."""
+    import os
+
+    folder = tmp_path / "room"
+    folder.mkdir()
+    bundle = {"stage": "trained", "room": "room-0123456789abcdef.spz", "bodies": {},
+              "created": 1.0, "capture": [[0.5, -1, 1.42], [1.25, 0.5, 1.38]]}
+
+    def served(capture, stamp):
+        bundle["capture"] = capture
+        (folder / "splat.json").write_text(json.dumps(bundle))
+        os.utime(folder / "splat.json", (stamp, stamp))          # the cache re-reads on mtime
+        return SplatSource.fixed(folder).public(None, "room")
+
+    assert served([[0.5, -1, 1.42], [1.25, 0.5, 1.38]], 1)["capture"] == [
+        [0.5, -1.0, 1.42], [1.25, 0.5, 1.38]]
+    assert len(served([[0.0, 0.0, 1.4]] * 400, 2)["capture"]) == 400
+    for stamp, bad in enumerate([[[0.0, 0.0, 1.4]] * 401, [], [[0, 0]], [[0, 0, "1"]],
+                                 [[0, 0, True]], [[0, 0, 1.4], None], {"0": [0, 0, 1]},
+                                 "far away"], start=3):
+        assert "capture" not in served(bad, stamp), bad
+    # NaN and infinity are not JSON a browser can read either.
+    (folder / "splat.json").write_text(json.dumps({**bundle, "capture": [[0, 0, float("nan")]]}))
+    os.utime(folder / "splat.json", (20, 20))
+    assert "capture" not in SplatSource.fixed(folder).public(None, "room")
+
+
+def test_the_bundle_carries_the_capture_spots_it_is_given(tmp_path):
+    from litereality_agent.models.splat.spz import Splats
+    from litereality_agent.pipeline.splatroom import read_bundle, write_bundle
+    from litereality_agent.pipeline.splatroom.split import Split
+
+    n = 4
+    room = Splats(np.zeros((n, 3), np.float32), np.full((n, 3), -3, np.float32),
+                  np.tile(np.array([0, 0, 0, 1], np.float32), (n, 1)),
+                  np.full((n, 3), 0.5, np.float32), np.full(n, 0.9, np.float32))
+    parts = Split(room=room, bodies={}, counts={})
+    write_bundle(tmp_path, parts, stage="instant", capture=[[0.1, 0.2, 1.5]])
+    assert read_bundle(tmp_path)["capture"] == [[0.1, 0.2, 1.5]]
+    write_bundle(tmp_path, parts, stage="trained", capture=[])
+    assert "capture" not in read_bundle(tmp_path)

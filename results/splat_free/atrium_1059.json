@@ -1,0 +1,828 @@
+{
+ "room": "atrium_1059",
+ "scan": "/Users/abyyworld/LiteReality-scans/atrium_1059",
+ "views": [
+  0,
+  1,
+  8,
+  16,
+  24,
+  32,
+  40,
+  48,
+  50
+ ],
+ "held_out": [
+  0,
+  8,
+  16,
+  24,
+  32,
+  40,
+  48
+ ],
+ "wander": [
+  {
+   "pos": [
+    -0.15,
+    0.92,
+    -0.17
+   ],
+   "off_path_m": 0.65
+  },
+  {
+   "pos": [
+    -1.75,
+    0.32,
+    -0.17
+   ],
+   "off_path_m": 0.74
+  },
+  {
+   "pos": [
+    1.15,
+    0.62,
+    0.08
+   ],
+   "off_path_m": 0.98
+  }
+ ],
+ "variants": {
+  "base": {
+   "snapshot": "run/atrium_1059/splat_free_base/raw.spz.bin",
+   "splats": 800000,
+   "clean": null,
+   "render_s": 850.4,
+   "held_out": {
+    "psnr": {
+     "mean": 15.6865,
+     "median": 16.672,
+     "n": 7
+    },
+    "ssim": {
+     "mean": 0.5161,
+     "median": 0.5731,
+     "n": 7
+    },
+    "psnr_gain": {
+     "mean": 16.5958,
+     "median": 18.1918,
+     "n": 7
+    },
+    "psnr_baseline": {
+     "mean": 13.2862,
+     "median": 12.8096,
+     "n": 7
+    },
+    "psnr_static": {
+     "mean": 16.4403,
+     "median": 17.2325,
+     "n": 7
+    },
+    "ssim_static": {
+     "mean": 0.5292,
+     "median": 0.6584,
+     "n": 7
+    },
+    "psnr_objects": {
+     "mean": 12.0813,
+     "median": 12.6826,
+     "n": 5
+    },
+    "ssim_objects": {
+     "mean": 0.4432,
+     "median": 0.4639,
+     "n": 5
+    },
+    "coverage": {
+     "mean": 0.8382,
+     "median": 0.8584,
+     "n": 7
+    }
+   },
+   "training": {
+    "psnr": {
+     "mean": 16.1255,
+     "median": 16.1255,
+     "n": 2
+    },
+    "ssim": {
+     "mean": 0.4929,
+     "median": 0.4929,
+     "n": 2
+    },
+    "psnr_gain": {
+     "mean": 16.7837,
+     "median": 16.7837,
+     "n": 2
+    },
+    "psnr_baseline": {
+     "mean": 12.617,
+     "median": 12.617,
+     "n": 2
+    },
+    "psnr_static": {
+     "mean": 16.4488,
+     "median": 16.4488,
+     "n": 2
+    },
+    "ssim_static": {
+     "mean": 0.5298,
+     "median": 0.5298,
+     "n": 2
+    },
+    "psnr_objects": {
+     "mean": 16.5071,
+     "median": 16.5071,
+     "n": 1
+    },
+    "ssim_objects": {
+     "mean": 0.5633,
+     "median": 0.5633,
+     "n": 1
+    },
+    "coverage": {
+     "mean": 0.9023,
+     "median": 0.9023,
+     "n": 2
+    }
+   },
+   "per_view": [
+    {
+     "frame": 0,
+     "psnr": 13.6546,
+     "ssim": 0.2645,
+     "psnr_gain": 13.8283,
+     "psnr_baseline": 15.6371,
+     "frac_static": 0.8107,
+     "psnr_static": 13.9167,
+     "ssim_static": 0.2179,
+     "frac_objects": 0.1893,
+     "psnr_objects": 12.6826,
+     "ssim_objects": 0.4639,
+     "coverage": 0.8584,
+     "seen": false
+    },
+    {
+     "frame": 1,
+     "psnr": 16.3161,
+     "ssim": 0.3586,
+     "psnr_gain": 17.048,
+     "psnr_baseline": 13.879,
+     "frac_static": 0.8391,
+     "psnr_static": 16.2804,
+     "ssim_static": 0.3193,
+     "frac_objects": 0.1609,
+     "psnr_objects": 16.5071,
+     "ssim_objects": 0.5633,
+     "coverage": 0.8602,
+     "seen": true
+    },
+    {
+     "frame": 8,
+     "psnr": 16.672,
+     "ssim": 0.6234,
+     "psnr_gain": 18.6745,
+     "psnr_baseline": 10.9555,
+     "frac_static": 0.6374,
+     "psnr_static": 17.2325,
+     "ssim_static": 0.6584,
+     "frac_objects": 0.1626,
+     "psnr_objects": 14.6527,
+     "ssim_objects": 0.559,
+     "coverage": 0.9538,
+     "seen": false
+    },
+    {
+     "frame": 16,
+     "psnr": 12.9809,
+     "ssim": 0.2425,
+     "psnr_gain": 13.3655,
+     "psnr_baseline": 12.8096,
+     "frac_static": 0.7294,
+     "psnr_static": 16.8943,
+     "ssim_static": 0.2244,
+     "frac_objects": 0.2706,
+     "psnr_objects": 8.8297,
+     "ssim_objects": 0.291,
+     "coverage": 0.8492,
+     "seen": false
+    },
+    {
+     "frame": 24,
+     "psnr": 18.6193,
+     "ssim": 0.7505,
+     "psnr_gain": 18.6777,
+     "psnr_baseline": 11.2032,
+     "frac_static": 0.5933,
+     "psnr_static": 18.8967,
+     "ssim_static": 0.8134,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.9448,
+     "seen": false
+    },
+    {
+     "frame": 32,
+     "psnr": 18.83,
+     "ssim": 0.7082,
+     "psnr_gain": 19.26,
+     "psnr_baseline": 18.224,
+     "frac_static": 0.9723,
+     "psnr_static": 19.255,
+     "ssim_static": 0.7216,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.6513,
+     "seen": false
+    },
+    {
+     "frame": 40,
+     "psnr": 11.375,
+     "ssim": 0.4507,
+     "psnr_gain": 14.1725,
+     "psnr_baseline": 11.1581,
+     "frac_static": 0.3811,
+     "psnr_static": 10.6166,
+     "ssim_static": 0.3708,
+     "frac_objects": 0.1974,
+     "psnr_objects": 12.8317,
+     "ssim_objects": 0.529,
+     "coverage": 0.6948,
+     "seen": false
+    },
+    {
+     "frame": 48,
+     "psnr": 17.6736,
+     "ssim": 0.5731,
+     "psnr_gain": 18.1918,
+     "psnr_baseline": 13.016,
+     "frac_static": 0.3104,
+     "psnr_static": 18.2706,
+     "ssim_static": 0.6982,
+     "frac_objects": 0.0198,
+     "psnr_objects": 11.4099,
+     "ssim_objects": 0.3732,
+     "coverage": 0.9148,
+     "seen": false
+    },
+    {
+     "frame": 50,
+     "psnr": 15.9348,
+     "ssim": 0.6273,
+     "psnr_gain": 16.5193,
+     "psnr_baseline": 11.355,
+     "frac_static": 0.5905,
+     "psnr_static": 16.6171,
+     "ssim_static": 0.7404,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.9444,
+     "seen": true
+    }
+   ],
+   "wander": [
+    {
+     "holes": 0.0744,
+     "speckle": 0.0008
+    },
+    {
+     "holes": 0.0189,
+     "speckle": 0.0011
+    },
+    {
+     "holes": 0.1272,
+     "speckle": 0.0019
+    }
+   ]
+  },
+  "support3": {
+   "snapshot": "run/atrium_1059/splat_free_support3/raw.clean.spz.bin",
+   "splats": 465130,
+   "clean": {
+    "input": 800000,
+    "faint": 0,
+    "outside": 0,
+    "carved": 0,
+    "unsupported": 334870,
+    "carve_frames": 44,
+    "held_out_frames": 7,
+    "support_views": 3,
+    "kept": 465130,
+    "seconds": 1.046
+   },
+   "render_s": 550.5,
+   "held_out": {
+    "psnr": {
+     "mean": 11.3209,
+     "median": 10.9954,
+     "n": 7
+    },
+    "ssim": {
+     "mean": 0.4944,
+     "median": 0.485,
+     "n": 7
+    },
+    "psnr_gain": {
+     "mean": 13.563,
+     "median": 13.1324,
+     "n": 7
+    },
+    "psnr_baseline": {
+     "mean": 13.2862,
+     "median": 12.8096,
+     "n": 7
+    },
+    "psnr_static": {
+     "mean": 12.2877,
+     "median": 12.1022,
+     "n": 7
+    },
+    "ssim_static": {
+     "mean": 0.5124,
+     "median": 0.5996,
+     "n": 7
+    },
+    "psnr_objects": {
+     "mean": 8.3747,
+     "median": 8.0866,
+     "n": 5
+    },
+    "ssim_objects": {
+     "mean": 0.4197,
+     "median": 0.4239,
+     "n": 5
+    },
+    "coverage": {
+     "mean": 0.5265,
+     "median": 0.5753,
+     "n": 7
+    }
+   },
+   "training": {
+    "psnr": {
+     "mean": 11.7975,
+     "median": 11.7975,
+     "n": 2
+    },
+    "ssim": {
+     "mean": 0.4419,
+     "median": 0.4419,
+     "n": 2
+    },
+    "psnr_gain": {
+     "mean": 13.8841,
+     "median": 13.8841,
+     "n": 2
+    },
+    "psnr_baseline": {
+     "mean": 12.617,
+     "median": 12.617,
+     "n": 2
+    },
+    "psnr_static": {
+     "mean": 13.7097,
+     "median": 13.7097,
+     "n": 2
+    },
+    "ssim_static": {
+     "mean": 0.5064,
+     "median": 0.5064,
+     "n": 2
+    },
+    "psnr_objects": {
+     "mean": 7.9826,
+     "median": 7.9826,
+     "n": 1
+    },
+    "ssim_objects": {
+     "mean": 0.3737,
+     "median": 0.3737,
+     "n": 1
+    },
+    "coverage": {
+     "mean": 0.694,
+     "median": 0.694,
+     "n": 2
+    }
+   },
+   "per_view": [
+    {
+     "frame": 0,
+     "psnr": 10.9954,
+     "ssim": 0.2597,
+     "psnr_gain": 11.7994,
+     "psnr_baseline": 15.6371,
+     "frac_static": 0.8107,
+     "psnr_static": 11.6203,
+     "ssim_static": 0.2121,
+     "frac_objects": 0.1893,
+     "psnr_objects": 9.0252,
+     "ssim_objects": 0.4636,
+     "coverage": 0.5753,
+     "seen": false
+    },
+    {
+     "frame": 1,
+     "psnr": 10.197,
+     "ssim": 0.2891,
+     "psnr_gain": 13.2119,
+     "psnr_baseline": 13.879,
+     "frac_static": 0.8391,
+     "psnr_static": 10.7897,
+     "ssim_static": 0.2728,
+     "frac_objects": 0.1609,
+     "psnr_objects": 7.9826,
+     "ssim_objects": 0.3737,
+     "coverage": 0.5528,
+     "seen": true
+    },
+    {
+     "frame": 8,
+     "psnr": 10.8504,
+     "ssim": 0.5638,
+     "psnr_gain": 13.1324,
+     "psnr_baseline": 10.9555,
+     "frac_static": 0.6374,
+     "psnr_static": 12.1022,
+     "ssim_static": 0.604,
+     "frac_objects": 0.1626,
+     "psnr_objects": 6.4193,
+     "ssim_objects": 0.4177,
+     "coverage": 0.7915,
+     "seen": false
+    },
+    {
+     "frame": 16,
+     "psnr": 9.3595,
+     "ssim": 0.2176,
+     "psnr_gain": 12.2652,
+     "psnr_baseline": 12.8096,
+     "frac_static": 0.7294,
+     "psnr_static": 10.4693,
+     "ssim_static": 0.1738,
+     "frac_objects": 0.2706,
+     "psnr_objects": 7.297,
+     "ssim_objects": 0.3357,
+     "coverage": 0.4502,
+     "seen": false
+    },
+    {
+     "frame": 24,
+     "psnr": 14.5766,
+     "ssim": 0.6565,
+     "psnr_gain": 15.1515,
+     "psnr_baseline": 11.2032,
+     "frac_static": 0.5933,
+     "psnr_static": 17.8269,
+     "ssim_static": 0.7901,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.8141,
+     "seen": false
+    },
+    {
+     "frame": 32,
+     "psnr": 13.8354,
+     "ssim": 0.8149,
+     "psnr_gain": 16.4041,
+     "psnr_baseline": 18.224,
+     "frac_static": 0.9723,
+     "psnr_static": 14.2845,
+     "ssim_static": 0.8278,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.3037,
+     "seen": false
+    },
+    {
+     "frame": 40,
+     "psnr": 7.2957,
+     "ssim": 0.4633,
+     "psnr_gain": 11.8843,
+     "psnr_baseline": 11.1581,
+     "frac_static": 0.3811,
+     "psnr_static": 6.278,
+     "ssim_static": 0.3797,
+     "frac_objects": 0.1974,
+     "psnr_objects": 8.0866,
+     "ssim_objects": 0.4575,
+     "coverage": 0.141,
+     "seen": false
+    },
+    {
+     "frame": 48,
+     "psnr": 12.333,
+     "ssim": 0.485,
+     "psnr_gain": 14.3043,
+     "psnr_baseline": 13.016,
+     "frac_static": 0.3104,
+     "psnr_static": 13.433,
+     "ssim_static": 0.5996,
+     "frac_objects": 0.0198,
+     "psnr_objects": 11.0453,
+     "ssim_objects": 0.4239,
+     "coverage": 0.61,
+     "seen": false
+    },
+    {
+     "frame": 50,
+     "psnr": 13.3981,
+     "ssim": 0.5947,
+     "psnr_gain": 14.5563,
+     "psnr_baseline": 11.355,
+     "frac_static": 0.5905,
+     "psnr_static": 16.6297,
+     "ssim_static": 0.7401,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.8352,
+     "seen": true
+    }
+   ],
+   "wander": [
+    {
+     "holes": 0.7752,
+     "speckle": 0.001
+    },
+    {
+     "holes": 0.2606,
+     "speckle": 0.002
+    },
+    {
+     "holes": 0.6496,
+     "speckle": 0.0022
+    }
+   ]
+  },
+  "clean_support3": {
+   "snapshot": "run/atrium_1059/splat_free_clean_support3/raw.clean.spz.bin",
+   "splats": 394005,
+   "clean": {
+    "input": 800000,
+    "faint": 105031,
+    "outside": 5333,
+    "carved": 16767,
+    "unsupported": 278864,
+    "carve_frames": 44,
+    "held_out_frames": 7,
+    "support_views": 3,
+    "kept": 394005,
+    "seconds": 0.973
+   },
+   "render_s": 568.9,
+   "held_out": {
+    "psnr": {
+     "mean": 11.2936,
+     "median": 10.9216,
+     "n": 7
+    },
+    "ssim": {
+     "mean": 0.4939,
+     "median": 0.4842,
+     "n": 7
+    },
+    "psnr_gain": {
+     "mean": 13.5436,
+     "median": 13.0341,
+     "n": 7
+    },
+    "psnr_baseline": {
+     "mean": 13.2862,
+     "median": 12.8096,
+     "n": 7
+    },
+    "psnr_static": {
+     "mean": 12.2815,
+     "median": 12.0545,
+     "n": 7
+    },
+    "ssim_static": {
+     "mean": 0.5121,
+     "median": 0.5996,
+     "n": 7
+    },
+    "psnr_objects": {
+     "mean": 8.2922,
+     "median": 8.0767,
+     "n": 5
+    },
+    "ssim_objects": {
+     "mean": 0.419,
+     "median": 0.4238,
+     "n": 5
+    },
+    "coverage": {
+     "mean": 0.5251,
+     "median": 0.5718,
+     "n": 7
+    }
+   },
+   "training": {
+    "psnr": {
+     "mean": 11.7497,
+     "median": 11.7497,
+     "n": 2
+    },
+    "ssim": {
+     "mean": 0.441,
+     "median": 0.441,
+     "n": 2
+    },
+    "psnr_gain": {
+     "mean": 13.8569,
+     "median": 13.8569,
+     "n": 2
+    },
+    "psnr_baseline": {
+     "mean": 12.617,
+     "median": 12.617,
+     "n": 2
+    },
+    "psnr_static": {
+     "mean": 13.6774,
+     "median": 13.6774,
+     "n": 2
+    },
+    "ssim_static": {
+     "mean": 0.5053,
+     "median": 0.5053,
+     "n": 2
+    },
+    "psnr_objects": {
+     "mean": 7.8476,
+     "median": 7.8476,
+     "n": 1
+    },
+    "ssim_objects": {
+     "mean": 0.3746,
+     "median": 0.3746,
+     "n": 1
+    },
+    "coverage": {
+     "mean": 0.6917,
+     "median": 0.6917,
+     "n": 2
+    }
+   },
+   "per_view": [
+    {
+     "frame": 0,
+     "psnr": 10.9216,
+     "ssim": 0.2598,
+     "psnr_gain": 11.7571,
+     "psnr_baseline": 15.6371,
+     "frac_static": 0.8107,
+     "psnr_static": 11.6072,
+     "ssim_static": 0.2116,
+     "frac_objects": 0.1893,
+     "psnr_objects": 8.8114,
+     "ssim_objects": 0.4662,
+     "coverage": 0.5718,
+     "seen": false
+    },
+    {
+     "frame": 1,
+     "psnr": 10.1002,
+     "ssim": 0.2875,
+     "psnr_gain": 13.1536,
+     "psnr_baseline": 13.879,
+     "frac_static": 0.8391,
+     "psnr_static": 10.7069,
+     "ssim_static": 0.2708,
+     "frac_objects": 0.1609,
+     "psnr_objects": 7.8476,
+     "ssim_objects": 0.3746,
+     "coverage": 0.5491,
+     "seen": true
+    },
+    {
+     "frame": 8,
+     "psnr": 10.7428,
+     "ssim": 0.5616,
+     "psnr_gain": 13.0341,
+     "psnr_baseline": 10.9555,
+     "frac_static": 0.6374,
+     "psnr_static": 12.0545,
+     "ssim_static": 0.6017,
+     "frac_objects": 0.1626,
+     "psnr_objects": 6.231,
+     "ssim_objects": 0.4134,
+     "coverage": 0.788,
+     "seen": false
+    },
+    {
+     "frame": 16,
+     "psnr": 9.357,
+     "ssim": 0.218,
+     "psnr_gain": 12.2719,
+     "psnr_baseline": 12.8096,
+     "frac_static": 0.7294,
+     "psnr_static": 10.4648,
+     "ssim_static": 0.1743,
+     "frac_objects": 0.2706,
+     "psnr_objects": 7.2969,
+     "ssim_objects": 0.3357,
+     "coverage": 0.4494,
+     "seen": false
+    },
+    {
+     "frame": 24,
+     "psnr": 14.5816,
+     "ssim": 0.656,
+     "psnr_gain": 15.159,
+     "psnr_baseline": 11.2032,
+     "frac_static": 0.5933,
+     "psnr_static": 17.8483,
+     "ssim_static": 0.79,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.8131,
+     "seen": false
+    },
+    {
+     "frame": 32,
+     "psnr": 13.8354,
+     "ssim": 0.8149,
+     "psnr_gain": 16.4041,
+     "psnr_baseline": 18.224,
+     "frac_static": 0.9723,
+     "psnr_static": 14.2845,
+     "ssim_static": 0.8278,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.3037,
+     "seen": false
+    },
+    {
+     "frame": 40,
+     "psnr": 7.2941,
+     "ssim": 0.463,
+     "psnr_gain": 11.8828,
+     "psnr_baseline": 11.1581,
+     "frac_static": 0.3811,
+     "psnr_static": 6.278,
+     "ssim_static": 0.3797,
+     "frac_objects": 0.1974,
+     "psnr_objects": 8.0767,
+     "ssim_objects": 0.4559,
+     "coverage": 0.1409,
+     "seen": false
+    },
+    {
+     "frame": 48,
+     "psnr": 12.3229,
+     "ssim": 0.4842,
+     "psnr_gain": 14.2965,
+     "psnr_baseline": 13.016,
+     "frac_static": 0.3104,
+     "psnr_static": 13.4335,
+     "ssim_static": 0.5996,
+     "frac_objects": 0.0198,
+     "psnr_objects": 11.0451,
+     "ssim_objects": 0.4238,
+     "coverage": 0.609,
+     "seen": false
+    },
+    {
+     "frame": 50,
+     "psnr": 13.3992,
+     "ssim": 0.5945,
+     "psnr_gain": 14.5602,
+     "psnr_baseline": 11.355,
+     "frac_static": 0.5905,
+     "psnr_static": 16.6479,
+     "ssim_static": 0.7398,
+     "frac_objects": 0.0,
+     "psnr_objects": null,
+     "ssim_objects": null,
+     "coverage": 0.8343,
+     "seen": true
+    }
+   ],
+   "wander": [
+    {
+     "holes": 0.7752,
+     "speckle": 0.001
+    },
+    {
+     "holes": 0.2621,
+     "speckle": 0.002
+    },
+    {
+     "holes": 0.6513,
+     "speckle": 0.0023
+    }
+   ]
+  }
+ },
+ "seconds": 1974.8
+}

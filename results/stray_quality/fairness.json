@@ -1,0 +1,54 @@
+{
+ "eval_frames": 29,
+ "stray_atrium_q206": {
+  "train_frames": 188,
+  "eval_rows_in_train": [],
+  "min_row_gap": 7,
+  "min_time_gap_s": 0.2,
+  "nearest_train_cam_m": {
+   "min": 0.008,
+   "median": 0.043
+  },
+  "eval_rows_with_train_cam_within_5cm_5deg": [
+   32,
+   224,
+   610,
+   1078,
+   1321,
+   2070,
+   2224,
+   2371
+  ],
+  "angle_at_nearest_deg": {
+   "min": 0.4,
+   "median": 8.2
+  }
+ },
+ "stray_atrium_q600": {
+  "train_frames": 637,
+  "eval_rows_in_train": [],
+  "min_row_gap": 7,
+  "min_time_gap_s": 0.2,
+  "nearest_train_cam_m": {
+   "min": 0.004,
+   "median": 0.038
+  },
+  "eval_rows_with_train_cam_within_5cm_5deg": [
+   32,
+   224,
+   308,
+   465,
+   610,
+   1078,
+   1321,
+   2010,
+   2070,
+   2224,
+   2371
+  ],
+  "angle_at_nearest_deg": {
+   "min": 0.4,
+   "median": 6.6
+  }
+ }
+}

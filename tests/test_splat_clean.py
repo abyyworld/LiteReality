@@ -312,3 +312,113 @@ def test_a_million_splats_of_a_300_photo_scan_in_seconds():
     assert elapsed < 10.0, f"{elapsed:.1f} s for 1M splats x 300 frames"
     assert stats["carve_frames"] == C.CARVE_FRAMES and stats["held_out_frames"] == 300 - 262
     assert stats["carved"] > 0 and len(out) >= int(n * 0.7)
+
+
+# ── agreement: kept only where enough training photos saw a splat on its surface ─────────────────
+
+
+def _facing(yaws: list[float], tmp_eyes=None) -> list[Frame]:
+    """Cameras at head height near the middle, one per yaw, level: a constant dense map of 2 m
+    then puts their surface on the plane 2 m ahead (x = +-2 for yaw 0 / pi)."""
+    return [Frame(i, K.copy(), _c2w([0.0, 0.1 * (i % 3 - 1), 1.4], yaw, 0.0),
+                  Path(f"frame_{i:05d}.jpg"), Path("missing.png"), None, SIZE)
+            for i, yaw in enumerate(yaws)]
+
+
+def test_agreement_alone_keeps_the_surface_and_drops_what_no_photo_saw_on_it(tmp_path):
+    """On its own (the other rules off), agreement keeps every splat on the box's surfaces and
+    drops every floater and everything beyond the walls: no photo saw any of them on a surface."""
+    rng = np.random.default_rng(0)
+    frames = _frames(tmp_path)
+    pos, labels = _scene(rng, frames)
+    out, stats = C.clean(_splats(pos), frames, min_opacity=0.0, carve_votes=0, support_views=3)
+    kept = {tuple(p) for p in np.round(out.positions, 4)}
+    alive = np.array([tuple(p) in kept for p in np.round(pos.astype(np.float32), 4)])
+    assert alive[labels == 0].all()
+    assert not alive[labels == 1].any() and not alive[labels == 2].any()
+    assert not alive[(labels == 3) & (pos[:, 0] > 2.5)].any()      # a door leaf's swing: air
+    assert (stats["faint"], stats["outside"], stats["carved"]) == (0, 0, 0)
+    assert stats["unsupported"] == len(pos) - len(out) and stats["support_views"] == 3
+    assert stats["carve_frames"] == 56 and stats["held_out_frames"] == 8
+
+
+def test_a_splat_too_few_photos_saw_on_its_surface_goes():
+    frames = _facing([0.0, 0.0, 0.0, np.pi, np.pi])       # three look at x = +2, two at x = -2
+    dense = {f.index: np.full((192, 256), 2.0, np.float32) for f in frames}
+    pos = np.array([[2.0, 0.0, 1.4],       # on the +x surface in three photos
+                    [2.04, 0.1, 1.4],      # 4 cm behind it: within 5 cm, still on it
+                    [-2.0, 0.0, 1.4],      # on the -x surface in two photos only
+                    [2.3, 0.0, 1.4],       # hidden behind the surface
+                    [1.5, 0.0, 1.4]])      # floating in front of it
+    out, stats = C.clean(_splats(pos), frames, dense=dense, test_every=0, carve_votes=0,
+                         support_views=3)
+    np.testing.assert_allclose(out.positions, pos[:2].astype(np.float32), atol=1e-6)
+    assert stats["unsupported"] == 3 and stats["carved"] == 0
+    out, stats = C.clean(_splats(pos), frames, dense=dense, test_every=0, carve_votes=0,
+                         support_views=2)
+    np.testing.assert_allclose(out.positions, pos[:3].astype(np.float32), atol=1e-6)
+    # With carving too, the floater is counted once, as carved.
+    out, stats = C.clean(_splats(pos), frames, dense=dense, test_every=0, carve_votes=2,
+                         support_views=3)
+    assert len(out) == 2 and stats["carved"] == 1 and stats["unsupported"] == 2
+    # Off (the default): nothing is dropped for want of agreement.
+    out, stats = C.clean(_splats(pos), frames, dense=dense, test_every=0, carve_votes=0)
+    assert len(out) == len(pos) and stats["unsupported"] == 0 and "support_views" not in stats
+
+
+def test_held_out_frames_never_vote_for_agreement():
+    """The trainer's held-out photo (the first by name) seeing a splat on its surface does not
+    count: two training photos are not three."""
+    frames = _facing([0.0, 0.0, 0.0] + [np.pi] * 5)
+    sees = {0, 1, 2}
+    dense = {f.index: np.full((192, 256), 2.0 if f.index in sees or f.index > 2 else 0.0,
+                              np.float32) for f in frames}
+    splat = _splats(np.array([[2.0, 0.0, 1.4]]))
+    out, stats = C.clean(splat, frames, dense=dense, carve_votes=0, support_views=3)
+    assert len(out) == 0 and stats["held_out_frames"] == 1 and stats["carve_frames"] == 7
+    out, stats = C.clean(splat, frames, dense=dense, test_every=0, carve_votes=0,
+                         support_views=3)
+    assert len(out) == 1
+
+
+def test_agreement_never_empties_a_room_without_depth():
+    frames = _facing([0.0] * 4)                            # no LiDAR on disk, no dense maps
+    out, stats = C.clean(_splats(np.array([[2.0, 0.0, 1.4]])), frames, test_every=0,
+                         support_views=3)
+    assert len(out) == 1 and stats["carve_frames"] == 0 and stats["support_views"] == 0
+
+
+def test_protected_splats_need_no_agreement():
+    frames = _facing([0.0] * 4)
+    dense = {f.index: np.full((192, 256), 2.0, np.float32) for f in frames}
+    pos = np.array([[1.5, 0.0, 1.4], [1.5, 0.05, 1.4]])
+    out, stats = C.clean(_splats(pos), frames, dense=dense, test_every=0, carve_votes=0,
+                         support_views=3, protect=np.array([True, False]))
+    assert len(out) == 1 and stats["unsupported"] == 1
+    np.testing.assert_allclose(out.positions[0], pos[0], atol=1e-6)
+
+
+def test_the_agreement_bar_follows_the_share_of_frames_that_vote():
+    assert C.support_need(3, 56, 56, 56) == 3
+    assert C.support_need(3, 96, 262, 96) == 2         # 3 of 262 photos is ~1.1 of 96 voters
+    assert C.support_need(3, 96, 96 * 3, 96) == 1
+    assert C.support_need(3, 2, 2, 2) == 2             # two photos cannot ask for three
+    assert C.support_need(3, 10, 10, 0) == 0           # no depth: no agreement to ask for
+    assert C.support_need(0, 56, 56, 56) == 0
+
+
+def test_a_million_splats_with_agreement_in_seconds():
+    """Agreement rides on carving's projection: 1M splats x 60 frames with every rule on."""
+    rng = np.random.default_rng(5)
+    frames = _frames(None, count=60)
+    dense = {f.index: _render(f.c2w, (720, 960)) for f in frames}
+    n = 1_000_000
+    surface = _surface(0.02)
+    pos = np.concatenate([surface[rng.integers(0, len(surface), int(n * 0.7))],
+                          rng.uniform(LO - 0.5, HI + 0.5, (n - int(n * 0.7), 3))])
+    t = time.perf_counter()
+    out, stats = C.clean(_splats(pos), frames, dense=dense, bounds=_room(), support_views=3)
+    elapsed = time.perf_counter() - t
+    assert elapsed < 10.0, f"{elapsed:.1f} s for 1M splats x 60 frames"
+    assert stats["carve_frames"] == 60 - 8 and stats["unsupported"] > 0
+    assert len(out) >= int(n * 0.69)

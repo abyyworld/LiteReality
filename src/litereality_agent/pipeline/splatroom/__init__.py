@@ -10,12 +10,15 @@ the body the server moves — grab the real chair and the real chair moves.
 What it writes, in ``run/<scan>/splat/`` (`DEFAULT_DIR`):
 
     splat.json                 the current bundle: {"stage", "step", "room": file,
-                               "bodies": {name: file}, "counts", "created"}, rewritten atomically
+                               "bodies": {name: file}, "counts", "created", "view", "capture"},
+                               rewritten atomically ("view": where a newcomer first stands;
+                               "capture": where the phone was, for the browser's walk zone)
     room-<hash>.spz            files are named by their content, so a browser caches them forever
     body-<name>-<hash>.spz     and a bundle never points at a half-written file
     report.json                timings, splat counts and the trainer's held-out PSNR/SSIM/LPIPS
     raw.spz.bin                the latest trained snapshot, uncut and uncleaned (`SavedTrainer`)
-    raw.clean.spz.bin          the same after `clean` (with ``clean=True``): what was cut and served
+    raw.clean.spz.bin          the same after `clean` (with ``clean=True`` or the agreement filter):
+                               what was cut and served
 
 Two optional improvements for the views the scan barely saw (both off by default):
 
@@ -32,9 +35,16 @@ Two optional improvements for the views the scan barely saw (both off by default
                  the trainer never waits for it.
     clean        every snapshot loses its faint splats, the ones outside RoomPlan's room and the
                  floaters the depth maps see through (`models.splat.clean`) before it is cut.
+    agreement    ("support_views" in `clean_options`, on its own or with `clean`) every snapshot
+                 keeps only the splats at least that many training photos saw on their surface:
+                 the speckle a thin scan leaves where one or two photos looked goes.
+
+A re-cut (`SavedTrainer`) replays `RAW` through the same rules: a trained room is cleaned again
+with new rules on a laptop, no GPU.
 
     litereality splatroom <scan> [--scene run/<scan>/objects/scene.xml] [--instant-only]
                          [--depth promptda] [--depth-loss-dense] [--normal-lambda F] [--clean]
+                         [--support-views N] [--recut --no-masks]
 """
 
 from __future__ import annotations
@@ -60,13 +70,16 @@ BUNDLE = "splat.json"
 REPORT = "report.json"
 SPLAT_SCENE = "scene_splat.xml"  # the physics with the bodies moved, beside the scene cut against
 RAW = "raw.spz.bin"            # the latest snapshot uncut (not a bundle file: never served)
-RAW_CLEAN = "raw.clean.spz.bin"  # the same cleaned, as it was cut (with `clean`)
+RAW_CLEAN = "raw.clean.spz.bin"  # the same cleaned, as it was cut (`clean`, agreement)
 INSTANT_VOXEL = 0.016          # ~640k splats, ~6 MB for tea_room: on screen in seconds
 # Points per photo drawn from dense depth: up to this many, but no more in all than the trainer's
 # splat budget (MCMC never prunes its starting points, so 20000 x 300 photos would start it at 6M).
 DENSE_POINTS_MAX = 20_000
 CAP_MAX = 800_000              # the trainer's default splat budget (deploy/modal/splat "cap_max")
 TEST_EVERY = 8                 # the trainer's default hold-out ("test_every")
+# Capture spots a bundle carries (the browser keeps walkers near them): ~1 per photo of a thin
+# scan, a spread of a long one; a few kB of JSON either way.
+CAPTURE_MAX = 200
 # Seconds from the start of a build that training waits for dense depth. A warm 60-photo scan
 # takes ~17 s, a cold one ~32 s; no free GPU, or a stalled upload, must not hold the H100 for the
 # Modal call's own 10-minute limit while the LiDAR would have trained the room in ~75 s.
@@ -105,8 +118,17 @@ def _name(prefix: str, data: bytes) -> str:
     return f"{prefix}-{hashlib.sha256(data).hexdigest()[:16]}.spz"
 
 
+def capture_positions(frames, most: int = CAPTURE_MAX) -> list[list[float]]:
+    """Where the phone was for each photo, in the room's frame (Z up, as "view"), rounded to the
+    centimetre: at most `most`, evenly spaced in frame order (`clean.spread`). The browser keeps
+    walkers within reach of these spots, where the splat has photos behind it."""
+    picked = splat_clean.spread(list(frames), most)
+    return [[round(float(v), 2) for v in f.c2w[:3, 3]] for f in picked]
+
+
 def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = None,
-                 antialiased: bool = True, view: dict | None = None) -> dict:
+                 antialiased: bool = True, view: dict | None = None,
+                 capture: list | None = None) -> dict:
     """Write one bundle (files first, then `splat.json` atomically) and drop older files. The
     previous bundle's files are kept one bundle longer: an upload of it may still be reading them
     (`BundleUploader`), and a browser may still be fetching them."""
@@ -130,6 +152,8 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
               "created": round(time.time(), 3)}
     if view is not None:
         bundle["view"] = view          # where a newcomer first stands (`views.best_view`)
+    if capture:
+        bundle["capture"] = capture    # the capture spots (`capture_positions`)
     tmp = out_dir / (BUNDLE + ".tmp")
     tmp.write_text(json.dumps(bundle, indent=1))
     os.replace(tmp, out_dir / BUNDLE)
@@ -143,15 +167,22 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
 
 
 def add_view(out_dir: Path, scan_dir: Path) -> dict | None:
-    """Give the bundle in `out_dir` its first view (`views.best_view`) if it has none yet, for
-    bundles written before views existed. Rewrites `splat.json` atomically; returns the bundle."""
+    """Give the bundle in `out_dir` its first view (`views.best_view`) and its capture spots
+    (`capture_positions`) where it has none yet, for bundles written before either existed.
+    Rewrites `splat.json` atomically when something was added; returns the bundle."""
     bundle = read_bundle(out_dir)
-    if bundle is None or "view" in bundle:
+    if bundle is None or ("view" in bundle and "capture" in bundle):
         return bundle
-    view = splat_views.best_view(rgbd.load_frames(scan_dir))
-    if view is None:
+    frames = rgbd.load_frames(scan_dir)
+    added = False
+    if "view" not in bundle:
+        view = splat_views.best_view(frames)   # reads every photo: only when it is missing
+        if view is not None:
+            bundle["view"], added = view, True
+    if "capture" not in bundle and frames:
+        bundle["capture"], added = capture_positions(frames), True
+    if not added:
         return bundle
-    bundle["view"] = view
     tmp = out_dir / (BUNDLE + ".tmp")
     tmp.write_text(json.dumps(bundle, indent=1))
     os.replace(tmp, out_dir / BUNDLE)
@@ -189,7 +220,10 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     then the training set's points per photo (default `dense_points_for`). Dense trainer losses
     asked for in `options` are dropped, with a line in the report, when no dense depth came back
     (or none within `depth_deadline` seconds of the start: ``report["depth"]["fallback"]``).
-    With `clean`, every snapshot goes through `clean.clean` (keywords `clean_options`) first."""
+    With `clean`, every snapshot goes through `clean.clean` (keywords `clean_options`) first.
+    ``clean_options["support_views"]`` (the agreement filter) works with or without `clean`:
+    without it, agreement is the only rule that runs (the faint, outside and carving rules are
+    switched off), so each rule can be tried alone."""
     import threading
 
     from litereality_agent.pipeline.splatroom import masks as object_masks
@@ -203,20 +237,32 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     if not frames:
         raise ValueError(f"{scan_dir}: no frames with a pose, a photo and depth")
     first_view = splat_views.best_view(frames)
+    capture = capture_positions(frames)
     report: dict = {"scan": str(scan_dir), "scene": str(scene_xml), "frames": len(frames),
-                    "view": first_view,
+                    "view": first_view, "capture": len(capture),
                     "depth": {"source": "promptda" if refiner is not None else "lidar"},
                     "bundles": []}
     options = dict(options or {})
-    test_every = int(options.get("test_every", TEST_EVERY))
+    # A re-cut holds out what the training run held out (--no-holdout, a --trainer-option),
+    # not what this command line would: otherwise photos it trained on lose their vote.
+    trained_options = (trainer.report.get("options") or {}) if isinstance(
+        trainer, SavedTrainer) else {}
+    test_every = int(options.get("test_every", trained_options.get("test_every", TEST_EVERY)))
     clean_kw = dict(clean_options or {})
+    support_views = int(clean_kw.get("support_views") or 0)
+    cleaning = clean or support_views > 0
     if clean:
         clean_kw.setdefault("bounds", room_bounds(scan_dir, log))
+    elif cleaning:
+        # Agreement alone: the other rules stay off unless `clean` asks for them too.
+        clean_kw.update(min_opacity=0.0, bounds=None, carve_votes=0)
+    if cleaning:
         report["clean"] = {"margin": clean_kw.get("margin", splat_clean.MARGIN),
                            "carve_frames": clean_kw.get("carve_frames",
                                                         splat_clean.CARVE_FRAMES),
                            "min_opacity": clean_kw.get("min_opacity", splat_clean.MIN_OPACITY),
                            "carve_votes": clean_kw.get("carve_votes", splat_clean.CARVE_VOTES),
+                           "support_views": support_views,
                            "room_bounds": clean_kw["bounds"] is not None,
                            "test_every": test_every}
 
@@ -225,15 +271,17 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
 
     def cleaned(splats: spz.Splats, dense: dict | None,
                 image_names=None) -> tuple[spz.Splats, dict]:
-        """`splats` through `clean.clean` (when on), carving with the training photos only: the
-        trainer scores its held-out photos, so their depth must not decide what stays."""
-        if not clean:
+        """`splats` through `clean.clean` (when on), carving and checking agreement with the
+        training photos only: the trainer scores its held-out photos, so their depth must not
+        decide what stays."""
+        if not cleaning:
             return splats, {}
         out, stats = splat_clean.clean(splats, frames, dense=dense or None,
                                        test_every=test_every, image_names=image_names,
                                        **clean_kw)
         log(f"  clean: {stats['kept']:,} of {stats['input']:,} kept ({stats['faint']:,} faint, "
-            f"{stats['outside']:,} outside, {stats['carved']:,} carved), {stats['seconds']} s")
+            f"{stats['outside']:,} outside, {stats['carved']:,} carved, "
+            f"{stats['unsupported']:,} unsupported), {stats['seconds']} s")
         return out, {"clean": stats}
 
     publishing = threading.RLock()     # the dense instant room is published from its own thread
@@ -267,7 +315,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
             elif moved_before and on_scene:
                 log(f"  no object moved this time: the physics as scanned again ({scene_xml})")
                 on_scene(Path(scene_xml))
-        bundle = write_bundle(out_dir, parts, stage=stage, step=step, view=first_view)
+        bundle = write_bundle(out_dir, parts, stage=stage, step=step, view=first_view,
+                              capture=capture)
         entry = {"stage": stage, "step": step, "at": round(time.perf_counter() - t0, 2),
                  "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
                  "bodies": len(parts.bodies), "masks": state["masks"] is not None,
@@ -466,7 +515,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                     # Uncut and uncleaned, for evaluation and for cutting again (`SavedTrainer`).
                     write_raw(RAW, splats)
                 splats, extra = cleaned(splats, state["dense"], report.get("images"))
-                if clean:
+                if cleaning:
                     write_raw(RAW_CLEAN, splats)
                 else:                   # an earlier run's: evaluate must not score it as this one
                     (out_dir / RAW_CLEAN).unlink(missing_ok=True)

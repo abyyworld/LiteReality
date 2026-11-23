@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import sys
 import threading
@@ -722,6 +723,18 @@ def _splatroom(args) -> int:
                                         profile=modal["profile"],
                                         credentials=modal["credentials"])
     options = {"steps": args.steps} if args.steps else {}
+    for item in args.trainer_option:
+        key, sep, raw = item.partition("=")
+        if not sep or not key.strip():
+            raise SystemExit(f"--trainer-option {item!r}: expected KEY=VALUE")
+        try:
+            options[key.strip()] = json.loads(raw)
+        except ValueError:
+            options[key.strip()] = raw
+    if args.train_width:
+        from litereality_agent.models.splat import dataset as splat_dataset
+
+        splat_dataset.train_width_override = int(args.train_width)
     if args.no_holdout:
         options["test_every"] = 100000
     # The dense losses are sent only when asked for: an older deployed trainer refuses the names.
@@ -750,6 +763,9 @@ def _splatroom(args) -> int:
     clean_options = {}
     if args.carve_votes is not None:
         clean_options["carve_votes"] = args.carve_votes
+    if args.support_views:
+        # On its own or beside --clean's rules (`splatroom.build` keeps them apart).
+        clean_options["support_views"] = args.support_views
     on_bundle = on_scene = None
     segment = None
     # SAM 2 runs on a Modal GPU: an instant-only room ("no GPU, free") is cut by the boxes.
@@ -803,6 +819,9 @@ def _splatroom(args) -> int:
                                  move_bodies=not args.keep_physics, refiner=refiner,
                                  dense_points=args.dense_points, clean=args.clean,
                                  clean_options=clean_options)
+    if args.train_width and not args.recut:
+        report["train_width"] = int(args.train_width)     # the photos' width this run trained at
+        (out / splatroom.REPORT).write_text(json.dumps(report, indent=1))
     print(f"  done in {report['total_s']} s; report: {console.short(out / splatroom.REPORT)}")
     if not args.publish:
         served = Path(report["corrected_scene"]) if report.get("corrected_scene") else scene
@@ -1125,6 +1144,18 @@ def _parser() -> argparse.ArgumentParser:
     splat.add_argument("--carve-votes", type=int, default=None, metavar="N",
                        help="with --clean: photos that must see through a splat to drop it "
                             "(default 2; 0 = no carving)")
+    splat.add_argument("--train-width", type=int, default=None, metavar="PX",
+                       help="the training photos' width (default 960; the scan's own 1920 for "
+                            "full resolution). Dense depth stays at 960 and is resampled")
+    splat.add_argument("--trainer-option", action="append", default=[], metavar="KEY=VALUE",
+                       help="a trainer option (deploy/modal/splat DEFAULTS: sh_degree, "
+                            "batch_size, cap_max, trainer_args, ...); VALUE is read as JSON, "
+                            "else as text. Repeatable")
+    splat.add_argument("--support-views", type=int, default=None, metavar="N",
+                       help="keep only splats at least N training photos saw on their measured "
+                            "surface (try 3; default off): drops the speckle of a thin scan. "
+                            "Alone it is the only rule; --clean adds the others. With --recut "
+                            "--no-masks it re-cleans the last trained snapshot with no GPU")
     splat.set_defaults(handler=_splatroom)
 
     quick = commands.add_parser(
@@ -1223,7 +1254,234 @@ def _parser() -> argparse.ArgumentParser:
                                "concurrency or server-capacity test, no hold-out unless "
                                "--holdout): for a quick look, not for the paper's numbers")
     evaluate.set_defaults(handler=_evaluate)
+
+    stray_import = commands.add_parser(
+        "import-stray",
+        help="a Stray Scanner recording (LiDAR video, ARKit poses) as a scan: its sharpest "
+             "frames, lined up with the room's LiteReality Scanner scan",
+    )
+    stray_import.add_argument("recording", help="the recording's folder (holding odometry.csv, "
+                                                "rgb.mp4, depth/) or a .zip of it")
+    stray_import.add_argument("--out", required=True, metavar="DIR",
+                              help="the scan folder to write")
+    stray_import.add_argument("--align-to", metavar="SCAN",
+                              help="the room's LiteReality Scanner scan (a folder or a scan name "
+                                   "under $LR_SCANS_DIR): the import moves into its ARKit world "
+                                   "and gets its RoomPlan room.usdz")
+    stray_import.add_argument("--frames", type=int, default=300, metavar="N",
+                              help="training frames to keep (default 300)")
+    stray_import.add_argument("--max-residual", type=float, default=0.05, metavar="M",
+                              help="refuse an alignment whose median surface distance is above "
+                                   "this (metres, default 0.05)")
+    stray_import.add_argument("--min-inliers", type=float, default=0.4, metavar="F",
+                              help="refuse an alignment with less than this fraction of the "
+                                   "recording on the scan's surface (default 0.4; lower it when "
+                                   "the recording also covers rooms the scan did not)")
+    stray_import.add_argument("--overwrite", action="store_true",
+                              help="replace a scan already in --out")
+    stray_import.add_argument("--accept-ambiguous", action="store_true",
+                              help="take the best alignment even when another heading fits the "
+                                   "scan's walls nearly as well (refused by default)")
+    stray_import.add_argument("--min-move", type=float, default=None, metavar="M",
+                              help="near-duplicate distance: a frame closer than this to the last "
+                                   "kept one (and turned less than --min-turn) is dropped "
+                                   "(metres, default 0.05)")
+    stray_import.add_argument("--min-turn", type=float, default=None, metavar="DEG",
+                              help="near-duplicate turn (degrees, default 3)")
+    stray_import.add_argument("--exclude", metavar="FILE",
+                              help="a text file of recording frames never to keep (the first "
+                                   "token of each line: the odometry frame number, e.g. 001234; "
+                                   "# comments): an evaluation set held out of training")
+    stray_import.add_argument("--exclude-span", type=float, default=0.0, metavar="S",
+                              help="with --exclude: also drop every frame within this many "
+                                   "seconds of an excluded one (default 0)")
+    stray_import.add_argument("--allow-frame-mismatch", action="store_true",
+                              help="pair rgb.mp4's frames with odometry rows from the first even "
+                                   "when their PTS cannot explain a different count (refused by "
+                                   "default: photos could sit off their poses)")
+    stray_import.add_argument("--output-root")
+    stray_import.set_defaults(handler=_import_stray)
+
+    video_import = commands.add_parser(
+        "import-video",
+        help="an ordinary phone video (no LiDAR, no special app) as a scan: its sharpest "
+             "frames, posed and given metric depth by MapAnything on Modal, lined up with the "
+             "room's LiteReality Scanner scan",
+    )
+    video_import.add_argument("video", help="the video file (e.g. an iPhone Camera .MOV)")
+    video_import.add_argument("--out", required=True, metavar="DIR",
+                              help="the scan folder to write")
+    video_import.add_argument("--align-to", metavar="SCAN",
+                              help="the room's LiteReality Scanner scan (a folder or a scan name "
+                                   "under $LR_SCANS_DIR): yaw + translation + scale into its "
+                                   "ARKit world, and its RoomPlan room.usdz")
+    video_import.add_argument("--frames", type=int, default=200, metavar="N",
+                              help="training frames to keep (default 200)")
+    video_import.add_argument("--max-residual", type=float, default=0.05, metavar="M",
+                              help="refuse an alignment whose median surface distance is above "
+                                   "this (metres, default 0.05)")
+    video_import.add_argument("--min-inliers", type=float, default=0.4, metavar="F",
+                              help="refuse an alignment with less than this fraction of the "
+                                   "video's points on the scan's surface (default 0.4)")
+    video_import.add_argument("--accept-ambiguous", action="store_true",
+                              help="take the best alignment even when another heading fits "
+                                   "nearly as well")
+    video_import.add_argument("--overwrite", action="store_true",
+                              help="replace a scan already in --out")
+    video_import.add_argument("--reference", metavar="SCAN",
+                              help="a LiDAR scan of the same room in the same world (e.g. a "
+                                   "Stray import aligned to the same scan): report pose and "
+                                   "depth error against it (needs --align-to)")
+    video_import.add_argument("--keep-bad-frames", action="store_true",
+                              help="keep frames whose depth does not register onto the "
+                                   "--align-to scan's surface (dropped by default)")
+    video_import.add_argument("--viz-dir", metavar="DIR",
+                              help="with --reference: write side-by-side depth images here")
+    video_import.add_argument("--max-views", type=int, default=None, metavar="N",
+                              help="views per model pass (more frames are chained by shared "
+                                   "anchor views; default the function's, 320)")
+    video_import.add_argument("--env", default=None,
+                              help="Modal environment (default: settings)")
+    video_import.add_argument("--output-root")
+    video_import.set_defaults(handler=_import_video)
     return parser
+
+
+def _stray_selection_kwargs(args) -> dict:
+    """import-stray's optional frame-selection overrides, as `import_stray` keywords."""
+    from litereality_agent.pipeline.capture import read_frame_list
+
+    kw: dict = {}
+    if args.min_move is not None:
+        kw["min_move"] = args.min_move
+    if args.min_turn is not None:
+        kw["min_turn_deg"] = args.min_turn
+    if args.exclude:
+        kw["exclude"] = read_frame_list(args.exclude)
+        kw["exclude_span"] = args.exclude_span
+    return kw
+
+
+def _import_stray(args) -> int:
+    """`litereality import-stray <recording> --out <scan>`: a Stray Scanner recording as a scan
+    (pipeline/capture), optionally in the ARKit world of the room's LiteReality Scanner scan."""
+    import time
+
+    from litereality_agent.pipeline.capture import REPORT, import_stray
+
+    t0 = time.perf_counter()
+    align_to = None
+    if args.align_to:
+        raw = Path(args.align_to).expanduser()
+        if raw.is_dir():
+            align_to = raw
+        else:
+            found = _quick_target(args.align_to, args.output_root)
+            if found is None:
+                raise SystemExit(f"--align-to {args.align_to}: no such scan (a folder, or a scan "
+                                 "name under $LR_SCANS_DIR)")
+            align_to = found[0]
+    out = Path(args.out).expanduser()
+    report = import_stray(args.recording, out, align_to=align_to, frames=args.frames,
+                          max_residual=args.max_residual, min_inliers=args.min_inliers,
+                          overwrite=args.overwrite, accept_ambiguous=args.accept_ambiguous,
+                          allow_frame_mismatch=args.allow_frame_mismatch,
+                          **_stray_selection_kwargs(args))
+    sel, sharp = report["selection"], report["selection"]["sharpness"]
+    print(f"import-stray  {args.recording} -> {console.short(out)}")
+    print(f"  frames      {report['frames']} kept of {report['video']['frames']} "
+          f"({sel['duplicates_dropped']} near-duplicates, {sel['blurry_dropped']} blurry, "
+          f"{sel['tracking_dropped']} around tracking jumps, {sel['no_depth']} without depth)")
+    print(f"  sharpness   kept median {sharp['kept_median']} (min {sharp['kept_min']}) vs "
+          f"{sharp['all_median']} over every frame")
+    if report["alignment"]:
+        a = report["alignment"]
+        print(f"  alignment   yaw {a['yaw_deg']} deg, t {a['translation_m']} m, residual "
+              f"{a['residual_m'] * 100:.1f} cm, {a['inliers']:.0%} of it on the scan's surface")
+        runner = a.get("runner_up")
+        print(f"  heading     {a['score_kind']} {a['score']:.0%}"
+              + (f" vs {runner['score']:.0%} at {runner['yaw_deg']} deg (margin {a['margin']})"
+                 if runner else "")
+              + ("  AMBIGUOUS" if a.get("ambiguous") else ""))
+    print(f"  time        {time.perf_counter() - t0:.1f} s; report: "
+          f"{console.short(out / REPORT)}")
+    return 0
+
+
+def _scan_arg(value: str, flag: str, output_root) -> Path:
+    raw = Path(value).expanduser()
+    if raw.is_dir():
+        return raw
+    found = _quick_target(value, output_root)
+    if found is None:
+        raise SystemExit(f"{flag} {value}: no such scan (a folder, or a scan name under "
+                         "$LR_SCANS_DIR)")
+    return found[0]
+
+
+def _import_video(args) -> int:
+    """`litereality import-video <video> --out <scan>`: a phone video as a scan
+    (models/capture/video: MapAnything on Modal for poses and depth), optionally moved into the
+    ARKit world of the room's LiteReality Scanner scan, optionally scored against a LiDAR scan."""
+    import json
+    import time
+
+    from litereality_agent.models.capture import video as video_import
+    from litereality_agent.models.capture import video_eval
+
+    t0 = time.perf_counter()
+    align_to = _scan_arg(args.align_to, "--align-to", args.output_root) if args.align_to else None
+    if args.reference and not align_to:
+        raise SystemExit("--reference needs --align-to: without it the import stays in the "
+                         "video's own world and cannot be compared with the reference")
+    reference = (_scan_arg(args.reference, "--reference", args.output_root)
+                 if args.reference else None)
+    out = Path(args.out).expanduser()
+
+    class _Lazy:
+        """Looks the deployed function up (and reads the Modal login) only when the model's
+        reply is not cached in the scan already."""
+
+        def remote(self, *a, **k):
+            modal = _modal_kwargs(load_settings())
+            return video_import.modal_function(
+                environment_name=args.env or modal["environment"] or "main",
+                profile=modal["profile"], credentials=modal["credentials"]).remote(*a, **k)
+
+    options = {"max_views": args.max_views} if args.max_views else {}
+    report = video_import.import_video(
+        args.video, out, align_to=align_to, frames=args.frames, function=_Lazy(),
+        options=options, max_residual=args.max_residual, min_inliers=args.min_inliers,
+        accept_ambiguous=args.accept_ambiguous, overwrite=args.overwrite,
+        keep_bad_frames=args.keep_bad_frames)
+    sel = report["selection"]
+    print(f"import-video  {args.video} -> {console.short(out)}")
+    print(f"  frames      {report['frames']} kept of {sel['video_frames']} "
+          f"({sel['duplicates_dropped']} near-duplicates, {sel['blurry_dropped']} blurry)")
+    m = report["model"]
+    print(f"  model       {m.get('model')} on {m.get('gpu')}: {m.get('seconds')} s"
+          + (" (cached reply)" if report["model_cached"] else ""))
+    if report["alignment"]:
+        a = report["alignment"]
+        print(f"  alignment   scale {a['scale']}, yaw {a['yaw_deg']} deg, t {a['translation_m']} "
+              f"m, residual {a['residual_m'] * 100:.1f} cm, {a['inliers']:.0%} on the scan's "
+              "surface" + ("  AMBIGUOUS" if a.get("ambiguous") else ""))
+    if reference is not None:
+        viz = Path(args.viz_dir).expanduser() if args.viz_dir else None
+        result = video_eval.evaluate(out, reference, viz_dir=viz)
+        report["reference_eval"] = {"reference": str(reference), **result}
+        (out / video_import.REPORT).write_text(json.dumps(report, indent=2) + "\n",
+                                               encoding="utf-8")
+        g, d = result["geometry_registration"], result["depth_vs_lidar"]
+        rp, fc = result.get("reprojection") or {}, result.get("focal_vs_lidar") or {}
+        print(f"  vs LiDAR    reprojection {rp.get('median_px')} px median (p90 "
+              f"{rp.get('p90_px')}) over {rp.get('frames')} frames; focal {fc.get('focal')} px "
+              f"(scan {fc.get('scan_fx')}); geometry registration {g['position_median_m']} m / "
+              f"{g['rotation_median_deg']} deg ({g['ok']} ok, {g['failed']} failed); depth "
+              f"{d['abs_median_m']} m ({d['rel_median']} relative) over {d['frames']}")
+    print(f"  time        {time.perf_counter() - t0:.1f} s; report: "
+          f"{console.short(out / video_import.REPORT)}")
+    return 0
 
 
 def _is_capture(path: Path) -> bool:

@@ -476,3 +476,142 @@ def test_the_cli_threads_depth_and_clean_into_the_build(tmp_path, box_scan, monk
     with pytest.raises(SystemExit, match="--depth promptda"):
         cli._splatroom(cli._parser().parse_args(base + ["--depth-loss-dense"]))
     assert cli._parser().parse_args(base + ["--clean", "--no-clean"]).clean is False
+
+
+# ── agreement on a re-cut, and the capture spots ─────────────────────────────────────────────────
+
+
+def test_a_recut_cleans_the_saved_snapshot_by_agreement_alone(tmp_path, box_scan):
+    """`--recut --support-views 3` without --clean: the trained snapshot on disk is replayed (no
+    GPU) through agreement only. The floater and the splat far outside go (no photo saw them on
+    a surface); the faint floor splat stays (the faint rule is off); the photo the trainer held
+    out does not vote, so the one training photo is all agreement can ask for."""
+    xml = _scene(tmp_path, 1.0)
+    out = tmp_path / "splat"
+    out.mkdir()
+    room, counts = _trained_room()
+    (out / splatroom.RAW).write_bytes(spz.encode(room))
+    (out / splatroom.REPORT).write_text(json.dumps({
+        "images": ["frame_00000.jpg", "frame_00001.jpg"], "gpu": "L4",
+        "bundles": [{"stage": "trained", "step": 7000, "trainer_s": 400.0}]}))
+    report = splatroom.build(box_scan, out, xml, trainer=splatroom.SavedTrainer(out),
+                             log=lambda _: None, move_bodies=False,
+                             clean_options={"support_views": 3})
+    assert report["recut"] is True and report["clean"]["support_views"] == 3
+    assert report["clean"]["room_bounds"] is False and report["clean"]["carve_votes"] == 0
+    stats = report["bundles"][-1]["clean"]
+    assert (stats["faint"], stats["outside"], stats["carved"]) == (0, 0, 0)
+    assert stats["held_out_frames"] == 1 and stats["support_views"] == 1
+    cleaned = spz.decode((out / splatroom.RAW_CLEAN).read_bytes())
+    assert len(cleaned) == stats["kept"] and stats["unsupported"] >= 2
+
+    def left(p) -> bool:
+        return bool(np.any(np.abs(cleaned.positions - np.array(p)).max(axis=1) < 1e-4))
+
+    assert left([0.6, 0.5, 0.0])                             # faint, but on the floor
+    assert not left([1.1, -0.5, 1.5]) and not left([9.0, 9.0, 9.0])
+    assert stats["kept"] >= 0.8 * counts["surface"]          # the surface, bar its silhouettes
+    assert len(spz.decode((out / splatroom.RAW).read_bytes())) == len(room)   # never rewritten
+
+
+def test_a_recut_holds_out_what_the_training_run_held_out(tmp_path, box_scan, monkeypatch):
+    """A room trained with --no-holdout (test_every 100000), re-cut without repeating it: the
+    cleanup holds out what the trainer held out, not the default every 8th; an explicit
+    test_every on the re-cut still wins."""
+    from litereality_agent.models.splat import clean as splat_clean
+
+    xml = _scene(tmp_path, 1.0)
+    out = tmp_path / "splat"
+    out.mkdir()
+    (out / splatroom.RAW).write_bytes(spz.encode(_trained_room()[0]))
+    (out / splatroom.REPORT).write_text(json.dumps({
+        "images": ["frame_00000.jpg", "frame_00001.jpg"], "options": {"test_every": 100000},
+        "bundles": [{"stage": "trained", "step": 7000, "trainer_s": 400.0}]}))
+    asked: list[int] = []
+    real = splat_clean.clean
+
+    def spy(*a, **kw):
+        asked.append(kw["test_every"])
+        return real(*a, **kw)
+
+    monkeypatch.setattr(splat_clean, "clean", spy)
+
+    def recut(options=None) -> dict:
+        return splatroom.build(box_scan, out, xml, trainer=splatroom.SavedTrainer(out),
+                               options=options, log=lambda _: None, move_bodies=False,
+                               clean_options={"support_views": 3})
+
+    report = recut()
+    assert report["clean"]["test_every"] == 100000 and set(asked) == {100000}
+    assert report["options"] == {"test_every": 100000}           # still the training run's
+    asked.clear()
+    report = recut({"test_every": 1})
+    assert report["clean"]["test_every"] == 1 and set(asked) == {1}
+    assert report["bundles"][-1]["clean"]["held_out_frames"] == 2
+
+
+def test_every_bundle_carries_the_capture_spots(tmp_path, box_scan):
+    xml = _scene(tmp_path, 1.0)
+    out = tmp_path / "splat"
+    report = splatroom.build(box_scan, out, xml, instant_only=True, log=lambda _: None,
+                             move_bodies=False)
+    assert report["capture"] == 2
+    bundle = splatroom.read_bundle(out)
+    assert bundle["capture"] == [[0.9, 0.0, 3.0], [1.1, 0.0, 3.0]]      # room frame, Z up
+
+
+def test_capture_spots_are_a_spread_rounded_to_the_centimetre():
+    frames = []
+    for i in range(500):
+        c2w = np.eye(4)
+        c2w[:3, 3] = (i * 0.01234, -1.0 / 3.0, 1.4 + 1e-4)
+        frames.append(SimpleNamespace(c2w=c2w))
+    spots = splatroom.capture_positions(frames)
+    assert len(spots) == splatroom.CAPTURE_MAX == 200
+    assert spots[0] == [0.0, -0.33, 1.4] and spots[-1] == [round(499 * 0.01234, 2), -0.33, 1.4]
+    assert splatroom.capture_positions(frames[:3]) == [[0.0, -0.33, 1.4], [0.01, -0.33, 1.4],
+                                                       [0.02, -0.33, 1.4]]
+
+
+def test_an_old_bundle_gets_its_capture_spots(tmp_path, box_scan):
+    from litereality_agent.pipeline.splatroom.split import Split
+
+    out = tmp_path / "splat"
+    room, _ = _trained_room()
+    splatroom.write_bundle(out, Split(room=room, bodies={}, counts={}), stage="trained", step=1)
+    assert "capture" not in splatroom.read_bundle(out)
+    bundle = splatroom.add_view(out, box_scan)
+    assert bundle["capture"] == [[0.9, 0.0, 3.0], [1.1, 0.0, 3.0]]
+    assert splatroom.read_bundle(out)["capture"] == bundle["capture"]
+    assert "view" not in bundle            # straight-down photos make no first view
+    stamp = (out / splatroom.BUNDLE).stat().st_mtime_ns
+    assert splatroom.add_view(out, box_scan)["capture"] == bundle["capture"]
+    assert (out / splatroom.BUNDLE).stat().st_mtime_ns == stamp      # nothing new: not rewritten
+
+
+def test_the_cli_threads_agreement_into_a_recut(tmp_path, box_scan, monkeypatch):
+    xml = _scene(tmp_path, 1.0)
+    out = tmp_path / "splat"
+    out.mkdir()
+    (out / splatroom.RAW).write_bytes(spz.encode(_trained_room()[0]))
+    context = SimpleNamespace(scene_dir=tmp_path, scan="box")
+    monkeypatch.setattr(cli, "_quick_target", lambda *a: (box_scan, context))
+    monkeypatch.setattr(cli, "load_settings",
+                        lambda: SimpleNamespace(modal_configured=lambda: True))
+    monkeypatch.setattr(cli, "_modal_kwargs",
+                        lambda s: {"credentials": None, "profile": None, "environment": None})
+    built: list[dict] = []
+    monkeypatch.setattr(splatroom, "build",
+                        lambda *a, **kw: built.append(kw) or {"total_s": 0.0})
+    base = ["splatroom", str(box_scan), "--scene", str(xml), "--out", str(out), "--no-masks",
+            "--recut"]
+    assert cli._splatroom(cli._parser().parse_args(base + ["--support-views", "3"])) == 0
+    kw = built[-1]
+    assert isinstance(kw["trainer"], splatroom.SavedTrainer) and kw["segment"] is None
+    assert kw["clean"] is False and kw["clean_options"] == {"support_views": 3}
+    assert kw["refiner"] is None
+    args = cli._parser().parse_args(base + ["--support-views", "3", "--clean"])
+    assert cli._splatroom(args) == 0
+    assert built[-1]["clean"] is True and built[-1]["clean_options"] == {"support_views": 3}
+    assert cli._splatroom(cli._parser().parse_args(base + ["--support-views", "0"])) == 0
+    assert built[-1]["clean_options"] == {}

@@ -21,6 +21,9 @@ import numpy as np
 # A pixel whose depth jumps by more than this fraction to a neighbour is an occlusion edge in the
 # sensor depth: its finite-difference normal is meaningless there, so it gets none.
 MAX_NORMAL_JUMP = 0.1
+# A sparse depth point counts only where every pixel of its bilinear footprint is covered (the
+# covered-pixel mask sampled there is 1, up to float rounding): `sparse_disparity`.
+FULL_COVER = 1.0 - 1e-4
 
 
 def depth_path(data_dir: str, image_name: str) -> str | None:
@@ -160,6 +163,25 @@ def depth_normals(depth, Ks, max_jump: float | None = None):
         if max_jump is not None:
             valid = valid & (abs(side - centre) <= max_jump * centre)
     return (nx / norm, ny / norm, nz / norm), valid
+
+
+def sparse_disparity(depths, covered, depths_gt):
+    """gsplat's sparse depth loss terms at the LiDAR points, (rendered, measured) disparity, with
+    no NaN where the render covers nothing (numpy or torch, any matching shapes).
+
+    `depths` is the rendered expected depth bilinearly sampled at the points, `covered` the same
+    sampling of the render's mask of covered pixels (alpha > 0), `depths_gt` the measured depth.
+    Upstream takes ``where(depths > 0, 1 / depths, 0)``. A point whose bilinear footprint touches
+    a pixel nothing covers samples a blend towards 0 depth (disparity up to ~1e9, a gradient that
+    overflows), and one on such pixels samples exactly 0, whose gradient through the unselected
+    1 / 0 is 0 * inf = NaN: every splat drawn there turns NaN within a step or two (atrium_phone,
+    a phone video's sparse model depth, from step 1). Those points get the measured disparity
+    back: no loss and no gradient until the render covers them. Where the render covers every
+    point (a LiDAR scan's splats do) this is upstream's loss exactly."""
+    ok = (covered >= FULL_COVER) & (depths > 0)
+    disp_gt = 1.0 / depths_gt
+    safe = depths * ok + depths_gt * ~ok
+    return (1.0 / safe) * ok + disp_gt * ~ok, disp_gt
 
 
 def dense_depth_l1(pred, dense):

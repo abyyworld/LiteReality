@@ -10,8 +10,10 @@ Adds three trainer flags, all off by default so an unflagged run is gsplat's own
     --normal-lambda 0.0         DN-Splatter's normal term: 1 - cos between the normals of the
                                 rendered and the sensor depth (finite differences, camera space)
 
-gsplat's sparse `--depth-loss` (the LiDAR points, in disparity) is untouched and still works beside
-them, and evaluation (held-out PSNR / SSIM / LPIPS) is not touched at all.
+gsplat's sparse `--depth-loss` (the LiDAR points, in disparity) still works beside them, with one
+fix: a point the render does not cover gets no loss instead of a NaN gradient (edit 8; the same
+loss wherever the render covers the point). Evaluation (held-out PSNR / SSIM / LPIPS) is not
+touched at all.
 
 Each edit is anchored on exact text of the pinned file and must match exactly once: a different
 gsplat fails the image build here, loudly, instead of training without the loss.
@@ -33,7 +35,8 @@ EDITS: list[tuple[str, str]] = [
         "from utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed\n",
         "from utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed\n"
         f"{MARKER}\n"
-        "from litereality_dense import DenseDepthData, dense_depth_l1, depth_normal_loss\n",
+        "from litereality_dense import (DenseDepthData, dense_depth_l1, depth_normal_loss,\n"
+        "                               sparse_disparity)\n",
     ),
     # 2. The flags (tyro: --dense-depth, --dense-depth-lambda, --normal-lambda).
     (
@@ -92,6 +95,18 @@ EDITS: list[tuple[str, str]] = [
         '                desc += f"dense depth loss={densedepthloss.item():.4f}| "\n'
         "            if dense_gt is not None and cfg.normal_lambda > 0.0:\n"
         '                desc += f"normal loss={normalloss.item():.4f}| "\n',
+    ),
+    # 8. gsplat's sparse depth loss without its NaN: a LiDAR point where the render covers no
+    #    pixel (or only some of its bilinear footprint) gave 1 / 0 depth, whose gradient is NaN
+    #    (litereality_dense.sparse_disparity). Unchanged wherever the render covers the point.
+    (
+        "                disp = torch.where(depths > 0.0, 1.0 / depths, torch.zeros_like(depths))\n"
+        "                disp_gt = 1.0 / depths_gt  # [1, M]\n",
+        f"                {MARKER}\n"
+        "                covered = F.grid_sample(\n"
+        "                    (alphas > 0.0).float().permute(0, 3, 1, 2), grid, align_corners=True\n"
+        "                ).squeeze(3).squeeze(1)  # [1, M]\n"
+        "                disp, disp_gt = sparse_disparity(depths, covered, depths_gt)\n",
     ),
 ]
 

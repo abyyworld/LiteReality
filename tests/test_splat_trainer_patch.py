@@ -133,11 +133,15 @@ def test_the_patch_applies_to_gsplat_1_5_3_and_adds_only_the_dense_losses(upstre
     assert "from litereality_dense import" in patched
     assert "self.trainset = DenseDepthData(self.trainset, cfg.data_dir)" in patched
     # Nothing upstream is lost: every original line is still there, in order, except the one
-    # render_mode line, which now also renders depth for the dense losses.
+    # render_mode line, which now also renders depth for the dense losses, and the sparse depth
+    # loss's disparities, now `sparse_disparity` (no NaN where the render covers nothing).
     diff = difflib.unified_diff(upstream_trainer.splitlines(), patched.splitlines(), n=0,
                                 lineterm="")
     removed = [line[1:] for line in diff if line.startswith("-") and not line.startswith("---")]
-    assert removed == ['                render_mode="RGB+ED" if cfg.depth_loss else "RGB",']
+    assert removed == [
+        '                render_mode="RGB+ED" if cfg.depth_loss else "RGB",',
+        "                disp = torch.where(depths > 0.0, 1.0 / depths, torch.zeros_like(depths))",
+        "                disp_gt = 1.0 / depths_gt  # [1, M]"]
     # The validation set and the eval are untouched: the held-out numbers stay gsplat's.
     assert 'self.valset = Dataset(self.parser, split="val")' in patched
     with pytest.raises(ValueError, match="already patched"):
@@ -157,6 +161,16 @@ def test_dense_loss_reads_the_rendered_depth_before_the_sparse_loss_overwrites_i
     dense_at = patched.index("pred_depth = depths[..., 0]")
     assert patched.index("colors, depths = renders[..., 0:3], renders[..., 3:4]") < dense_at
     assert dense_at < patched.index("depths = F.grid_sample(")
+
+
+def test_the_sparse_depth_loss_samples_coverage_where_it_samples_depth(upstream_trainer):
+    patched = patch_trainer.patch(upstream_trainer)
+    grid_at = patched.index("grid = points.unsqueeze(2)  # [1, M, 1, 2]")
+    covered_at = patched.index("covered = F.grid_sample(")
+    disp_at = patched.index("disp, disp_gt = sparse_disparity(depths, covered, depths_gt)")
+    assert grid_at < patched.index("depths = F.grid_sample(") < covered_at < disp_at
+    assert "(alphas > 0.0).float().permute(0, 3, 1, 2), grid, align_corners=True" in patched
+    assert disp_at < patched.index("depthloss = F.l1_loss(disp, disp_gt) * self.scene_scale")
 
 
 # ── the maths ────────────────────────────────────────────────────────────────────────────────────
@@ -219,6 +233,49 @@ def test_dense_l1_is_the_mean_metre_error_where_both_have_depth():
     # (1,0): nothing rendered; (1,1): nothing measured. Left: |1-1.5| and |2-2|.
     assert dense.dense_depth_l1(pred, gt) == pytest.approx(0.25)
     assert dense.dense_depth_l1(pred, np.zeros_like(gt)) == 0
+
+
+def _upstream_disparity(depths, depths_gt):
+    """gsplat 1.5.3's sparse depth loss terms, as its trainer writes them (numpy)."""
+    with np.errstate(divide="ignore"):
+        return np.where(depths > 0.0, 1.0 / depths, 0.0), 1.0 / depths_gt
+
+
+# LiDAR points sampled from a render: covered, covered, half its bilinear footprint on a pixel
+# nothing covers (its expected depth blended towards 0), and wholly uncovered (depth exactly 0).
+SAMPLED = np.array([[1.0, 2.0, 1e-9, 0.0]])
+COVERED = np.array([[1.0, 1.0 - 3e-5, 0.5, 0.0]])
+MEASURED = np.array([[1.25, 2.5, 1.5, 0.8]])
+
+
+def test_the_sparse_depth_loss_is_upstreams_where_covered_and_nothing_where_not():
+    disp, disp_gt = dense.sparse_disparity(SAMPLED, COVERED, MEASURED)
+    up, up_gt = _upstream_disparity(SAMPLED, MEASURED)
+    np.testing.assert_array_equal(disp_gt, up_gt)
+    np.testing.assert_array_equal(disp[:, :2], up[:, :2])       # covered: upstream's own value
+    np.testing.assert_array_equal(disp[:, 2:], disp_gt[:, 2:])  # not: no error at all
+    assert np.abs(up - up_gt).max() > 1e8                       # upstream: a 1e9 disparity
+    assert np.abs(disp - disp_gt).mean() == pytest.approx((0.2 + 0.1) / 4)
+
+
+def test_the_sparse_depth_loss_has_finite_gradients_where_the_render_covers_nothing():
+    # atrium_phone (a phone video's sparse model depth): after one Adam step some LiDAR points
+    # lie where no splat draws; upstream's 1 / 0 there sent every splat's gradient to NaN.
+    torch = pytest.importorskip("torch")
+
+    def grads(fn):
+        d = torch.tensor(SAMPLED, dtype=torch.float32, requires_grad=True)
+        gt = torch.tensor(MEASURED, dtype=torch.float32)
+        disp, disp_gt = fn(d, gt)
+        (disp - disp_gt).abs().mean().backward()
+        return d.grad
+
+    up = grads(lambda d, gt: (torch.where(d > 0.0, 1.0 / d, torch.zeros_like(d)), 1.0 / gt))
+    assert torch.isnan(up).any()                                # the bug, as released
+    ours = grads(lambda d, gt: dense.sparse_disparity(
+        d, torch.tensor(COVERED, dtype=torch.float32), gt))
+    assert torch.isfinite(ours).all()
+    assert ours[0, 2] == 0 and ours[0, 3] == 0 and ours[0, 0] != 0 and ours[0, 1] != 0
 
 
 def test_the_losses_run_in_torch_with_finite_gradients_through_holes():

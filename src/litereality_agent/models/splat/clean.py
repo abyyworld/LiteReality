@@ -2,23 +2,33 @@
 
 A trained room carries floaters (splats hanging in the air between the camera and the wall that
 make a view the scan barely saw look smeared or streaked), haze, and whatever the camera glimpsed
-through a window or a doorway. Three rules take them out, cheapest first:
+through a window or a doorway. Four rules take them out, cheapest first, each switched on alone:
 
-    faint     opacity under `min_opacity`: haze, not detail
-    outside   beyond the room's walls, floor or ceiling grown by `margin` (RoomPlan's room, in the
-              splat's own frame). The span of each door and window is kept, and a door's swing
-              (its leaf may stand open outward); the view through them is not.
-    carved    FREE-SPACE CARVING. A depth pixel says the space between the camera and the surface
-              it measured is empty, so a splat well in front of that surface (by more than
-              max(5 cm, 3 %) of the measured depth) was "seen through" by that frame. A splat seen
-              through by at least `carve_votes` frames, and by at least half of the frames whose
-              valid depth it projects onto, is a floater. The vote, not one frame, decides: a
-              pose error at a silhouette or one bad depth pixel is outvoted by the views that see
-              the splat where it is.
+    faint        opacity under `min_opacity`: haze, not detail
+    outside      beyond the room's walls, floor or ceiling grown by `margin` (RoomPlan's room, in
+                 the splat's own frame). The span of each door and window is kept, and a door's
+                 swing (its leaf may stand open outward); the view through them is not.
+    carved       FREE-SPACE CARVING. A depth pixel says the space between the camera and the
+                 surface it measured is empty, so a splat well in front of that surface (by more
+                 than max(5 cm, 3 %) of the measured depth) was "seen through" by that frame. A
+                 splat seen through by at least `carve_votes` frames, and by at least half of the
+                 frames whose valid depth it projects onto, is a floater. The vote, not one frame,
+                 decides: a pose error at a silhouette or one bad depth pixel is outvoted by the
+                 views that see the splat where it is.
+    unsupported  AGREEMENT (off unless `support_views` > 0). Carving's opposite question: not "did
+                 a photo see through it" but "did enough photos see it". A splat is kept only if
+                 it lies ON the measured surface (within max(5 cm, 4 %) of the depth at its pixel:
+                 neither floating in front of it nor hidden behind it) in at least
+                 `support_views` training frames. Splats only one or two photos saw (speckle on a
+                 desk, a smear behind clutter) go, and so do splats on no measured surface at all
+                 (fill behind a window, a big blob fitted to a bright patch). The price: a surface
+                 the depth never measured (beyond the LiDAR's range in every view, glass, a black
+                 screen) goes too, and the browser shows the plain room through the hole.
 
-Carving uses the frames the trainer TRAINS on only: gsplat holds out every `test_every`-th photo
-by name order and reports PSNR/SSIM/LPIPS on them, and letting their depth decide what stays would
-leak those photos into the room they are scored against.
+Carving and agreement use the frames the trainer TRAINS on only: gsplat holds out every
+`test_every`-th photo by name order and reports PSNR/SSIM/LPIPS on them, and letting their depth
+decide what stays would leak those photos into the room they are scored against. Both rules share
+one projection pass: turning agreement on costs a few comparisons per frame, not a second pass.
 
 Depth is the dense map when one is given for a frame (PromptDA, metres, 0 = invalid, any size) and
 the scan's LiDAR otherwise (`depth_*.png`, millimetres, confident pixels only). A dense map is
@@ -29,9 +39,11 @@ Both drop the pixels on a depth discontinuity the way `rgbd` does: a mixed pixel
 between the two surfaces and would carve the nearer one.
 
 Pure numpy: ~1M splats x 60 frames in a few seconds on a laptop (splats in chunks, one frame's
-depth in memory at a time). Projection is the cost, linear in frames, so a long scan carves with
-at most `CARVE_FRAMES` of its training frames, spread evenly over it; a `depth_cache` keeps each
-frame's filtered depth between calls (every snapshot of one build).
+depth in memory at a time). Projection is the cost, linear in frames, so a long scan carves (and
+checks agreement) with at most `CARVE_FRAMES` of its training frames, spread evenly over it; the
+agreement bar then shrinks in proportion (`support_need`), so a long scan is held to the same
+share of its photos as a short one. A `depth_cache` keeps each frame's filtered depth between
+calls (every snapshot of one build).
 """
 
 from __future__ import annotations
@@ -59,6 +71,8 @@ MARGIN = 0.15
 MIN_OPACITY = 0.02
 CARVE_VOTES = 2
 CARVE_ABSOLUTE, CARVE_RELATIVE = 0.05, 0.03   # "in front of the measured surface" beyond this
+SUPPORT_VIEWS = 3                             # agreement's bar when it is switched on
+SUPPORT_ABSOLUTE, SUPPORT_RELATIVE = 0.05, 0.04   # "on the measured surface" within this
 TEST_EVERY = 8                                # the trainer's own hold-out (deploy/modal/splat)
 CHUNK = 1 << 18                               # splats projected at a time
 # Frames that vote at most: ~2.5 s for 1M splats on a laptop. Two votes out of ~100 views spread
@@ -299,15 +313,17 @@ def _cached_depth(frame: Frame, dense: dict | None, cache: dict | None) -> np.nd
     return depth
 
 
-def count_votes(positions: np.ndarray, frames: list[Frame], *, dense: dict | None = None,
-                chunk: int = CHUNK,
-                depth_cache: dict | None = None) -> tuple[np.ndarray, np.ndarray, int]:
-    """Per splat centre: in how many `frames` it was seen through, and in how many it projected
-    onto valid depth at all; and how many frames had depth to vote with."""
+def depth_counts(positions: np.ndarray, frames: list[Frame], *, dense: dict | None = None,
+                 chunk: int = CHUNK, depth_cache: dict | None = None,
+                 support: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray | None, int]:
+    """One projection pass over `frames`, per splat centre: in how many it was seen THROUGH (in
+    front of the measured surface), in how many it projected onto valid depth at all, and (with
+    `support`) in how many it lay ON the measured surface; and how many frames had depth."""
     pos = np.ascontiguousarray(positions, dtype=np.float32)
     n = len(pos)
     through = np.zeros(n, dtype=np.uint16)
     seen = np.zeros(n, dtype=np.uint16)
+    on = np.zeros(n, dtype=np.uint16) if support else None
     used = 0
     for frame in frames:
         depth = _cached_depth(frame, dense, depth_cache)
@@ -339,33 +355,66 @@ def count_votes(positions: np.ndarray, frames: list[Frame], *, dense: dict | Non
             seen[hit] += 1
             front = z < d - np.maximum(CARVE_ABSOLUTE, CARVE_RELATIVE * d)
             through[hit[front]] += 1
+            if on is not None:
+                close = np.abs(z - d) <= np.maximum(SUPPORT_ABSOLUTE, SUPPORT_RELATIVE * d)
+                on[hit[close]] += 1
+    return through, seen, on, used
+
+
+def count_votes(positions: np.ndarray, frames: list[Frame], *, dense: dict | None = None,
+                chunk: int = CHUNK,
+                depth_cache: dict | None = None) -> tuple[np.ndarray, np.ndarray, int]:
+    """Per splat centre: in how many `frames` it was seen through, and in how many it projected
+    onto valid depth at all; and how many frames had depth to vote with."""
+    through, seen, _on, used = depth_counts(positions, frames, dense=dense, chunk=chunk,
+                                            depth_cache=depth_cache, support=False)
     return through, seen, used
+
+
+def support_need(support_views: int, voting: int, training: int, used: int) -> int:
+    """How many frames must see a splat on its surface for it to stay: `support_views` of the
+    training frames, scaled to the share of them that vote (`spread` keeps at most
+    `CARVE_FRAMES`), and never more than the frames that had depth (a scan with two photos
+    cannot ask for three)."""
+    if support_views <= 0 or used <= 0:
+        return 0
+    share = voting / max(training, 1)
+    need = int(np.ceil(support_views * min(1.0, share) - 1e-9))
+    return max(1, min(need, used))
 
 
 def clean(splats: Splats, frames: list[Frame], *, dense: dict | None = None,
           bounds=None, margin: float = MARGIN, min_opacity: float = MIN_OPACITY,
-          carve_votes: int = CARVE_VOTES, test_every: int = TEST_EVERY,
-          image_names: Iterable[str] | None = None,
+          carve_votes: int = CARVE_VOTES, support_views: int = 0,
+          test_every: int = TEST_EVERY, image_names: Iterable[str] | None = None,
           protect: np.ndarray | None = None, door_swing: bool = True,
           carve_frames: int = CARVE_FRAMES, depth_cache: dict | None = None,
           log=None) -> tuple[Splats, dict]:
-    """`splats` without the faint, the outside and the carved (see the module docstring).
+    """`splats` without the faint, the outside, the carved and (with `support_views`) the
+    unsupported (see the module docstring). Every rule is switched off alone:
+    ``min_opacity <= 0``, ``bounds=None``, ``carve_votes <= 0``, ``support_views <= 0`` (the
+    default: agreement is asked for, never implied).
 
-    `frames` are the scan's (`rgbd.load_frames`); only the ones the trainer trains on carve
-    (`training_frames` with `test_every` and the training set's `image_names`). `dense` maps a
-    frame index to its dense depth (metres, 0 invalid); frames without one use their LiDAR.
-    `bounds` is a `Room` (`room_from_plan`) or ``(min xyz, max xyz)``; None skips that rule.
-    ``carve_votes <= 0`` skips carving. `protect` (bool per splat) exempts splats from carving.
-    At most `carve_frames` training frames vote (`spread`; <= 0: all); `depth_cache` (a dict the
-    caller keeps, keyed by the dense maps' identity) saves re-reading their depth next call.
+    `frames` are the scan's (`rgbd.load_frames`); only the ones the trainer trains on carve or
+    vote for agreement (`training_frames` with `test_every` and the training set's
+    `image_names`). `dense` maps a frame index to its dense depth (metres, 0 invalid); frames
+    without one use their LiDAR. `bounds` is a `Room` (`room_from_plan`) or ``(min xyz, max
+    xyz)``. `protect` (bool per splat) exempts splats from both depth rules. At most
+    `carve_frames` training frames vote (`spread`; <= 0: all); `depth_cache` (a dict the caller
+    keeps, keyed by the dense maps' identity) saves re-reading their depth next call. No frame
+    with depth: agreement is skipped, not used to drop the whole room.
     Returns the kept splats and the counts each rule dropped, with the seconds it took."""
     t0 = time.perf_counter()
     n = len(splats)
     keep = np.ones(n, dtype=bool)
-    stats: dict = {"input": n, "faint": 0, "outside": 0, "carved": 0, "carve_frames": 0}
+    stats: dict = {"input": n, "faint": 0, "outside": 0, "carved": 0, "unsupported": 0,
+                   "carve_frames": 0}
+    carving = carve_votes > 0
+    agreeing = support_views > 0
     if n:
-        keep &= np.asarray(splats.opacities, dtype=np.float32).reshape(-1) >= min_opacity
-        stats["faint"] = int(n - keep.sum())
+        if min_opacity > 0:
+            keep &= np.asarray(splats.opacities, dtype=np.float32).reshape(-1) >= min_opacity
+            stats["faint"] = int(n - keep.sum())
 
         if bounds is not None:
             idx = np.flatnonzero(keep)
@@ -373,24 +422,34 @@ def clean(splats: Splats, frames: list[Frame], *, dense: dict | None = None,
             keep[idx[~inside]] = False
             stats["outside"] = int((~inside).sum())
 
-        if carve_votes > 0 and frames:
+        if (carving or agreeing) and frames:
             use = training_frames(frames, test_every=test_every, image_names=image_names)
             voters = spread(use, carve_frames)
             idx = np.flatnonzero(keep)
             if protect is not None:
                 idx = idx[~np.asarray(protect, dtype=bool)[idx]]
-            through, seen, used = count_votes(splats.positions[idx], voters, dense=dense,
-                                              depth_cache=depth_cache)
-            floater = (through >= carve_votes) & (2 * through.astype(np.int32) >= seen)
-            keep[idx[floater]] = False
-            stats["carved"] = int(floater.sum())
+            through, seen, on, used = depth_counts(splats.positions[idx], voters, dense=dense,
+                                                   depth_cache=depth_cache, support=agreeing)
             stats["carve_frames"] = used
             stats["held_out_frames"] = len(frames) - len(use)
+            gone = np.zeros(len(idx), dtype=bool)
+            if carving:
+                gone = (through >= carve_votes) & (2 * through.astype(np.int32) >= seen)
+                stats["carved"] = int(gone.sum())
+            if agreeing:
+                need = support_need(support_views, len(voters), len(use), used)
+                stats["support_views"] = need
+                if need:
+                    # Carved splats are counted once, as carved.
+                    unsupported = (on < need) & ~gone
+                    stats["unsupported"] = int(unsupported.sum())
+                    gone |= unsupported
+            keep[idx[gone]] = False
     stats["kept"] = int(keep.sum())
     stats["seconds"] = round(time.perf_counter() - t0, 3)
     if log:
         log(f"clean: {stats['kept']:,} of {n:,} splats kept ({stats['faint']:,} faint, "
-            f"{stats['outside']:,} outside the room, {stats['carved']:,} carved by "
+            f"{stats['outside']:,} outside the room, {stats['carved']:,} carved, "
+            f"{stats['unsupported']:,} seen on a surface by too few photos; "
             f"{stats['carve_frames']} frames), {stats['seconds']:.1f} s")
     return (splats if stats["kept"] == n else splats.subset(keep)), stats
-
