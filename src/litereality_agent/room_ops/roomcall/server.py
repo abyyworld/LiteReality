@@ -64,6 +64,12 @@ only, with its own photoreal bundle, and is let go the same way once the room ha
 GET /rooms.json lists them and says what a call room shows now (the join card offers the choice
 to whoever is first in).
 
+Scheduled meetings (`meetings`, hosted only). POST /meetings schedules one (rate-limited per
+address, capped; the answer carries a cancel token for POST /meetings/<id>/cancel); /m/<id> is its
+link (a redirect to the page with the meeting's card), /m/<id>.ics its calendar file; a browser's
+push subscription for its reminder goes to /meetings/<id>/subscribe, and the reminders cron
+(deploy/modal/reminders/app.py) sends it. /sw.js shows the reminder.
+
 Every HTTP response carries the OWASP headers the Zoom client checks before it will render a Zoom
 App at all (Strict-Transport-Security, X-Content-Type-Options, Content-Security-Policy,
 Referrer-Policy — developers.zoom.us/docs/zoom-apps/security/owasp/). The CSP admits the page's one
@@ -119,6 +125,9 @@ from litereality_agent.room_ops.roomcall.hosted import scene_digest, scene_files
 from litereality_agent.room_ops.roomcall.library import NAME as LIBRARY_NAME
 from litereality_agent.room_ops.roomcall.library import SCAN as LIBRARY_SCAN
 from litereality_agent.room_ops.roomcall.library import LibraryRoom, RoomLibrary
+from litereality_agent.room_ops.roomcall.meetings import MAX_BODY as MEETING_MAX_BODY
+from litereality_agent.room_ops.roomcall.meetings import MEETING_ID, MeetingError, MeetingService
+from litereality_agent.room_ops.roomcall.meetings import ics as meeting_ics
 from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
 from litereality_agent.room_ops.roomcall.scans import ScanConfig, ScanRequestError, ScanService
 from litereality_agent.room_ops.roomcall.sim import RoomSim, load_model
@@ -259,6 +268,15 @@ PICK_SCAN = LIBRARY_SCAN
 PICK_DEFAULT = "default"
 THUMB_CACHE = "public, max-age=300"
 MAX_THUMB_BYTES = 2 * 1024 * 1024
+# Scheduled meetings (`meetings`): the page's module for them, the service worker that shows their
+# reminders (served from the root so its scope is the whole app), and what a Home Screen web app
+# needs (iOS delivers web push only to one). Fixed names, like every other file served.
+MEETINGS_JS = "meetings.js"
+SERVICE_WORKER = "sw.js"
+MANIFEST = "manifest.webmanifest"
+ICONS = {"icon.svg": "image/svg+xml", "icon-192.png": "image/png", "icon-512.png": "image/png",
+         "apple-touch-icon.png": "image/png"}
+ICON_CACHE = "public, max-age=86400"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -311,7 +329,9 @@ def content_security_policy(script_hashes: Iterable[str]) -> str:
         "media-src": "'self' data: blob: mediastream:",
         "font-src": "'self' data:",
         "connect-src": f"'self' ws: wss: blob: data: {THREE_CDN} {ZOOM_SDK}",
+        # 'self': the pose worker, and the service worker showing meeting reminders (/sw.js).
         "worker-src": "'self' blob:",
+        "manifest-src": "'self'",
         "object-src": "'none'",
         "base-uri": "'self'",
         "form-action": "'self'",
@@ -1931,7 +1951,8 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
                avatars: AvatarConfig | None = None,
                scans: ScanConfig | None = None,
                splats: SplatSource | None = None,
-               library: RoomLibrary | None = None) -> FastAPI:
+               library: RoomLibrary | None = None,
+               meetings: MeetingService | None = None) -> FastAPI:
     """The room call app for one scene: its first version's geometry built here, once (or read
     from `prebuilt`, see `read_prebuilt`); rooms made on demand.
 
@@ -1944,7 +1965,9 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     `scans` says whether, and how far, a scan sent into a room is built (default: off).
     `splats` is where the photoreal room's splat bundles are (`splats.SplatSource`; default none:
     everyone sees the meshes). `library` is the ready rooms a call room may be moved into
-    (`library.RoomLibrary`; default none: the default room only).
+    (`library.RoomLibrary`; default none: the default room only). `meetings` keeps scheduled
+    meetings and their reminders' subscriptions (`meetings.MeetingService`; default none: no
+    scheduling, its routes are 404).
     """
     if model is None:
         if scene_xml is None:
@@ -1964,6 +1987,7 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     app.add_middleware(SecurityHeaders, headers=security_headers(web.script_hashes))
     app.state.roomcall = hub
     app.state.web = web
+    app.state.meetings = meetings
 
     def file_response(name: str, media_type: str) -> Response:
         body = web.asset(name)
@@ -1992,6 +2016,36 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
     @app.get("/pose_worker.js")
     async def pose_worker_js() -> Response:
         return file_response("pose_worker.js", JS)
+
+    @app.get("/" + MEETINGS_JS)
+    async def meetings_js() -> Response:
+        return file_response(MEETINGS_JS, JS)
+
+    @app.get("/" + SERVICE_WORKER)
+    async def service_worker() -> Response:
+        """The worker that shows a meeting's reminder and opens the room when it is clicked. From
+        the root, so its scope is the whole app; revalidated, so a fix reaches every browser."""
+        body = web.asset(SERVICE_WORKER)
+        if body is None:
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return Response(body, media_type=JS, headers={"Cache-Control": "no-cache",
+                                                      "Service-Worker-Allowed": "/"})
+
+    @app.get("/" + MANIFEST)
+    async def manifest() -> Response:
+        return file_response(MANIFEST, "application/manifest+json")
+
+    def icon_route(name: str, media_type: str) -> None:
+        async def icon() -> Response:
+            body = web.asset(name)
+            if body is None:
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
+            return Response(body, media_type=media_type, headers={"Cache-Control": ICON_CACHE})
+
+        app.add_api_route("/" + name, icon, methods=["GET"], name=f"icon {name}")
+
+    for icon_name, icon_type in ICONS.items():
+        icon_route(icon_name, icon_type)
 
     def model_response(name: str, request: Request) -> Response:
         """A vendored model by its fixed name. Every page that uses one fetches it, so a repeat
@@ -2196,6 +2250,146 @@ def create_app(scene_xml: Path | None = None, *, model: mujoco.MjModel | None = 
             return JSONResponse({"detail": "Not Found"}, status_code=404,
                                 headers={"Cache-Control": "no-store"})
         return Response(data, media_type="image/jpeg", headers={"Cache-Control": THUMB_CACHE})
+
+    # -- scheduled meetings (`meetings`): none of these exist without a MeetingService ----------
+
+    def meeting_error(status: int, message: str, retry: int | None = None) -> Response:
+        body: dict = {"detail": message}
+        headers = {"Cache-Control": "no-store"}
+        if retry is not None:
+            body["retry"] = retry
+            headers["Retry-After"] = str(retry)
+        return JSONResponse(body, status_code=status, headers=headers)
+
+    def not_found() -> Response:
+        return meeting_error(404, "Not Found")
+
+    async def read_json(request: Request) -> Any:
+        """A small JSON body, read with a cap (an oversized one is refused before it is in
+        memory, a declared one before it is read at all)."""
+        length = request.headers.get("content-length")
+        if length is not None:
+            try:
+                declared = int(length)
+            except ValueError:
+                raise MeetingError(400, "bad Content-Length") from None
+            if declared > MEETING_MAX_BODY:
+                raise MeetingError(413, "the request is too big")
+        body = bytearray()
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > MEETING_MAX_BODY:
+                raise MeetingError(413, "the request is too big")
+        try:
+            return json.loads(body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            raise MeetingError(400, "send JSON") from None
+
+    def client_of(request: Request) -> str | None:
+        return request.client.host if request.client else None
+
+    def public_base(request: Request) -> str:
+        """This app's address as the person sees it (for the calendar file's link). Hosted on
+        Modal it is always https; elsewhere a proxy's X-Forwarded-Proto says, else the request."""
+        host = request.headers.get("host") or request.url.netloc
+        if not re.fullmatch(r"[A-Za-z0-9.-]{1,253}(:\d{1,5})?|\[[0-9A-Fa-f:.]{2,45}\](:\d{1,5})?",
+                            host or ""):
+            host = "localhost"
+        proto = (request.headers.get("x-forwarded-proto") or request.url.scheme).split(",")[0]
+        proto = proto.strip().lower()
+        if host.split(":")[0].endswith(".modal.run") or proto not in ("http", "https"):
+            proto = "https"
+        return f"{proto}://{host}"
+
+    @app.get("/meetings.json")
+    async def meetings_info() -> Response:
+        """Whether this server schedules meetings, and the key browsers subscribe to their
+        reminders with (null until the reminders cron has published it)."""
+        if meetings is None:
+            return not_found()
+        key = await asyncio.to_thread(meetings.push_key)
+        return JSONResponse({"enabled": True, "push": key}, headers={"Cache-Control": "no-store"})
+
+    @app.get("/push/key")
+    async def push_key() -> Response:
+        """The VAPID public key (`applicationServerKey`), or 404 while reminders are not set up."""
+        key = await asyncio.to_thread(meetings.push_key) if meetings is not None else None
+        if key is None:
+            return meeting_error(404, "reminders are not set up on this server")
+        return JSONResponse({"key": key}, headers={"Cache-Control": "no-store"})
+
+    @app.post("/meetings")
+    async def meeting_create(request: Request) -> Response:
+        """{title, start (ISO 8601 with its offset), room, minutes?, pick?} -> 201 the meeting,
+        with its link (m/<id>) and, for whoever made it only, its cancel `token`. Limited per
+        client address, and capped (`meetings.MeetingStore`)."""
+        if meetings is None:
+            return not_found()
+        try:
+            body = await read_json(request)
+            picks = {room.name: room.label for room in await hub.library_rooms()}
+            meeting, token = await asyncio.to_thread(meetings.create, body,
+                                                     client=client_of(request), picks=picks)
+        except MeetingError as exc:
+            return meeting_error(exc.status, exc.message, exc.retry_after)
+        return JSONResponse({**meeting.public(), "token": token}, status_code=201,
+                            headers={"Cache-Control": "no-store"})
+
+    @app.get("/meetings/{name}")
+    async def meeting_json(name: str) -> Response:
+        """GET /meetings/<id>.json: the meeting, for its card."""
+        mid = name[:-5] if name.endswith(".json") else ""
+        found = None
+        if meetings is not None and MEETING_ID.match(mid):
+            found = await asyncio.to_thread(meetings.get, mid)
+        if found is None:
+            return meeting_error(404, "no such meeting (it may have ended a while ago)")
+        return JSONResponse(found.public(), headers={"Cache-Control": "no-store"})
+
+    async def subscription_change(mid: str, request: Request, change) -> Response:
+        if meetings is None or not MEETING_ID.match(mid):
+            return not_found()
+        try:
+            body = await read_json(request)
+            await asyncio.to_thread(change, mid, body, client=client_of(request))
+        except MeetingError as exc:
+            return meeting_error(exc.status, exc.message, exc.retry_after)
+        return Response(status_code=204, headers={"Cache-Control": "no-store"})
+
+    @app.post("/meetings/{mid}/subscribe")
+    async def meeting_subscribe(mid: str, request: Request) -> Response:
+        """A browser's push subscription (`PushSubscription.toJSON()`) for this meeting's reminder."""
+        return await subscription_change(mid, request, meetings and meetings.subscribe)
+
+    @app.post("/meetings/{mid}/unsubscribe")
+    async def meeting_unsubscribe(mid: str, request: Request) -> Response:
+        """{"endpoint"}: no reminder for this browser after all."""
+        return await subscription_change(mid, request, meetings and meetings.unsubscribe)
+
+    @app.post("/meetings/{mid}/cancel")
+    async def meeting_cancel(mid: str, request: Request) -> Response:
+        """{"token"} (the one the create answer gave): the meeting is removed, with its reminders."""
+        return await subscription_change(mid, request, meetings and meetings.cancel)
+
+    @app.get("/m/{name}")
+    async def meeting_page(name: str, request: Request) -> Response:
+        """/m/<id>: the meeting's link -> the room call in its call room with the meeting's card
+        (a redirect, so the page and its relative URLs are the one at the root). /m/<id>.ics:
+        the meeting as a calendar file with a 15-minute alarm."""
+        calendar = name.endswith(".ics")
+        mid = name[:-4] if calendar else name
+        found = None
+        if meetings is not None and MEETING_ID.match(mid):
+            found = await asyncio.to_thread(meetings.get, mid)
+        if found is None:
+            return meeting_error(404, "no such meeting (it may have ended a while ago)")
+        if calendar:
+            link = f"{public_base(request)}/m/{found.id}"
+            return Response(meeting_ics(found, link), media_type="text/calendar; charset=utf-8",
+                            headers={"Cache-Control": "no-store",
+                                     "Content-Disposition": 'attachment; filename="room-call.ics"'})
+        return Response(status_code=302, headers={"Location": "../" + found.join_query(),
+                                                  "Cache-Control": "no-store"})
 
     @app.get("/healthz")
     async def healthz() -> Response:

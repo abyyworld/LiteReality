@@ -352,6 +352,78 @@ webcam on their avatar and the same physics. That's because the link is https.
   in it, it uses 2 CPUs and 2 GB, roughly $0.10 an hour at Modal's CPU rates.
 - **Stop it:** `uv run modal app stop litereality-roomcall`.
 
+## Meeting reminders
+
+On the permanent link anyone can schedule the next call: **Rooms → Schedule a meeting…** in a
+room, or **Schedule a meeting for later…** on the join card. A meeting has a title (up to 80
+characters), a start time picked in your own time zone (stored in UTC), a length (default 1 hour)
+and a room: this call room as it is, or a ready room from the library that the first person in
+switches it to. It gets an unguessable link, `/m/<id>`, to paste anywhere. Opening it shows the
+meeting's card on the join screen, with the start in the viewer's own time zone and:
+
+- **Remind me** — a notification 15 minutes before the start, even with the page and the browser
+  tab closed (Web Push). The click asks for notification permission; nothing is asked before.
+- **Add to calendar** — an `.ics` file (`/m/<id>.ics`) with its own 15-minute alarm. Works
+  everywhere, including where push does not.
+- **Copy link**.
+- **Cancel meeting** — only in the browser that scheduled it (it holds the meeting's cancel token;
+  the server keeps only a hash). Press twice: the link, the calendar file and the reminders stop.
+
+Where it cannot work, the page says so instead of showing a broken button: with notifications
+blocked, or no Push API, only the calendar is offered.
+
+**iPhone and iPad:** Safari delivers web push only to a Home Screen web app (iOS 16.4 or later).
+In a Safari tab the card says *Add to Home Screen to get the reminder*: Share → Add to Home
+Screen, then open the room call from the new icon and press Remind me there. The Home Screen app
+opens the page it was added from, so add it from the meeting's link.
+
+**Setting it up (once).** The reminders are sent by a small app of their own,
+`litereality-roomcall-reminders` (`deploy/modal/reminders/app.py`), with a VAPID key pair kept
+only as the Modal secret `roomcall-vapid`:
+
+```bash
+uv run --env-file .env python scripts/roomcall/vapid_secret.py --subject mailto:you@your.domain
+uv run --env-file .env modal deploy --env main deploy/modal/reminders/app.py
+```
+
+The script makes the key pair, stores it as the secret without ever printing the private key,
+and prints the public key. `--subject` is how push services (Apple's especially) can contact
+whoever runs the server; leave it out and a placeholder is used. Make the keys once: every
+reminder already set up is tied to them, so the script refuses to replace them unless you pass
+`--rotate`, which ends those reminders. The room call itself needs no redeploy for reminders. Its
+scheduling routes are live with the next normal deploy. The first cron run publishes the public key on
+the Volume, and **Remind me** appears within a minute.
+
+How it works: meetings live on the scenes Volume under `.meetings/` (one folder each; the
+subscriptions beside them). Every minute the reminders function reads them and sends a push to
+every browser that asked about a meeting starting within the next 15 minutes and has not been
+reminded yet: the first run that does is the one a few seconds after start − 15 min, so the
+notification says *Starting in 15 min*; a missed minute is made up by the next, and nothing is
+sent once a meeting has started. Pushes go out 16 at a time, one meeting's turn after another
+(soonest first), and a run starts no new batch after 45 seconds (the next minute's carries on).
+Who was reminded is written and committed after every batch, so a run stopped halfway never
+sends anyone the same reminder twice. Subscriptions the push service says are gone (404/410) are
+dropped, and so are ones whose push failed in 3 runs where other pushes went through. Meetings
+are removed a day after they ended. It is a separate app, not a second function beside the room
+call's, because deploying into that app replaces its one container and would drop every call in
+progress.
+
+Limits: 6 meetings per 10 minutes and 30 a day from one network; 5 coming up per network, 20 per
+call room and 200 on the server; 200 reminders per meeting, at most 20 of them from one network;
+up to 90 days ahead. (A network is one IPv4 address or one IPv6 /64.) If a room is flooded
+anyway, delete those meetings' folders: `uv run modal volume ls litereality-roomcall-scenes
+.meetings`, then `uv run modal volume rm litereality-roomcall-scenes .meetings/<id> -r` (or
+`MeetingStore.purge_room(<room>)` from code with the Volume mounted).
+
+**Cost:** the cron runs 1440 times a day with 0.125 CPU and 256 MB, and its container stops 2
+seconds after each run. Billed per second, each run is about 5 s (a cold start plus 1–2 s of
+work), which comes to 2 hours of container time a day, or 60 hours a month. At Modal's CPU price
+($0.047 per core-hour) and memory price ($0.008 per GiB-hour), 60 h × (0.125 × $0.047 + 0.25 ×
+$0.008) is roughly **$0.50 a month**. Even if the container stayed
+up all month, it would be about $6. Stop it with
+`uv run modal app stop litereality-roomcall-reminders`. Scheduling and the calendar files keep
+working, but reminders stop.
+
 ## Use it with Zoom, Meet or Teams: from your own machine
 
 The local server listens on `127.0.0.1` only. For other people on the call to reach it, give it an HTTPS

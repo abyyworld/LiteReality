@@ -35,6 +35,9 @@ What runs where:
 
     uv run litereality roomcall run/office_room/objects/scene_splat.xml --library --thumb a.jpg
 
+- Scheduled meetings (`meetings`): each in its own folder under `.meetings/` on the Volume (a dot
+  name, never a version, never pruned by a publish), written by this app; a separate small app,
+  deploy/modal/reminders/app.py, reads them every minute and sends the 15-minute reminders.
 - A scan sent into a room during the call (POST /scan, `scans`) is unpacked and built in the
   container itself, by the CLI in child processes: the quick room, then realistic objects from
   TRELLIS, called from inside the container with the workspace's own (ambient) credentials. The
@@ -112,6 +115,8 @@ NOT_IN_IMAGE = {
     "open3d": "`realroom.fit.decimate`, only for a mesh over 150k faces; TRELLIS's passes ask for "
               "20k and 50k",
     "coacd": "the full pipeline's convex decomposition (`sim.properties`), not the quick room",
+    "pywebpush": "`meetings.webpush_sender`: only the reminders cron sends pushes, from its own "
+                 "image (`meetings.REMINDER_PACKAGES`, deploy/modal/reminders/app.py)",
 }
 # Where the container unpacks and builds scans sent into rooms: its own disk, not the Volume.
 SCAN_SCRATCH = "/tmp/roomcall-scans"
@@ -590,7 +595,7 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
               reload=None, poll_seconds: float = POLL_SECONDS, freeze: bool = False,
               avatars: str = "modal", uploads: str = "realistic", commit=None,
               scan_scratch: Path | None = None, keep_rooms: bool = True,
-              realistic_per_day: int | None = None, scan_budget=None):
+              realistic_per_day: int | None = None, scan_budget=None, meetings: bool = True):
     """The room call app the container serves: the Volume's current version, else the demo room,
     watching the Volume (`VolumeWatch`; `reload` is the Volume's own `reload`) for the next one.
     `freeze` (the container: the app is the process) exempts startup objects from the garbage
@@ -604,7 +609,9 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
     `SCAN_SCRATCH`), at most `realistic_per_day` (default `scans.REALISTIC_PER_DAY`) realistic
     builds a UTC day across restarts (`scan_budget`, default a Modal Dict). With `keep_rooms`
     each room's scanned version is also kept under `ROOMS_DIR` on the Volume (`commit` is the
-    Volume's own, run under one lock with `reload`)."""
+    Volume's own, run under one lock with `reload`). With `meetings`, scheduled meetings and
+    their reminders' subscriptions are kept under `meetings.MEETINGS_DIR` on the Volume too (the
+    reminders cron, deploy/modal/reminders/app.py, reads them there)."""
     import threading
 
     from litereality_agent.room_ops.roomcall.avatars import (
@@ -658,9 +665,19 @@ def build_app(root: Path, *, web_dir: Path | None = None, scratch: Path | None =
     # The ready rooms people pick in a call (`add_to_library`): their list is read again once
     # the version watcher's Volume reload shows it changed.
     library = RoomLibrary.folder(Path(root), poll_seconds=poll_seconds)
+    from litereality_agent.room_ops.roomcall.meetings import (
+        MEETINGS_DIR,
+        MeetingService,
+        MeetingStore,
+    )
+
+    scheduled = None
+    if meetings:
+        scheduled = MeetingService(MeetingStore(Path(root) / MEETINGS_DIR, commit=commit,
+                                                lock=volume_lock))
     app = create_app(ref.scene, label=ref.label, stage=ref.stage, version=ref.id,
                      prebuilt=ref.prebuilt, web_dir=web_dir, watch=watch, avatars=bodies,
-                     scans=scans, splats=splats, library=library)
+                     scans=scans, splats=splats, library=library, meetings=scheduled)
     if freeze:
         freeze_startup_objects()
     return app

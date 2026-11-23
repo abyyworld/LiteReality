@@ -27,6 +27,7 @@ import {
   parseAvatar, headMask, poseSkeleton, UpperBodySolver, packJoints, unpackJoints, Gait, SENT,
   relaxedUpperBody, assembleLocal, qSlerp, qRot, smoothstep, QI,
 } from './body.js';
+import { createMeetings } from './meetings.js';
 
 // Picking walks a BVH instead of every triangle: a scanned room's merged static shell is up to a
 // million triangles and its bounds contain the camera, so a plain raycast tests all of them on
@@ -72,7 +73,9 @@ const BODY_FADE_S = 0.4, BODY_RETRY_MS = 5000, UPPER_SMOOTH = 12;
 const LABEL_OVER_HEAD = 0.25;                      // name tag over a body's Head joint
 const FACE_SCREEN_H = 0.28, FACE_PUSH = 0.04;      // the live face on a body: size, and toward you
 const FACE_TAU = 0.15;                             // s: the live face eases in and out
-const FACE_SHOW_DEG = 70, FACE_HIDE_DEG = 95;      // head turned further from you: the splat head
+const WALK_RADIUS = 1.0;                           // m from a capture spot, in the photoreal room
+const ZONE_EASE = 5;                               // 1/s: someone far outside the zone glides in
+const FACE_SHOW_DEG = 70, FACE_HIDE_DEG = 95;     // head turned further from you: the splat head
 const POSE_MODEL = '/pose_landmarker_lite.task';
 const POSE_TRACK_HZ = 15, POSE_STALE_MS = 500, POSE_LOST_MS = 1000, POSE_INIT_MS = 30000;
 // A sender's tracker can fall behind (a busy laptop runs it next to the hologram's segmenter), and
@@ -144,6 +147,10 @@ function toast(msg, kind = '') {
 
 /* ------------------------------------------------------------------ page state */
 const params = new URLSearchParams(location.search);
+// Not yet checked in a real browser on a good capture: the static room drawn behind the splats,
+// and keeping people near the capture path. Opt-in (?backdrop=1, ?zone=1) until they are.
+const BACKDROP = params.get('backdrop') === '1';
+const WALK_ZONE = params.get('zone') === '1';
 const qRoom = params.get('room');
 let roomId = qRoom && ROOM_RE.test(qRoom) ? qRoom : 'lobby';
 let zoom = null;                                   // {context, room, name} inside the Zoom client
@@ -613,15 +620,49 @@ function setHighlight(id, on) {
 
 /* ------------------------------------------------------------------ walking (first person) */
 // yaw is about MuJoCo +Z with 0 looking along +X (the wire convention); pitch > 0 looks up.
-const walker = { pos: new THREE.Vector3(0, EYE, 0), vel: new THREE.Vector3(), yaw: 0, pitch: 0 };
+// `free`: placed by the ?debug=1 camera, so the photoreal walk zone does not apply.
+const walker = { pos: new THREE.Vector3(0, EYE, 0), vel: new THREE.Vector3(), yaw: 0, pitch: 0, free: false };
 const keys = new Set();
 const joy = { x: 0, y: 0 };                        // on-screen stick, -1..1 (y up = forward)
 const twoFinger = { x: 0, y: 0 };
 
-function clampWalker() {
+/** Inside the room's walls, and in the photoreal room near where the scan's photos were taken.
+ *  `dt` is the frame's step when walking (0 for a placement, which snaps). */
+function clampWalker(dt = 0) {
+  walkZone(dt);
   walker.pos.x = clamp(walker.pos.x, bounds.minX, bounds.maxX);
   walker.pos.z = clamp(walker.pos.z, bounds.minZ, bounds.maxZ);
   walker.pos.y = eyeY;
+}
+
+/** The photoreal room only looks right near where the scan's photos were taken: further away
+ *  every surface is seen closer or more side-on than any photo saw it, and smears. So while it is
+ *  shown and the bundle says where the photos were taken (`photo.capture`), the walker stays
+ *  within WALK_RADIUS of one of those spots: the union of those discs, and the nearest point of it
+ *  is on the disc of the nearest spot. */
+function walkZone(dt) {
+  const spots = WALK_ZONE && photoShown() && !walker.free ? photo.capture : null;
+  if (!spots) return;
+  const px = walker.pos.x, py = -walker.pos.z;     // three (x, z) is MuJoCo (x, -y)
+  let best = Infinity, cx = 0, cy = 0;
+  for (const [x, y] of spots) {
+    const d2 = (x - px) ** 2 + (y - py) ** 2;
+    if (d2 < best) { best = d2; cx = x; cy = y; }
+  }
+  const d = Math.sqrt(best), over = d - WALK_RADIUS;
+  if (over <= 0) return;
+  const nx = (px - cx) / d, ny = (py - cy) / d;   // outward, MuJoCo frame
+  // Someone far outside (the photoreal room has just come on) glides in, easing out, and never
+  // slower than a run (HURRY): so one frame's step over the edge is always taken straight back,
+  // and the glide's tail ends at that speed instead of being closed in one jump. A placement
+  // (dt 0) snaps.
+  const move = dt > 0 ? Math.min(over, Math.max(over * smooth(ZONE_EASE, dt), HURRY * dt)) : over;
+  walker.pos.x -= nx * move;
+  walker.pos.z += ny * move;
+  // Walking outward is cancelled too, so they slide along the edge instead of pushing past it
+  // and being pulled back every frame (the jitter).
+  const out = walker.vel.x * nx - walker.vel.z * ny;
+  if (out > 0) { walker.vel.x -= nx * out; walker.vel.z += ny * out; }
 }
 
 function stepWalker(dt) {
@@ -639,7 +680,7 @@ function stepWalker(dt) {
   const want = new THREE.Vector3(c * fwd + s * side, 0, -s * fwd + c * side).multiplyScalar(speed);
   walker.vel.lerp(want, smooth(10, dt));
   walker.pos.addScaledVector(walker.vel, dt);
-  clampWalker();
+  clampWalker(dt);
   camera.position.copy(walker.pos);
   camera.rotation.set(walker.pitch, walker.yaw - Math.PI / 2, 0);
 }
@@ -1164,12 +1205,41 @@ function sparkFailed(err) {
 // The scanned room as Gaussian splats (server splats.py, pipeline/splatroom): the static room in
 // the world group (MuJoCo frame) and each movable object's splat under its body's node, in that
 // body's frame, so the real chair moves when the physics moves it. The meshes stay underneath:
-// they pick and block exactly as before (`photoHidden`), they are just not drawn while splats are
-// shown. Bundles change on their own clock (the instant room, then sharper trained snapshots):
-// the server says {"t": "splat"} and the new files load beside the old, then replace them.
+// they pick and block exactly as before. A movable body with a splat of its own is not drawn
+// (`photoHidden`: its splat moves with it); the static room is drawn as a BACKDROP behind every
+// splat, so where the scan has no splats (a blown-out window, a spot no photo saw) the plain
+// textured room shows instead of the empty scene background. Bundles change on their own clock
+// (the instant room, then sharper trained snapshots): the server says {"t": "splat"} and the new
+// files load beside the old, then replace them.
+//
+// How the backdrop stays behind: the room's meshes and the scan's splats never line up exactly
+// (wall splats sit a centimetre either side of the wall plane; a static table is a catalogue
+// model, not the real one), so depth between the two cannot be trusted. The backdrop is drawn
+// first (renderOrder BACKDROP_ORDER, ahead of everything opaque), then `depthCut` clears the depth
+// buffer, then everything else: people, bodies without splats, and last the splats (Spark's
+// renderer draws after the opaque meshes). So a splat is never hidden by, nor fights with, the
+// backdrop, while people still hide the splats behind them. One render, no second pass: three
+// sorts by renderOrder, and the clear happens in `depthCut`'s onBeforeRender. three draws every
+// transparent material in a pass of its own after all opaque ones, whatever its renderOrder, so
+// backdrop glass would land after the clear and blend over backdrop walls and furniture in front
+// of it. So while in the backdrop, glass is made "opaque" to three (still alpha-blended, by
+// CustomBlending): it sorts into the opaque pass at BACKDROP_GLASS, after the rest of the
+// backdrop, and depth-tests against it before the clear.
+// A transform trick (walls pushed out a few cm, polygonOffset) was not enough: furniture models
+// stick out well past the real furniture, and polygonOffset is tiny at room distances.
 const SPLAT_URL = /^splat\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]{1,140}\.spz$/;
-const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map(), retries: new Map() };
+const BACKDROP_ORDER = -3, BACKDROP_GLASS = -2;    // before the depth clear (-1) and all else (0)
+const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map(), retries: new Map(), capture: null };
 try { const s = sessionStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
+const depthCut = new THREE.Mesh(
+  new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3)),
+  new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false }));
+depthCut.renderOrder = BACKDROP_GLASS + 1;
+depthCut.frustumCulled = false;                    // a zero-size triangle: always "in view"
+depthCut.visible = false;
+// gl.clear obeys the depth mask, and the last material drawn may have left it off.
+depthCut.onBeforeRender = (r) => { r.state.buffers.depth.setMask(true); r.clearDepth(); };
+scene.add(depthCut);
 
 const photoShown = () => photo.want && !!photo.room;
 
@@ -1184,7 +1254,7 @@ function clearSplat() {
   disposeSplat(photo.room); photo.room = null;
   for (const m of photo.bodies.values()) disposeSplat(m);
   photo.bodies.clear();
-  Object.assign(photo, { v: null, created: null, stage: '', step: null });
+  Object.assign(photo, { v: null, created: null, stage: '', step: null, capture: null });
   applyPhoto();
 }
 
@@ -1203,21 +1273,62 @@ function attachBodySplats() {
   applyPhoto();
 }
 
-/** Meshes drawn or not: not where a splat stands in for them (the static room; a body that has
- *  its own splat). Splats are faded with `opacity`, never `visible` (Spark shows a re-shown mesh
- *  only after its next sort). */
+/** What one of the room's meshes is while the photoreal room is shown (`on`): 'hidden' under a
+ *  movable body's own splat (it moves with the body), 'backdrop' for the static room (drawn
+ *  behind every splat), else 'mesh' (a body with no splat of its own, or no photoreal room). */
+function meshRole(o, on) {
+  if (!on) return 'mesh';
+  const id = o.userData.bodyId;
+  if (id === undefined) return BACKDROP ? 'backdrop' : 'hidden';
+  return photo.bodies.has(shown?.bodies.get(id)?.name) ? 'hidden' : 'mesh';
+}
+
+/** A mesh into the backdrop (drawn before the depth clear) or back. Glass (a transparent
+ *  material) is made opaque to three's sorting but keeps blending as before (see BACKDROP_GLASS),
+ *  so it is drawn before the clear too; its originals are kept in `userData.glass0` (a material
+ *  can be shared by several meshes) and put back when it leaves. Whatever it writes to depth
+ *  there is cleared before the splats, so they show through the window. */
+function setBackdrop(o, on) {
+  let glass = false;
+  for (const m of [].concat(o.material)) {
+    if (!m) continue;
+    const was = m.userData.glass0;
+    if (on && !was && m.transparent) {
+      const keep = ['transparent', 'blending', 'blendEquation', 'blendSrc', 'blendDst',
+        'blendSrcAlpha', 'blendDstAlpha'];
+      m.userData.glass0 = Object.fromEntries(keep.map((k) => [k, m[k]]));
+      // three's NormalBlending, written out: a non-NormalBlending material is never forced opaque.
+      Object.assign(m, {
+        transparent: false, blending: THREE.CustomBlending, blendEquation: THREE.AddEquation,
+        blendSrc: m.premultipliedAlpha ? THREE.OneFactor : THREE.SrcAlphaFactor,
+        blendDst: THREE.OneMinusSrcAlphaFactor, blendSrcAlpha: THREE.OneFactor,
+        blendDstAlpha: THREE.OneMinusSrcAlphaFactor, needsUpdate: true,
+      });
+    } else if (!on && was) {
+      Object.assign(m, was, { needsUpdate: true });
+      delete m.userData.glass0;
+    }
+    glass ||= !!m.userData.glass0;
+  }
+  o.renderOrder = on ? (glass ? BACKDROP_GLASS : BACKDROP_ORDER) : 0;
+}
+
+/** Meshes drawn, hidden or drawn as the backdrop (`meshRole`). Splats are faded with `opacity`,
+ *  never `visible` (Spark shows a re-shown mesh only after its next sort). */
 function applyPhoto() {
   const on = photoShown();
   if (photo.room) photo.room.opacity = on ? 1 : 0;
   for (const m of photo.bodies.values()) m.opacity = on ? 1 : 0;
+  let backdrop = false;
   sceneRoot?.traverse((o) => {
     if (!o.isMesh) return;
-    const id = o.userData.bodyId;
-    const covered = id === undefined ? true : photo.bodies.has(shown?.bodies.get(id)?.name);
-    const hide = on && covered;
-    o.visible = !hide;
-    o.userData.photoHidden = hide;
+    const role = meshRole(o, on);
+    o.visible = role !== 'hidden';
+    o.userData.photoHidden = role === 'hidden';
+    setBackdrop(o, role === 'backdrop');
+    backdrop ||= role === 'backdrop';
   });
+  depthCut.visible = backdrop;                     // no backdrop, no clear: depth as it always was
   showStageTag();
   const btn = $('photoBtn');
   if (btn) {
@@ -1268,7 +1379,8 @@ async function refreshSplat() {
     for (const m of photo.bodies.values()) disposeSplat(m);
     photo.room = room; world.add(room);
     photo.bodies = new Map(loaded);
-    Object.assign(photo, { v, created: man.created ?? null, stage: String(man.stage || ''), step: man.step ?? null });
+    Object.assign(photo, { v, created: man.created ?? null, stage: String(man.stage || ''), step: man.step ?? null,
+                           capture: captureSpots(man.capture) });
     attachBodySplats();
     applySplatView(man);
     if (first && photo.want) toast('Photoreal room on (P switches)');
@@ -1278,6 +1390,14 @@ async function refreshSplat() {
     failed();
     retrySplat(photo.gen, v);                      // after failed(), which may have cleared
   }
+}
+
+/** Where the scan's photos were taken (the bundle's `capture`: room frame, Z up, metres) as
+ *  [x, y] on the floor plan, or null when the bundle has none worth using. */
+function captureSpots(list) {
+  if (!Array.isArray(list)) return null;
+  const spots = list.slice(0, 400).filter((p) => finite(p) && p.length === 3).map((p) => [p[0], p[1]]);
+  return spots.length ? spots : null;
 }
 
 /** A download that failed on a flaky connection is tried again (5 s, 15 s, 45 s) rather than
@@ -1299,17 +1419,20 @@ if (params.get('debug') === '1') {
       shown: photoShown(), stage: photo.stage, step: photo.step, v: photo.v,
       bodies: [...photo.bodies.keys()],
       attached: [...photo.bodies].filter(([, m]) => m.parent && m.parent !== world).map(([n]) => n),
+      backdrop: depthCut.visible, capture: photo.capture?.length ?? 0, walkZone: !walker.free,
     }),
     bodies: () => [...(shown?.bodies.values() || [])].map((b) => ({
       id: b.id, name: b.name, p: b.node.position.toArray() })),   // nodes live in the MuJoCo frame
     look(from, at) {
       const a = mjToThree(...from), b = mjToThree(...at), d = b.clone().sub(a);
+      walker.free = true;                          // exactly there: the walk zone stops applying
       walker.pos.copy(a); walker.vel.set(0, 0, 0);
       walker.yaw = Math.atan2(-d.z, d.x);
       walker.pitch = Math.asin(clamp(d.y / Math.max(d.length(), 1e-6), -1, 1));
       return true;
     },
     setPhoto(on) { if (photo.want !== !!on) togglePhoto(); return photoShown(); },
+    setWalkZone(on) { walker.free = !on; return !walker.free; },   // look() turns it off
   };
 }
 
@@ -3335,9 +3458,9 @@ async function fetchRooms() {
 /** The Rooms button and the help row: there when there is another room to go to, or a scan to add. */
 function syncRoomsBtn() {
   const btn = $('roomsBtn');
-  btn.hidden = rooms.list.length < 2 && !scans.enabled;
+  btn.hidden = rooms.list.length < 2 && !scans.enabled && !meetings.enabled;
   btn.dataset.state = rooms.busy || scans.up ? 'building' : '';
-  $('helpRooms').hidden = $('helpRoomsTerm').hidden = btn.hidden;
+  $('helpRooms').hidden = $('helpRoomsTerm').hidden = rooms.list.length < 2 && !scans.enabled;
   $('helpRoomsPick').hidden = rooms.list.length < 2;
   $('helpRoomsScan').hidden = !scans.enabled;
 }
@@ -3491,7 +3614,8 @@ function roomsHint() {
   store.set('roomsHintSeen', true);
   btn.classList.add('hint');
   setTimeout(() => btn.classList.remove('hint'), 10000);
-  const say = rooms.list.length < 2 ? 'Scanned a room? Rooms brings it into this call'
+  const say = rooms.list.length < 2 && !scans.enabled ? 'Rooms schedules a meeting here for later'
+    : rooms.list.length < 2 ? 'Scanned a room? Rooms brings it into this call'
     : scans.enabled ? 'Rooms moves everyone to another room, or brings in one you scanned'
       : 'Rooms moves everyone here to another room';
   setTimeout(() => toast(say), 1800);
@@ -3500,7 +3624,7 @@ function roomsHint() {
 /** The panel; with no other room to go to, straight to adding a scanned one (as before Rooms). */
 function openRoomsPanel() {
   $('roomsBtn').classList.remove('hint');
-  if (rooms.list.length < 2 && scans.enabled) { openScanPanel(); return; }
+  if (rooms.list.length < 2 && scans.enabled && !meetings.enabled) { openScanPanel(); return; }
   renderRooms();
   togglePanel('roomsPanel', true);
   refreshRooms();
@@ -3518,6 +3642,14 @@ async function refreshRooms() {
 
 $('roomsBtn').addEventListener('click', () => ($('roomsPanel').hidden && $('scanPanel').hidden ? openRoomsPanel() : togglePanel('roomsPanel', false)));
 $('roomsScanBtn').addEventListener('click', openScanPanel);
+
+// Scheduled meetings (meetings.js): Rooms › Schedule a meeting…, the join card's "for later" link,
+// and the card a meeting's link (/m/<id>) opens with. All hidden on a server that does not schedule.
+const meetings = createMeetings({
+  $, toast, togglePanel, roomId: () => roomId, onEnabled: syncRoomsBtn,
+  // A meeting set in a library room: the join card preselects it for whoever is first in.
+  onPick: (name) => { if (!joined && rooms.join?.tiles?.some((r) => r.name === name)) chooseJoinRoom(name); },
+});
 
 /** The join card's heading: the room this person will land in, as chosen there (or as it is now). */
 function joinLabel() {
@@ -3555,7 +3687,8 @@ async function loadJoinRooms() {
       return b;
     }));
     $('roomRow').hidden = false;
-    chooseJoinRoom(current);
+    const asked = meetings.pick();
+    chooseJoinRoom(asked && tiles.some((r) => r.name === asked) ? asked : current);
   }
   const say = joinLabel();
   if (say) $('sceneLabel').textContent = say;
@@ -4011,7 +4144,7 @@ function closePanels() {
   $('bodyBtn').setAttribute('aria-expanded', 'false');
   $('roomsBtn').setAttribute('aria-expanded', 'false');
 }
-const PANELS = ['people', 'help', 'invitePop', 'bodyPanel', 'roomsPanel', 'scanPanel'];
+const PANELS = ['people', 'help', 'invitePop', 'bodyPanel', 'roomsPanel', 'scanPanel', 'meetPanel'];
 
 $('peopleBtn').addEventListener('click', () => togglePanel('people'));
 $('helpBtn').addEventListener('click', () => togglePanel('help'));
@@ -4146,6 +4279,7 @@ function frame() {
 /* ------------------------------------------------------------------ boot */
 (async function boot() {
   buildSwatches();
+  meetings.boot(params);                           // a meeting's card, if the link has one (never waited for)
   canvas.tabIndex = 0;
   // Join waits for the room id: inside Zoom it comes from the meeting, which takes a moment. The
   // room download does not wait for Zoom.

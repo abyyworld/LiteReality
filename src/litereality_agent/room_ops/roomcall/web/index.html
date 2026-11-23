@@ -9,6 +9,10 @@
 <meta name="theme-color" content="#16191d" media="(prefers-color-scheme: dark)">
 <title>Room call · LiteReality</title>
 <link rel="stylesheet" href="app.css">
+<!-- a Home Screen web app (iOS delivers meeting reminders only to one) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- The ONLY inline script on this page. The server allows it by its sha256 hash in the CSP, so
      any edit here (even whitespace) changes the hash; the server recomputes it from this file. -->
 <script type="importmap">{ "imports": {
@@ -33,6 +37,21 @@
         link lands in the same room and moves the same objects.</p>
       <div class="room-line">Room <code id="roomName">lobby</code><span id="zoomBadge" class="badge" hidden>Zoom meeting</span></div>
     </header>
+
+    <!-- a scheduled meeting's card, for its link (/m/<id> lands here with ?meeting=<id>; meetings.js) -->
+    <section id="meetCard" class="meet-card" hidden aria-label="Scheduled meeting">
+      <div class="meet-when"><span id="meetWhen"></span> <span class="meet-rel" id="meetRel"></span></div>
+      <h2 id="meetTitle" class="meet-title"></h2>
+      <p class="muted small meet-room"><span id="meetRoom"></span> · join below when it starts</p>
+      <div class="meet-actions">
+        <button class="btn primary" id="meetRemind" type="button" aria-pressed="false" hidden>Remind me</button>
+        <a class="btn" id="meetIcs" href="#" rel="nofollow">Add to calendar</a>
+        <button class="btn" id="meetCopy" type="button">Copy link</button>
+        <button class="btn danger" id="meetCardCancel" type="button" hidden>Cancel meeting</button>
+      </div>
+      <input id="meetCopyInput" type="text" readonly hidden aria-label="Meeting link">
+      <p class="notice warn small" id="meetHint" hidden></p>
+    </section>
 
     <div class="progress" id="loadProgress" role="progressbar" aria-label="Loading the room"
          aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -80,6 +99,7 @@
     <div class="notice error" id="joinError" role="alert" hidden></div>
 
     <button id="joinBtn" class="btn primary wide" type="submit">Join the room</button>
+    <button id="meetOpenJoin" class="btn link-btn" type="button" hidden>Schedule a meeting for later…</button>
   </form>
 </div>
 
@@ -180,6 +200,7 @@
     <p class="rooms-status" id="roomsStatus" role="status" aria-live="polite"></p>
     <button class="btn rooms-scan" id="roomsScanBtn" type="button" hidden>
       <span class="tool-ico ico-scan" aria-hidden="true"></span>Add a room you scanned…</button>
+    <button class="btn rooms-scan" id="roomsMeetBtn" type="button" hidden>Schedule a meeting…</button>
   </section>
 
   <section id="scanPanel" class="card panel scan-panel" hidden aria-label="Add a room you scanned">
@@ -233,6 +254,55 @@
   <div class="card scan-drop-card"><span class="tool-ico ico-scan" aria-hidden="true"></span>
     Drop the scan (<code>.zip</code> or <code>room.usdz</code>) to bring it into this room</div>
 </div>
+
+<!-- ------------------------------------------------------------ scheduling a meeting (meetings.js):
+     over the join screen or the room, so it is outside both -->
+<section id="meetPanel" class="card meet-panel" hidden role="dialog" aria-labelledby="meetPanelTitle">
+  <h2 id="meetPanelTitle">Schedule a meeting</h2>
+  <form id="meetForm" class="meet-form" novalidate>
+    <label class="field">
+      <span class="field-label">Title</span>
+      <input id="meetTitleInput" type="text" maxlength="80" required placeholder="e.g. Design review" autocomplete="off">
+    </label>
+    <label class="field">
+      <span class="field-label">Starts <small class="muted" id="meetZone"></small></span>
+      <input id="meetStart" type="datetime-local" required>
+    </label>
+    <label class="field">
+      <span class="field-label">Length</span>
+      <select id="meetMinutes">
+        <option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
+        <option value="60" selected>1 hour</option><option value="90">1 h 30</option><option value="120">2 hours</option>
+        <option value="180">3 hours</option>
+      </select>
+    </label>
+    <label class="field" id="meetPickRow" hidden>
+      <span class="field-label">Room at the start</span>
+      <select id="meetPick"></select>
+    </label>
+    <p class="muted small">In call room <code id="meetRoomName"></code>. Anyone with the link can join
+      and ask for a reminder.</p>
+    <p class="notice error small" id="meetFormError" role="alert" hidden></p>
+    <div class="meet-buttons">
+      <button class="btn" id="meetCancel" type="button">Cancel</button>
+      <button class="btn primary" id="meetCreate" type="submit">Schedule</button>
+    </div>
+  </form>
+  <div id="meetMade" class="meet-made" hidden>
+    <p class="meet-made-head"><b id="meetMadeTitle"></b><small class="muted" id="meetMadeWhen"></small></p>
+    <label class="field">
+      <span class="field-label">Share this link</span>
+      <span class="meet-link"><input id="meetLinkInput" type="text" readonly><button class="btn" id="meetLinkCopy" type="button">Copy</button></span>
+    </label>
+    <div class="meet-actions">
+      <button class="btn primary" id="meetMadeRemind" type="button" aria-pressed="false" hidden>Remind me</button>
+      <a class="btn" id="meetMadeIcs" href="#" rel="nofollow">Add to calendar</a>
+      <button class="btn danger" id="meetMadeCancel" type="button" hidden>Cancel meeting</button>
+    </div>
+    <p class="notice warn small" id="meetMadeHint" hidden></p>
+    <div class="meet-buttons"><button class="btn" id="meetDone" type="button">Done</button></div>
+  </div>
+</section>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
 <div id="mediaSink" class="media-sink" aria-hidden="true"></div>

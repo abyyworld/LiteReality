@@ -1,0 +1,15 @@
+{
+  "name": "Room call",
+  "short_name": "Room call",
+  "description": "A shared room for the people on your call.",
+  "id": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#16191d",
+  "theme_color": "#2f6fde",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

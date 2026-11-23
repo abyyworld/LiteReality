@@ -17,7 +17,9 @@ Where a room's bundle is:
 
     GET /splat.json?v=<version>   the bundle for that version's room (404 when it has none), with
                                   every file as a URL: {"name", "stage", "step", "created",
-                                  "room": url, "bodies": {body name: url}}
+                                  "room": url, "bodies": {body name: url}}, and when the bundle
+                                  has them (well formed) "view" (where a newcomer stands) and
+                                  "capture" (the scan's camera spots: the walk zone)
     GET /splat/<name>/<file>      one SPZ file (content-named: cached forever)
 """
 
@@ -35,6 +37,7 @@ FILE = re.compile(r"^(room|body-[A-Za-z0-9_.-]{1,96})-[0-9a-f]{16}\.spz$")
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _VERSION = re.compile(r"^(?P<name>[A-Za-z0-9_-]{1,48})-[0-9a-f]{12}$")
 MAX_FILE_BYTES = 200 * 1024 * 1024
+MAX_CAPTURE = 400              # capture spots a bundle may carry (the pipeline writes <= 200)
 POLL_SECONDS = 2.0
 # The URL name (``splat/<name>/<file>``) of the bundle of a version with no room name: never a
 # room name itself (`hosted.scene_name` strips '-' from both ends; `room_name` refuses it).
@@ -143,6 +146,9 @@ class SplatSource:
         view = _view(raw.get("view"))
         if view is not None:
             out["view"] = view
+        capture = _capture(raw.get("capture"))
+        if capture is not None:
+            out["capture"] = capture
         return out
 
     def file(self, name: str | None, file: str) -> bytes | None:
@@ -178,6 +184,21 @@ def _view(raw) -> dict | None:
             for v in nums)):
         return None
     return {"pos": [float(v) for v in pos], "yaw": float(yaw), "pitch": float(pitch)}
+
+
+def _number(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _capture(raw) -> list[list[float]] | None:
+    """A bundle's capture spots (the scan's camera positions, room frame, Z up) if they are well
+    formed: a non-empty list of at most `MAX_CAPTURE` ``[x, y, z]``, all finite. One bad entry
+    drops the field: a bundle that malformed is not one to trust spot by spot."""
+    if not isinstance(raw, list) or not 0 < len(raw) <= MAX_CAPTURE:
+        return None
+    if not all(isinstance(p, list) and len(p) == 3 and all(_number(v) for v in p) for p in raw):
+        return None
+    return [[float(v) for v in p] for p in raw]
 
 
 def _valid(raw) -> bool:

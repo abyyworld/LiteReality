@@ -204,3 +204,20 @@ def test_the_splat_child_is_timed_out_alone_and_never_outlives_its_build(web_dir
         wait_for(lambda: gone(splat_pid))
         assert time.monotonic() - started < 5
         wait_for(lambda: not hub.scans.jobs[job].procs)
+
+
+def test_the_manifest_carries_the_view_and_the_capture_spots(web_dir, tmp_path, monkeypatch):
+    """What the browser's photo mode reads: where to stand first and where the phone was (the
+    walk zone), both as the pipeline wrote them."""
+    root = tmp_path / "volume"
+    write_bundle(root / "room", created=1.0)
+    raw = json.loads((root / "room" / "splat.json").read_text())
+    raw.update(view={"pos": [0.5, 0.25, 1.4], "yaw": 1.0, "pitch": 0.0, "frame": 3},
+               capture=[[0.5, 0.25, 1.4], [1.0, -0.5, 1.38]])
+    (root / "room" / "splat.json").write_text(json.dumps(raw))
+    source = SplatSource.per_room(root, poll_seconds=0.05)
+    with splat_client(web_dir, tmp_path, monkeypatch, label="room", splats=source) as (
+            client, _hub):
+        manifest = client.get("/splat.json").json()
+    assert manifest["view"] == {"pos": [0.5, 0.25, 1.4], "yaw": 1.0, "pitch": 0.0}
+    assert manifest["capture"] == [[0.5, 0.25, 1.4], [1.0, -0.5, 1.38]]
