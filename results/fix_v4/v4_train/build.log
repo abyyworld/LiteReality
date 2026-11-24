@@ -1,0 +1,31 @@
+splatroom  stray_atrium_b3: /Users/abyyworld/LiteReality-scans/stray_atrium_b3 -> run/atrium_stray_q/v4_train  (physics: run/atrium_stray_q/v4_train/physics/scene.xml)
+  instant: 1,403,214 splats, 4 objects cut out, 14.87 MB, at 53.96 s
+  photo masks: 93 from 86 photos in 33.2 s
+  training set: 403 photos, 201.3 MB; training on Modal (gsplat-modal (detached job, Volume))
+    dataset (201.3 MB) on the Volume in 23 s
+    launching: modal run --detach --env main /Users/abyyworld/LiteReality/scripts/fix_v4/train_detached.py --run atrium_v4 --max-train-seconds 2100
+  trainer up on NVIDIA H100 80GB HBM3 at 170.81 s
+    step 222/10000 at 25.08 it/s, container 38 s, ~390 s left; snapshots []
+    step 974/10000 at 19.86 it/s, container 70 s, ~454 s left; snapshots []
+    step 1701/10000 at 24.31 it/s, container 101 s, ~341 s left; snapshots []
+    step 2437/10000 at 21.47 it/s, container 132 s, ~352 s left; snapshots []
+    step 3088/10000 at 17.24 it/s, container 164 s, ~401 s left; snapshots [2500]
+    step 3748/10000 at 22.36 it/s, container 196 s, ~280 s left; snapshots [2500]
+    step 4404/10000 at 15.62 it/s, container 228 s, ~358 s left; snapshots [2500]
+    step 5034/10000 at 20.0 it/s, container 259 s, ~248 s left; snapshots [2500]
+    step 5708/10000 at 22.42 it/s, container 291 s, ~191 s left; snapshots [2500, 5000]
+    step 6375/10000 at 22.13 it/s, container 323 s, ~164 s left; snapshots [2500, 5000]
+    step 7044/10000 at 17.98 it/s, container 355 s, ~164 s left; snapshots [2500, 5000]
+    step 7693/10000 at 21.95 it/s, container 386 s, ~105 s left; snapshots [2500, 5000]
+    step 8505/10000 at 22.64 it/s, container 425 s, ~66 s left; snapshots [2500, 5000, 7500]
+    step 9166/10000 at 19.51 it/s, container 457 s, ~43 s left; snapshots [2500, 5000, 7500]
+    step 9845/10000 at 21.61 it/s, container 489 s, ~7 s left; snapshots [2500, 5000, 7500]
+    step 9997/10000 at 22.2 it/s, container 521 s, ~0 s left; snapshots [2500, 5000, 7500, 10000]
+    step 10000/10000 at 19.24 it/s, container 547 s, ~0 s left; snapshots [2500, 5000, 7500, 10000]
+    snapshot 10000 (53.1 MB) downloaded in 6 s; waited 605 s in all
+  3 object(s) moved to where the photos show them: run/atrium_stray_q/v4_train/physics/scene_splat.xml
+  instant: 1,403,214 splats, 4 objects cut out by photo masks, 14.9 MB, at 715.18 s
+  trained step 10000: 2,400,000 splats, 4 objects cut out by photo masks, 52.81 MB, at 734.31 s
+  held-out photos: PSNR 29.29 dB, SSIM 0.902, LPIPS 0.204
+  done in 734.31 s; report: run/atrium_stray_q/v4_train/report.json
+  walk it: uv run litereality roomcall run/atrium_stray_q/v4_train/physics/scene_splat.xml --splat run/atrium_stray_q/v4_train

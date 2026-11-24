@@ -1,0 +1,200 @@
+Step 715: Added 59998 GSs. Now having 1259966 GSs.
+
+loss=0.141| sh degree=0| depth loss=0.330198| dense depth loss=0.1257| normal loss=0.3004| :   9%|▊         | 856/10000 [00:38<06:08, 24.83it/s]Step 858: Relocated 30550 GSs.
+Step 858: Added 62998 GSs. Now having 1322964 GSs.
+
+loss=0.056| sh degree=0| depth loss=0.025944| dense depth loss=0.0213| normal loss=0.0785| :  10%|█         | 1001/10000 [00:44<06:06, 24.54it/s]Step 1001: Relocated 54726 GSs.
+Step 1001: Added 66148 GSs. Now having 1389112 GSs.
+
+loss=0.061| sh degree=0| depth loss=0.021692| dense depth loss=0.0254| normal loss=0.0801| :  11%|█▏        | 1141/10000 [00:51<05:53, 25.06it/s]Step 1144: Relocated 73151 GSs.
+Step 1144: Added 69455 GSs. Now having 1458567 GSs.
+
+loss=0.082| sh degree=0| depth loss=0.058285| dense depth loss=0.0465| normal loss=0.1269| :  13%|█▎        | 1285/10000 [00:57<06:07, 23.70it/s]Step 1287: Relocated 85928 GSs.
+Step 1287: Added 72928 GSs. Now having 1531495 GSs.
+
+loss=0.065| sh degree=1| depth loss=0.089820| dense depth loss=0.0521| normal loss=0.0874| :  14%|█▍        | 1430/10000 [01:03<06:14, 22.88it/s]Step 1430: Relocated 93501 GSs.
+Step 1430: Added 76574 GSs. Now having 1608069 GSs.
+
+loss=0.050| sh degree=1| depth loss=0.064632| dense depth loss=0.0262| normal loss=0.0908| :  16%|█▌        | 1572/10000 [01:09<06:00, 23.39it/s]Step 1573: Relocated 103082 GSs.
+Step 1573: Added 80403 GSs. Now having 1688472 GSs.
+
+loss=0.059| sh degree=1| depth loss=0.057412| dense depth loss=0.0565| normal loss=0.0921| :  17%|█▋        | 1716/10000 [01:15<05:33, 24.83it/s]Step 1716: Relocated 108257 GSs.
+Step 1716: Added 84423 GSs. Now having 1772895 GSs.
+
+loss=0.094| sh degree=1| depth loss=0.117822| dense depth loss=0.0835| normal loss=0.2041| :  19%|█▊        | 1858/10000 [01:21<06:55, 19.58it/s]Step 1859: Relocated 104598 GSs.
+Step 1859: Added 88644 GSs. Now having 1861539 GSs.
+
+loss=0.087| sh degree=1| depth loss=0.205686| dense depth loss=0.0968| normal loss=0.1660| :  20%|██        | 2002/10000 [01:27<05:30, 24.24it/s]Step 2002: Relocated 108215 GSs.
+Step 2002: Added 93076 GSs. Now having 1954615 GSs.
+
+loss=0.089| sh degree=1| depth loss=0.042667| dense depth loss=0.0490| normal loss=0.0933| :  21%|██▏       | 2143/10000 [01:34<05:40, 23.09it/s]Step 2145: Relocated 107130 GSs.
+Step 2145: Added 97730 GSs. Now having 2052345 GSs.
+
+loss=0.059| sh degree=1| depth loss=0.096726| dense depth loss=0.0711| normal loss=0.1434| :  23%|██▎       | 2287/10000 [01:40<04:44, 27.14it/s]Step 2288: Relocated 107946 GSs.
+Step 2288: Added 102617 GSs. Now having 2154962 GSs.
+
+loss=0.090| sh degree=1| depth loss=0.051286| dense depth loss=0.0713| normal loss=0.1279| :  24%|██▍       | 2431/10000 [01:46<05:09, 24.47it/s]Step 2431: Relocated 109594 GSs.
+Step 2431: Added 107748 GSs. Now having 2262710 GSs.
+
+loss=0.068| sh degree=1| depth loss=0.196053| dense depth loss=0.0910| normal loss=0.1312| :  26%|██▌       | 2574/10000 [01:53<05:30, 22.46it/s]Step 2574: Relocated 110451 GSs.
+Step 2574: Added 113135 GSs. Now having 2375845 GSs.
+
+loss=0.101| sh degree=1| depth loss=0.108404| dense depth loss=0.1029| normal loss=0.1313| :  27%|██▋       | 2717/10000 [02:00<05:16, 22.98it/s]Step 2717: Relocated 112675 GSs.
+Step 2717: Added 24155 GSs. Now having 2400000 GSs.
+
+loss=0.055| sh degree=2| depth loss=0.055177| dense depth loss=0.0420| normal loss=0.1124| :  29%|██▊       | 2860/10000 [02:07<05:13, 22.74it/s]Step 2860: Relocated 103766 GSs.
+Step 2860: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.074| sh degree=2| depth loss=0.060092| dense depth loss=0.0498| normal loss=0.1274| :  30%|███       | 3001/10000 [02:14<06:24, 18.23it/s]Step 3003: Relocated 93281 GSs.
+Step 3003: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.065| sh degree=2| depth loss=0.025985| dense depth loss=0.0379| normal loss=0.0854| :  31%|███▏      | 3145/10000 [02:20<05:02, 22.65it/s]Step 3146: Relocated 89499 GSs.
+Step 3146: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.043| sh degree=2| depth loss=0.134310| dense depth loss=0.0482| normal loss=0.1096| :  33%|███▎      | 3289/10000 [02:27<05:06, 21.88it/s]Step 3289: Relocated 83283 GSs.
+Step 3289: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.048| sh degree=2| depth loss=0.136269| dense depth loss=0.0513| normal loss=0.1294| :  34%|███▍      | 3432/10000 [02:34<04:45, 22.99it/s]Step 3432: Relocated 80195 GSs.
+Step 3432: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.112| sh degree=2| depth loss=0.133773| dense depth loss=0.1142| normal loss=0.1911| :  36%|███▌      | 3573/10000 [02:41<04:48, 22.27it/s]Step 3575: Relocated 77630 GSs.
+Step 3575: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.039| sh degree=2| depth loss=0.024581| dense depth loss=0.0305| normal loss=0.0611| :  37%|███▋      | 3718/10000 [02:48<04:36, 22.71it/s]Step 3718: Relocated 73629 GSs.
+Step 3718: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.055| sh degree=2| depth loss=0.066790| dense depth loss=0.0322| normal loss=0.1257| :  39%|███▊      | 3859/10000 [02:55<04:33, 22.43it/s]Step 3861: Relocated 71677 GSs.
+Step 3861: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.072| sh degree=2| depth loss=0.107905| dense depth loss=0.0609| normal loss=0.1256| :  40%|████      | 4003/10000 [03:02<04:29, 22.26it/s]Step 4004: Relocated 68108 GSs.
+Step 4004: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.051| sh degree=2| depth loss=0.149664| dense depth loss=0.0738| normal loss=0.1100| :  41%|████▏     | 4146/10000 [03:09<04:58, 19.61it/s]Step 4147: Relocated 65493 GSs.
+Step 4147: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.051| sh degree=3| depth loss=0.022338| dense depth loss=0.0313| normal loss=0.0786| :  43%|████▎     | 4290/10000 [03:15<04:20, 21.88it/s]Step 4290: Relocated 63660 GSs.
+Step 4290: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.044| sh degree=3| depth loss=0.127374| dense depth loss=0.0477| normal loss=0.1218| :  44%|████▍     | 4431/10000 [03:22<04:15, 21.79it/s]Step 4433: Relocated 59457 GSs.
+Step 4433: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.071| sh degree=3| depth loss=0.034099| dense depth loss=0.0421| normal loss=0.0972| :  46%|████▌     | 4575/10000 [03:29<03:57, 22.82it/s]Step 4576: Relocated 57203 GSs.
+Step 4576: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.044| sh degree=3| depth loss=0.067192| dense depth loss=0.0417| normal loss=0.1147| :  47%|████▋     | 4719/10000 [03:36<03:56, 22.37it/s]Step 4719: Relocated 54569 GSs.
+Step 4719: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.057| sh degree=3| depth loss=0.137693| dense depth loss=0.0588| normal loss=0.1416| :  49%|████▊     | 4860/10000 [03:43<04:14, 20.19it/s]Step 4862: Relocated 52238 GSs.
+Step 4862: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.061| sh degree=3| depth loss=0.102134| dense depth loss=0.0622| normal loss=0.1266| :  50%|█████     | 5003/10000 [03:51<08:33,  9.73it/s]Step 5005: Relocated 49657 GSs.
+Step 5005: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.033| sh degree=3| depth loss=0.019036| dense depth loss=0.0249| normal loss=0.0665| :  51%|█████▏    | 5148/10000 [03:58<03:35, 22.56it/s]Step 5148: Relocated 48157 GSs.
+Step 5148: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.066| sh degree=3| depth loss=0.030997| dense depth loss=0.0419| normal loss=0.0973| :  53%|█████▎    | 5289/10000 [04:05<04:10, 18.78it/s]Step 5291: Relocated 47383 GSs.
+Step 5291: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.040| sh degree=3| depth loss=0.023233| dense depth loss=0.0372| normal loss=0.0776| :  54%|█████▍    | 5432/10000 [04:12<03:21, 22.65it/s]Step 5434: Relocated 44408 GSs.
+Step 5434: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.048| sh degree=3| depth loss=0.073795| dense depth loss=0.0525| normal loss=0.1075| :  56%|█████▌    | 5576/10000 [04:18<03:20, 22.02it/s]Step 5577: Relocated 42683 GSs.
+Step 5577: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.054| sh degree=3| depth loss=0.029520| dense depth loss=0.0435| normal loss=0.0911| :  57%|█████▋    | 5720/10000 [04:25<03:05, 23.06it/s]Step 5720: Relocated 42443 GSs.
+Step 5720: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.066| sh degree=3| depth loss=0.065125| dense depth loss=0.0674| normal loss=0.1366| :  59%|█████▊    | 5861/10000 [04:32<03:04, 22.47it/s]Step 5863: Relocated 40532 GSs.
+Step 5863: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.067| sh degree=3| depth loss=0.130300| dense depth loss=0.0569| normal loss=0.1208| :  60%|██████    | 6005/10000 [04:39<03:11, 20.86it/s]Step 6006: Relocated 38804 GSs.
+Step 6006: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.048| sh degree=3| depth loss=0.036689| dense depth loss=0.0244| normal loss=0.0857| :  61%|██████▏   | 6149/10000 [04:45<02:52, 22.27it/s]Step 6149: Relocated 38028 GSs.
+Step 6149: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.078| sh degree=3| depth loss=0.221599| dense depth loss=0.0969| normal loss=0.1604| :  63%|██████▎   | 6292/10000 [04:52<02:48, 22.06it/s]Step 6292: Relocated 36977 GSs.
+Step 6292: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.053| sh degree=3| depth loss=0.066753| dense depth loss=0.0383| normal loss=0.1191| :  64%|██████▍   | 6434/10000 [04:59<03:04, 19.29it/s]Step 6435: Relocated 35621 GSs.
+Step 6435: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.064| sh degree=3| depth loss=0.102957| dense depth loss=0.0688| normal loss=0.1556| :  66%|██████▌   | 6578/10000 [05:06<02:35, 22.04it/s]Step 6578: Relocated 34679 GSs.
+Step 6578: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.059| sh degree=3| depth loss=0.148590| dense depth loss=0.0707| normal loss=0.1301| :  67%|██████▋   | 6721/10000 [05:13<02:30, 21.84it/s]Step 6721: Relocated 33395 GSs.
+Step 6721: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.033| sh degree=3| depth loss=0.032607| dense depth loss=0.0347| normal loss=0.0822| :  69%|██████▊   | 6862/10000 [05:20<02:17, 22.75it/s]Step 6864: Relocated 32377 GSs.
+Step 6864: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.045| sh degree=3| depth loss=0.024123| dense depth loss=0.0270| normal loss=0.0892| :  70%|███████   | 7005/10000 [05:26<02:14, 22.33it/s]Step 7007: Relocated 31737 GSs.
+Step 7007: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.033| sh degree=3| depth loss=0.023487| dense depth loss=0.0304| normal loss=0.0600| :  71%|███████▏  | 7148/10000 [05:33<02:16, 20.86it/s]Step 7150: Relocated 31262 GSs.
+Step 7150: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.048| sh degree=3| depth loss=0.025870| dense depth loss=0.0284| normal loss=0.0773| :  73%|███████▎  | 7291/10000 [05:40<02:01, 22.23it/s]Step 7293: Relocated 29531 GSs.
+Step 7293: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.035| sh degree=3| depth loss=0.076126| dense depth loss=0.0586| normal loss=0.1197| :  74%|███████▍  | 7435/10000 [05:47<01:52, 22.70it/s]Step 7436: Relocated 28790 GSs.
+Step 7436: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.041| sh degree=3| depth loss=0.030413| dense depth loss=0.0358| normal loss=0.0923| :  76%|███████▌  | 7579/10000 [05:55<02:03, 19.66it/s]Step 7579: Relocated 28215 GSs.
+Step 7579: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.027| sh degree=3| depth loss=0.041211| dense depth loss=0.0384| normal loss=0.0940| :  77%|███████▋  | 7720/10000 [06:01<01:43, 22.03it/s]Step 7722: Relocated 27375 GSs.
+Step 7722: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.078| sh degree=3| depth loss=0.054231| dense depth loss=0.0652| normal loss=0.1303| :  79%|███████▊  | 7864/10000 [06:08<01:38, 21.59it/s]Step 7865: Relocated 26930 GSs.
+Step 7865: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.045| sh degree=3| depth loss=0.078078| dense depth loss=0.0479| normal loss=0.1090| :  80%|████████  | 8007/10000 [06:15<01:26, 22.93it/s]Step 8008: Relocated 25578 GSs.
+Step 8008: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.046| sh degree=3| depth loss=0.108248| dense depth loss=0.0390| normal loss=0.1186| :  82%|████████▏ | 8150/10000 [06:22<01:22, 22.33it/s]Step 8151: Relocated 25274 GSs.
+Step 8151: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.039| sh degree=3| depth loss=0.035215| dense depth loss=0.0391| normal loss=0.0871| :  83%|████████▎ | 8293/10000 [06:29<01:16, 22.22it/s]Step 8294: Relocated 25438 GSs.
+Step 8294: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.033| sh degree=3| depth loss=0.063948| dense depth loss=0.0427| normal loss=0.1114| :  84%|████████▍ | 8437/10000 [06:35<01:09, 22.36it/s]Step 8437: Relocated 24483 GSs.
+Step 8437: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.063| sh degree=3| depth loss=0.161610| dense depth loss=0.0898| normal loss=0.1446| :  86%|████████▌ | 8580/10000 [06:42<01:04, 21.96it/s]Step 8580: Relocated 23850 GSs.
+Step 8580: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.050| sh degree=3| depth loss=0.047421| dense depth loss=0.0350| normal loss=0.0993| :  87%|████████▋ | 8723/10000 [06:49<01:08, 18.75it/s]Step 8723: Relocated 22829 GSs.
+Step 8723: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.051| sh degree=3| depth loss=0.132718| dense depth loss=0.0430| normal loss=0.1473| :  89%|████████▊ | 8864/10000 [06:56<00:52, 21.81it/s]Step 8866: Relocated 22353 GSs.
+Step 8866: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.045| sh degree=3| depth loss=0.040439| dense depth loss=0.0507| normal loss=0.1071| :  90%|█████████ | 9008/10000 [07:03<00:46, 21.33it/s]Step 9009: Relocated 21874 GSs.
+Step 9009: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.062| sh degree=3| depth loss=0.030013| dense depth loss=0.0313| normal loss=0.0997| :  92%|█████████▏| 9151/10000 [07:10<00:36, 23.14it/s]Step 9152: Relocated 21561 GSs.
+Step 9152: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.040| sh degree=3| depth loss=0.032825| dense depth loss=0.0388| normal loss=0.0748| :  93%|█████████▎| 9294/10000 [07:16<00:31, 22.36it/s]Step 9295: Relocated 21350 GSs.
+Step 9295: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.077| sh degree=3| depth loss=0.038654| dense depth loss=0.0462| normal loss=0.1202| :  94%|█████████▍| 9437/10000 [07:23<00:27, 20.70it/s]Step 9438: Relocated 20759 GSs.
+Step 9438: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.053| sh degree=3| depth loss=0.061325| dense depth loss=0.0530| normal loss=0.1092| :  96%|█████████▌| 9581/10000 [07:30<00:18, 22.38it/s]Step 9581: Relocated 20294 GSs.
+Step 9581: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.040| sh degree=3| depth loss=0.062387| dense depth loss=0.0259| normal loss=0.1208| :  97%|█████████▋| 9722/10000 [07:37<00:12, 22.33it/s]Step 9724: Relocated 19627 GSs.
+Step 9724: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.037| sh degree=3| depth loss=0.026168| dense depth loss=0.0264| normal loss=0.0661| :  99%|█████████▊| 9865/10000 [07:44<00:07, 18.23it/s]Step 9867: Relocated 19438 GSs.
+Step 9867: Added 0 GSs. Now having 2400000 GSs.
+
+loss=0.051| sh degree=3| depth loss=0.034793| dense depth loss=0.0365| normal loss=0.1033| : 100%|█████████▉| 9997/10000 [07:50<00:00, 22.20it/s]Step:  9999 {'mem': 7.08862829208374, 'ellipse_time': 470.7068703174591, 'num_GS': 2400000}
+Running evaluation...
+
+loss=0.051| sh degree=3| depth loss=0.034793| dense depth loss=0.0365| normal loss=0.1033| : 100%|█████████▉| 9997/10000 [08:10<00:00, 22.20it/s]PSNR: 29.293, SSIM: 0.9019, LPIPS: 0.204 Time: 0.004s/image Number of GS: 2400000
+
+loss=0.051| sh degree=3| depth loss=0.034793| dense depth loss=0.0365| normal loss=0.1033| : 100%|██████████| 10000/10000 [08:39<00:00,  4.94s/it]

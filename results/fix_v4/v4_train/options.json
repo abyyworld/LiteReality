@@ -1,0 +1,16 @@
+{
+ "export_sh_degree": 3,
+ "cap_max": 2400000,
+ "steps": 10000,
+ "batch_size": 4,
+ "bilateral_grid": false,
+ "fused_bilagrid": false,
+ "preset": "q_sh3_nogrid",
+ "dense_depth": true,
+ "normal_lambda": 0.05,
+ "snapshots": [
+  2500,
+  5000,
+  7500
+ ]
+}

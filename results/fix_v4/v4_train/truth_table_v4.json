@@ -1,0 +1,146 @@
+{
+ "v4": {
+  "bundle": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v4",
+  "scene": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v4/physics/scene_splat.xml",
+  "chairs": {
+   "blue chair": {
+    "splats": 8900,
+    "centre": [
+     0.546999990940094,
+     1.3819999694824219,
+     -0.7580000162124634
+    ],
+    "by_count": {
+     "room": 0.0294,
+     "Chair0": 0.9706
+    },
+    "by_opacity": {
+     "room": 0.0229,
+     "Chair0": 0.9771
+    },
+    "body": "Chair0",
+    "in_body": 0.9706,
+    "in_room": 0.0294,
+    "in_other_bodies": 0.0,
+    "pass": true
+   },
+   "teal chair": {
+    "splats": 59085,
+    "centre": [
+     -1.3910000324249268,
+     -0.11900000274181366,
+     -0.5979999899864197
+    ],
+    "by_count": {
+     "room": 0.5848,
+     "Chair2": 0.4152
+    },
+    "by_opacity": {
+     "room": 0.4999,
+     "Chair2": 0.5001
+    },
+    "body": "Chair2",
+    "in_body": 0.4152,
+    "in_room": 0.5848,
+    "in_other_bodies": 0.0,
+    "pass": false
+   },
+   "dark chair": {
+    "splats": 104635,
+    "centre": [
+     -0.6990000009536743,
+     0.4269999861717224,
+     -0.7919999957084656
+    ],
+    "by_count": {
+     "room": 0.3741,
+     "Chair1": 0.482,
+     "Chair3": 0.0001,
+     "Chair2": 0.1438
+    },
+    "by_opacity": {
+     "room": 0.3273,
+     "Chair1": 0.5176,
+     "Chair3": 0.0001,
+     "Chair2": 0.1551
+    },
+    "body": "Chair1",
+    "in_body": 0.482,
+    "in_room": 0.3741,
+    "in_other_bodies": 0.1438,
+    "pass": false
+   }
+  }
+ },
+ "v4_train": {
+  "bundle": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v4_train",
+  "scene": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v4_train/physics/scene_splat.xml",
+  "chairs": {
+   "blue chair": {
+    "splats": 8885,
+    "centre": [
+     0.546999990940094,
+     1.3819999694824219,
+     -0.7580000162124634
+    ],
+    "by_count": {
+     "room": 0.0087,
+     "Chair0": 0.9913
+    },
+    "by_opacity": {
+     "room": 0.0071,
+     "Chair0": 0.9929
+    },
+    "body": "Chair0",
+    "in_body": 0.9913,
+    "in_room": 0.0087,
+    "in_other_bodies": 0.0,
+    "pass": true
+   },
+   "teal chair": {
+    "splats": 59088,
+    "centre": [
+     -1.3910000324249268,
+     -0.11900000274181366,
+     -0.5979999899864197
+    ],
+    "by_count": {
+     "room": 0.7302,
+     "Chair2": 0.2698
+    },
+    "by_opacity": {
+     "room": 0.6636,
+     "Chair2": 0.3364
+    },
+    "body": "Chair2",
+    "in_body": 0.2698,
+    "in_room": 0.7302,
+    "in_other_bodies": 0.0,
+    "pass": false
+   },
+   "dark chair": {
+    "splats": 104627,
+    "centre": [
+     -0.6990000009536743,
+     0.4269999861717224,
+     -0.7919999957084656
+    ],
+    "by_count": {
+     "room": 0.1277,
+     "Chair1": 0.1271,
+     "Chair2": 0.7452
+    },
+    "by_opacity": {
+     "room": 0.1136,
+     "Chair1": 0.1065,
+     "Chair2": 0.7799
+    },
+    "body": "Chair2",
+    "in_body": 0.7452,
+    "in_room": 0.1277,
+    "in_other_bodies": 0.1271,
+    "pass": false
+   }
+  }
+ }
+}

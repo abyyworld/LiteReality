@@ -1,0 +1,450 @@
+[
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T00:00:00",
+    "cost": "0.00340909"
+  },
+  {
+    "object_id": "ap-EbPKNrxWpJnPZBM5y6WPM8",
+    "description": "diag-gsplat-render",
+    "environment": "main",
+    "interval_start": "2026-11-24T01:00:00",
+    "cost": "0.00367247"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T01:00:00",
+    "cost": "0.00337216"
+  },
+  {
+    "object_id": "ap-3PdqC3MuHltmjntayuTx67",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.17616418"
+  },
+  {
+    "object_id": "ap-5yog79xPXuHK7w5h3gNxmk",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.14323319"
+  },
+  {
+    "object_id": "ap-7W32oSjtH916mYXHrBa4iv",
+    "description": "litereality-eyeful-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.23967315"
+  },
+  {
+    "object_id": "ap-AQyVscUfktVB80FuPoOHGF",
+    "description": "litereality-eyeful-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.95639870"
+  },
+  {
+    "object_id": "ap-WDyKvbiAzDjrOMshfV13mC",
+    "description": "diag-gsplat-render",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.00502696"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.00338972"
+  },
+  {
+    "object_id": "ap-aZ5mXe1zouCGUEWnbPKMUP",
+    "description": "litereality-eyeful-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.38570456"
+  },
+  {
+    "object_id": "ap-b4ILdWY2qhcrHJr8KEkuSL",
+    "description": "diag-gsplat-render",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.00888979"
+  },
+  {
+    "object_id": "ap-dWqhZirJVnj78VRjQTy2iH",
+    "description": "diag-gsplat-render",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.00090872"
+  },
+  {
+    "object_id": "ap-uI7A908Z23IKFAn0Z0cgI4",
+    "description": "litereality-eyeful-prepare",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.00741257"
+  },
+  {
+    "object_id": "ap-wPBwNpMSS09g6IgxDlK4Y2",
+    "description": "litereality-eyeful-verify",
+    "environment": "main",
+    "interval_start": "2026-11-24T02:00:00",
+    "cost": "0.01701822"
+  },
+  {
+    "object_id": "ap-7W32oSjtH916mYXHrBa4iv",
+    "description": "litereality-eyeful-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.25811990"
+  },
+  {
+    "object_id": "ap-Ap8CivasCxsre2deOqstEt",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.38775902"
+  },
+  {
+    "object_id": "ap-Ks0lle3ROGDIA4LUwERgAH",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.52497359"
+  },
+  {
+    "object_id": "ap-NPARTTTPxjXrzf7OXqCx2y",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.14581711"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.00322994"
+  },
+  {
+    "object_id": "ap-cqlQp8wfn1ZjdUpGYyQ1B2",
+    "description": "litereality-depth",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.41377310"
+  },
+  {
+    "object_id": "ap-kwFfzeLyMj25OQVDlIJS3q",
+    "description": "litereality-eyeful-fetch-eval",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.00031321"
+  },
+  {
+    "object_id": "ap-pjCPhPOkgqbxGRApxsOqBy",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T03:00:00",
+    "cost": "0.16145441"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T04:00:00",
+    "cost": "0.00330917"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T05:00:00",
+    "cost": "0.00341430"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T06:00:00",
+    "cost": "0.00355931"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T07:00:00",
+    "cost": "0.00354833"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T08:00:00",
+    "cost": "0.00359570"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T09:00:00",
+    "cost": "0.00352274"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T10:00:00",
+    "cost": "0.00361715"
+  },
+  {
+    "object_id": "ap-U73TF5Jc9DNO6W3uTgxdQd",
+    "description": "litereality-segment",
+    "environment": "main",
+    "interval_start": "2026-11-24T11:00:00",
+    "cost": "0.05882257"
+  },
+  {
+    "object_id": "ap-XUgpA3DrZSYNgCcvMSbv6b",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T11:00:00",
+    "cost": "0.75572233"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T11:00:00",
+    "cost": "0.00338900"
+  },
+  {
+    "object_id": "ap-aRegRZT1Wsvejb3W9R7fMq",
+    "description": "litereality-splat",
+    "environment": "main",
+    "interval_start": "2026-11-24T11:00:00",
+    "cost": "1.07164433"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T12:00:00",
+    "cost": "0.00369918"
+  },
+  {
+    "object_id": "ap-LJca8tmBqgb58Q32wHuyTR",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T13:00:00",
+    "cost": "0.00188671"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T13:00:00",
+    "cost": "0.00345217"
+  },
+  {
+    "object_id": "ap-4LmNRKiejHSdgEUSn18Qp6",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.00236268"
+  },
+  {
+    "object_id": "ap-L078aDvnBr8UQP5S7iRE7U",
+    "description": "hathaway-baselines-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.01199892"
+  },
+  {
+    "object_id": "ap-LJca8tmBqgb58Q32wHuyTR",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.00283590"
+  },
+  {
+    "object_id": "ap-PJ6zjqLtZiPp72b6KoIBNr",
+    "description": "hathaway-baselines-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.02172857"
+  },
+  {
+    "object_id": "ap-U9DNHSs0S3gLkvRG12ige6",
+    "description": "hathaway-baselines-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.00929575"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.00337320"
+  },
+  {
+    "object_id": "ap-ZvTYO7IZfSCugwH09NWZFl",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.00090387"
+  },
+  {
+    "object_id": "ap-uJDX9iJSr2EKdWdGZjNBgW",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T14:00:00",
+    "cost": "0.08844255"
+  },
+  {
+    "object_id": "ap-59EHl1Af55qP1re5KgqpTk",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.08663080"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.00369941"
+  },
+  {
+    "object_id": "ap-Z3lrvN6mJPESc4wOKYxoNn",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.12814281"
+  },
+  {
+    "object_id": "ap-aHTeTuAVznIw1ordbDCLVk",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.07196781"
+  },
+  {
+    "object_id": "ap-jzY7Q7GO61eMgRwnKLVxkr",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.11917595"
+  },
+  {
+    "object_id": "ap-ropW7v7qaOEbytbUdWFLIf",
+    "description": "hathaway-nst-replication",
+    "environment": "main",
+    "interval_start": "2026-11-24T15:00:00",
+    "cost": "0.36377433"
+  },
+  {
+    "object_id": "ap-38kJTeDxrLm1mW0lYsPvYg",
+    "description": "hathaway-closed-loop-seeds",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.15810277"
+  },
+  {
+    "object_id": "ap-R1DqzGevzoAhlfcid3uXjs",
+    "description": "litereality-v4-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.74661968"
+  },
+  {
+    "object_id": "ap-R4QA5sDJiTbCco7L0FO392",
+    "description": "robo-dog-football-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.00299580"
+  },
+  {
+    "object_id": "ap-SomjlJWs9RpuEb2YgMXEs7",
+    "description": "robo-dog-football-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.00174011"
+  },
+  {
+    "object_id": "ap-U73TF5Jc9DNO6W3uTgxdQd",
+    "description": "litereality-segment",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.02991760"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.00346491"
+  },
+  {
+    "object_id": "ap-ctxTvN3wx5dYJub22ftlrv",
+    "description": "robo-dog-football-train",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.06383976"
+  },
+  {
+    "object_id": "ap-eaCT8dIwuDI9GKZyoYNw5q",
+    "description": "hathaway-calibration",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.05542764"
+  },
+  {
+    "object_id": "ap-jKg4cr2bHQ9m1RDtEtO2xR",
+    "description": "hathaway-calibration",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.24108406"
+  },
+  {
+    "object_id": "ap-nkbJ5ZTKajj2pi9CDOqewe",
+    "description": "hathaway-calibration",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.52595447"
+  },
+  {
+    "object_id": "ap-oICGfiF2ZQDxORgmiNVciP",
+    "description": "hathaway-closed-loop-seeds",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.44253366"
+  },
+  {
+    "object_id": "ap-tghDKGXkyLLehUTy4riPnV",
+    "description": "hathaway-closed-loop-seeds",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.64055186"
+  },
+  {
+    "object_id": "ap-wyChSVzA4amRlmWKPyutvx",
+    "description": "hathaway-calibration",
+    "environment": "main",
+    "interval_start": "2026-11-24T16:00:00",
+    "cost": "0.00788697"
+  },
+  {
+    "object_id": "ap-XhxsUmqUgAtoHWkKYhXv1c",
+    "description": "litereality-roomcall-reminders",
+    "environment": "main",
+    "interval_start": "2026-11-24T17:00:00",
+    "cost": "0.00009671"
+  }
+]

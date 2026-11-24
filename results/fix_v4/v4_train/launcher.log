@@ -1,0 +1,182 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-R1DqzGevzoAhlfcid3uXjs
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/scripts/fix_v4/train_detached.py
+├── 🔨 Created mount /Users/abyyworld/LiteReality/deploy/modal/splat/app.py
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/patch_trainer.py
+└── 🔨 Created function train_job.
+spawned atrium_v4: fc-01M875QWSD7AZ00RTBBBEJJ9MQ
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+[atrium_v4] NVIDIA H100 80GB HBM3; 403 photos, 352 depth maps; mcmc --data-dir /tmp/splat/data --data-factor 1 --result-dir /tmp/splat/result --no-normalize-world-space --disable-viewer --disable-video --max-steps 10000 --batch-size 4 --save-ply --ply-steps 2500 5000 7500 10000 --save-steps 10000 --eval-steps 10000 --test-every 8 --sh-degree 3 --strategy.cap-max 2400000 --depth-loss --depth-lambda 0.01 --antialiased --visible-adam --strategy.refine-start-iter 714 --strategy.refine-every 143 --sh-degree-interval 1429 --dense-depth --dense-depth-lambda 0.1 --normal-lambda 0.05 --tb-every 0
+[atrium_v4] {"seconds": 8.0, "train_s": 0.0, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [], "final": false, "time": 1795537251.594239}
+[atrium_v4] {"step": 222, "steps": 10000, "it_s": 25.08, "seconds": 38.0, "train_s": 30.0, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [], "final": false, "time": 1795537281.596374}
+[atrium_v4] {"step": 974, "steps": 10000, "it_s": 19.86, "seconds": 69.7, "train_s": 61.7, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [], "final": false, "time": 1795537313.2639933}
+[atrium_v4] {"step": 1701, "steps": 10000, "it_s": 24.31, "seconds": 101.1, "train_s": 93.1, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [], "final": false, "time": 1795537344.7312722}
+[atrium_v4] {"step": 2437, "steps": 10000, "it_s": 21.47, "seconds": 132.5, "train_s": 124.6, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [], "final": false, "time": 1795537376.1482105}
+[atrium_v4] snapshot 2500: 2,262,710 splats, 39.8 MB
+[atrium_v4] {"step": 3088, "steps": 10000, "it_s": 17.24, "seconds": 164.3, "train_s": 156.3, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500], "final": false, "time": 1795537407.9220316}
+[atrium_v4] {"step": 3748, "steps": 10000, "it_s": 22.36, "seconds": 195.9, "train_s": 187.9, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500], "final": false, "time": 1795537439.484571}
+[atrium_v4] {"step": 4404, "steps": 10000, "it_s": 15.62, "seconds": 227.5, "train_s": 219.5, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500], "final": false, "time": 1795537471.1035266}
+[atrium_v4] {"step": 5034, "steps": 10000, "it_s": 20.0, "seconds": 259.1, "train_s": 251.1, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500], "final": false, "time": 1795537502.6809099}
+[atrium_v4] snapshot 5000: 2,400,000 splats, 46.0 MB
+[atrium_v4] {"step": 5708, "steps": 10000, "it_s": 22.42, "seconds": 291.0, "train_s": 283.0, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000], "final": false, "time": 1795537534.6061552}
+[atrium_v4] {"step": 6375, "steps": 10000, "it_s": 22.13, "seconds": 322.7, "train_s": 314.7, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000], "final": false, "time": 1795537566.3114467}
+[atrium_v4] {"step": 7044, "steps": 10000, "it_s": 17.98, "seconds": 354.6, "train_s": 346.6, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000], "final": false, "time": 1795537598.2403724}
+[atrium_v4] {"step": 7693, "steps": 10000, "it_s": 21.95, "seconds": 386.5, "train_s": 378.5, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000], "final": false, "time": 1795537630.0756242}
+[atrium_v4] snapshot 7500: 2,400,000 splats, 50.1 MB
+[atrium_v4] {"step": 8505, "steps": 10000, "it_s": 22.64, "seconds": 425.1, "train_s": 417.1, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000, 7500], "final": false, "time": 1795537668.6727707}
+[atrium_v4] {"step": 9166, "steps": 10000, "it_s": 19.51, "seconds": 456.9, "train_s": 448.9, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000, 7500], "final": false, "time": 1795537700.5170825}
+[atrium_v4] {"step": 9845, "steps": 10000, "it_s": 21.61, "seconds": 489.2, "train_s": 481.2, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000, 7500], "final": false, "time": 1795537732.7875302}
+[atrium_v4] snapshot 10000: 2,400,000 splats, 53.1 MB
+[atrium_v4] {"step": 9997, "steps": 10000, "it_s": 22.2, "seconds": 521.0, "train_s": 513.0, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000, 7500, 10000], "final": false, "time": 1795537764.5624897}
+[atrium_v4] {"step": 10000, "steps": 10000, "it_s": 19.24, "seconds": 546.9, "train_s": 539.0, "gpu": "NVIDIA H100 80GB HBM3", "images": 403, "depths": 352, "snapshots": [2500, 5000, 7500, 10000], "final": true, "time": 1795537790.5520205}
+[atrium_v4] done in 548.5 s: exit 0; stats {'psnr': 29.29290771484375, 'ssim': 0.9018548130989075, 'lpips': 0.20356334745883942, 'cc_psnr': 30.582502365112305, 'cc_ssim': 0.9071668982505798, 'cc_lpips': 0.19816024601459503, 'ellipse_time': 0.0037353927013920804, 'num_GS': 2400000}
+{
+ "run": "atrium_v4",
+ "gpu": "NVIDIA H100 80GB HBM3",
+ "images": 403,
+ "depths": 352,
+ "options": {
+  "steps": 10000,
+  "batch_size": 4,
+  "snapshots": [
+   2500,
+   5000,
+   7500,
+   10000
+  ],
+  "cap_max": 2400000,
+  "sh_degree": 3,
+  "export_sh_degree": 3,
+  "test_every": 8,
+  "depth_lambda": 0.01,
+  "bilateral_grid": false,
+  "fused_bilagrid": false,
+  "antialiased": true,
+  "packed": false,
+  "visible_adam": true,
+  "scale_schedule": true,
+  "dense_depth": true,
+  "dense_depth_lambda": 0.1,
+  "normal_lambda": 0.05,
+  "bilateral_grid_shape": [
+   16,
+   16,
+   8
+  ],
+  "bilateral_tv_lambda": 10.0,
+  "bilateral_mean_lambda": 0.0,
+  "preset": "q_sh3_nogrid",
+  "trainer_args": []
+ },
+ "command": [
+  "/opt/gsplat/examples/simple_trainer.py",
+  "mcmc",
+  "--data-dir",
+  "/tmp/splat/data",
+  "--data-factor",
+  "1",
+  "--result-dir",
+  "/tmp/splat/result",
+  "--no-normalize-world-space",
+  "--disable-viewer",
+  "--disable-video",
+  "--max-steps",
+  "10000",
+  "--batch-size",
+  "4",
+  "--save-ply",
+  "--ply-steps",
+  "2500",
+  "5000",
+  "7500",
+  "10000",
+  "--save-steps",
+  "10000",
+  "--eval-steps",
+  "10000",
+  "--test-every",
+  "8",
+  "--sh-degree",
+  "3",
+  "--strategy.cap-max",
+  "2400000",
+  "--depth-loss",
+  "--depth-lambda",
+  "0.01",
+  "--antialiased",
+  "--visible-adam",
+  "--strategy.refine-start-iter",
+  "714",
+  "--strategy.refine-every",
+  "143",
+  "--sh-degree-interval",
+  "1429",
+  "--dense-depth",
+  "--dense-depth-lambda",
+  "0.1",
+  "--normal-lambda",
+  "0.05",
+  "--tb-every",
+  "0"
+ ],
+ "setup_s": 8.0,
+ "snapshots": {
+  "2500": {
+   "seconds": 154.5,
+   "splats": 2262710,
+   "mb": 39.82
+  },
+  "5000": {
+   "seconds": 277.9,
+   "splats": 2400000,
+   "mb": 45.98
+  },
+  "7500": {
+   "seconds": 400.6,
+   "splats": 2400000,
+   "mb": 50.09
+  },
+  "10000": {
+   "seconds": 519.3,
+   "splats": 2400000,
+   "mb": 53.09
+  }
+ },
+ "train_s": 538.9,
+ "exit": 0,
+ "missing_snapshots": [],
+ "stats": {
+  "psnr": 29.29290771484375,
+  "ssim": 0.9018548130989075,
+  "lpips": 0.20356334745883942,
+  "cc_psnr": 30.582502365112305,
+  "cc_ssim": 0.9071668982505798,
+  "cc_lpips": 0.19816024601459503,
+  "ellipse_time": 0.0037353927013920804,
+  "num_GS": 2400000
+ },
+ "total_s": 548.5
+}
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-R1DqzGevzoAhlfcid3uXjs

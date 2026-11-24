@@ -1,0 +1,45 @@
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: divide by zero encountered in matmul
+  """(camera centre (3,), world direction per pixel centre (h*w, 3), not normalised)."""
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: overflow encountered in matmul
+  """(camera centre (3,), world direction per pixel centre (h*w, 3), not normalised)."""
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:254: RuntimeWarning: invalid value encountered in matmul
+  """(camera centre (3,), world direction per pixel centre (h*w, 3), not normalised)."""
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: divide by zero encountered in matmul
+  for box in boxes:
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: overflow encountered in matmul
+  for box in boxes:
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:281: RuntimeWarning: invalid value encountered in matmul
+  for box in boxes:
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: divide by zero encountered in matmul
+  
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: overflow encountered in matmul
+  
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:336: RuntimeWarning: invalid value encountered in matmul
+  
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: divide by zero encountered in matmul
+  near = (z < max(floor, plan.floor_z) + FLOOR_TOL) | (z > plan.ceiling_z - FLOOR_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: overflow encountered in matmul
+  near = (z < max(floor, plan.floor_z) + FLOOR_TOL) | (z > plan.ceiling_z - FLOOR_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:354: RuntimeWarning: invalid value encountered in matmul
+  near = (z < max(floor, plan.floor_z) + FLOOR_TOL) | (z > plan.ceiling_z - FLOOR_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: divide by zero encountered in matmul
+  for wall in plan.walls.values():
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: overflow encountered in matmul
+  for wall in plan.walls.values():
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:355: RuntimeWarning: invalid value encountered in matmul
+  for wall in plan.walls.values():
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:169: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:169: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:169: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 68: PSNR cc 21.31, hf_ratio 0.778
+  row 933: PSNR cc 18.15, hf_ratio 0.318
+  row 1643: PSNR cc 22.83, hf_ratio 0.065
+  row 2343: PSNR cc 20.19, hf_ratio 0.222
+v4_random_full: PSNR 20.0262 (cc 20.6199), SSIM 0.7843, LPIPS 0.4172, openings 21.4993, objects 18.5295, coverage 0.9876, hf_ratio 0.3456, lap_ratio 0.7978 over 4 views (4 unseen) at 1920x1440; render 680 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}

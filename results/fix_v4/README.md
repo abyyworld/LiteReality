@@ -19,3 +19,11 @@ vote and split fixes in `pipeline/splatroom/masks.py` and `split.py` (~94% per c
 Big files (over 5 MB) are kept out of git, in `~/LiteReality-scans/fix_v4/`:
 `e2e_affine/raw.spz.bin`, `e2e_affine/room-31336cffd79b252d.spz`,
 `e2e_affine/room-d2a4e2b10e4610f0.spz`.
+
+## movecheck/
+
+Room-call grab test of v4 and v2 (sheets, zooms, movecheck.json). Raw PNG frames are kept out of git in `~/LiteReality-scans/fix_v4/movecheck/`.
+
+## v4_train/
+
+Detached 10k-step retrain (scripts/fix_v4/). Not published: worse than v2 at new views (streaks), chair bases split off, phantom chair under the desk.
