@@ -202,3 +202,55 @@ def depth_normal_loss(pred, dense, Ks, max_jump: float = MAX_NORMAL_JUMP):
     (px, py, pz), pred_ok = depth_normals(pred, Ks)
     (gx, gy, gz), dense_ok = depth_normals(dense, Ks, max_jump=max_jump)
     return _masked_mean(1.0 - (px * gx + py * gy + pz * gz), pred_ok & dense_ok)
+
+
+# ── the per-photo colour model (bilateral grid) and colour-corrected metrics ──────────────────
+
+
+def grid_regularisers(grids, identity, tv_fn, tv_lambda: float, mean_lambda: float):
+    """The bilateral grids' regulariser: `tv_lambda` x gsplat's total variation (`tv_fn`, the
+    trainer's own `total_variation_loss`; skipped at weight 0, where a 1-cell grid's TV would be
+    0 / 0) plus `mean_lambda` x the mean square of (the grids' mean over all photos - `identity`).
+
+    The second term holds the colour map the photos share at the identity: what every photo shows
+    in a place must then be in the splats themselves, which is all an export carries, and only
+    each photo's own drift (exposure, white balance) is left to its grid. `grids` is N x 12 x ...
+    (one grid per photo first), `identity` the grids' mean when they were made (the identity map,
+    1 x 12 x ...). Numpy or torch; 0 when both weights are 0."""
+    loss = 0.0 * grids.sum()
+    if tv_lambda > 0:
+        loss = loss + tv_lambda * tv_fn(grids)
+    if mean_lambda > 0:
+        diff = grids.mean(0, keepdims=True) if isinstance(grids, np.ndarray) else \
+            grids.mean(0, keepdim=True)
+        loss = loss + mean_lambda * ((diff - identity) ** 2).mean()
+    return loss
+
+
+def color_correct(img, ref, num_iters: int = 5, eps: float = 0.5 / 255):
+    """`img` (... x 3, 0..1) under the per-channel quadratic colour map that best fits `ref`,
+    refitted `num_iters` times without the clipped pixels: the held-out cc_* metrics' correction,
+    the same maths as gsplat's `color_correct` (multinerf's), here so a run without a bilateral
+    grid (whose module brings it) reports them too. Torch only (the trainer's eval)."""
+    import torch
+
+    channels = img.shape[-1]
+    img_mat = img.reshape(-1, channels)
+    ref_mat = ref.reshape(-1, channels)
+
+    def unclipped(z):
+        return (z >= eps) & (z <= 1 - eps)
+
+    mask0 = unclipped(img_mat)
+    for _ in range(num_iters):
+        terms = [img_mat[:, c:c + 1] * img_mat[:, c:] for c in range(channels)]
+        a_mat = torch.cat([*terms, img_mat, torch.ones_like(img_mat[:, :1])], dim=-1)
+        warp = []
+        for c in range(channels):
+            b = ref_mat[:, c]
+            mask = mask0[:, c] & unclipped(img_mat[:, c]) & unclipped(b)
+            ma = torch.where(mask[:, None], a_mat, torch.zeros_like(a_mat))
+            mb = torch.where(mask, b, torch.zeros_like(b))
+            warp.append(torch.linalg.lstsq(ma, mb, rcond=-1)[0])
+        img_mat = torch.clip(a_mat @ torch.stack(warp, dim=-1), 0, 1)
+    return img_mat.reshape(img.shape)

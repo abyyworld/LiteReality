@@ -616,6 +616,15 @@ function setHighlight(id, on) {
   for (const m of b.mats) {
     if (on) m.emissive.setRGB(0.16, 0.24, 0.38); else m.emissive.copy(m.userData.emissive0);
   }
+  // In the photoreal room the meshes are hidden under the body's own splat: tint that instead,
+  // or nothing on screen says what was picked.
+  glowSplat(photo.bodies.get(b.name), on);
+}
+
+/** A body's splat tinted (Spark multiplies every splat's colour by `recolor`) or back to white. */
+function glowSplat(mesh, on) {
+  if (!mesh?.recolor) return;
+  if (on) mesh.recolor.setRGB(...SPLAT_GLOW); else mesh.recolor.setRGB(1, 1, 1);
 }
 
 /* ------------------------------------------------------------------ walking (first person) */
@@ -724,13 +733,22 @@ const inStep = () => ver.room === shown?.v;
 
 /** The movable body under the screen point, or null. Static geometry in front blocks it, so you
  *  cannot grab (or see the grab cursor on) something through a wall. Cheap enough for hover too
- *  thanks to the BVH. */
+ *  thanks to the BVH. A body the photoreal room's cut says holds too little of a real object
+ *  (`offered`) is not offered: grabbing it would carry away a patch of floor, not the chair. */
 function pick(x, y) {
   if (!sceneReady || !inStep()) return null;
   setNdc(x, y);
   const h = raycaster.intersectObject(sceneRoot, true).find((i) => i.object.isMesh && (i.object.visible || i.object.userData.photoHidden));
   if (!h || h.object.userData.bodyId === undefined) return null;
+  if (!offered(h.object.userData.bodyId)) return null;
   return { body: h.object.userData.bodyId, point: h.point.clone(), distance: h.distance };
+}
+
+/** Whether a body may be grabbed: always, unless the photoreal room is on and its bundle marks
+ *  that body's splat as not holding a real object (splat.json "grabbable": {name: false}). */
+function offered(id) {
+  const name = shown?.bodies.get(id)?.name;
+  return !(photoShown() && photo.bodies.has(name) && photo.grabbable.get(name) === false);
 }
 
 function setHover(id) {
@@ -1229,7 +1247,8 @@ function sparkFailed(err) {
 // stick out well past the real furniture, and polygonOffset is tiny at room distances.
 const SPLAT_URL = /^splat\/[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]{1,140}\.spz$/;
 const BACKDROP_ORDER = -3, BACKDROP_GLASS = -2;    // before the depth clear (-1) and all else (0)
-const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map(), retries: new Map(), capture: null };
+const photo = { want: true, gen: 0, v: null, created: null, stage: '', step: null, room: null, bodies: new Map(), retries: new Map(), capture: null, grabbable: new Map() };
+const SPLAT_GLOW = [1.3, 1.45, 1.9];               // a picked body's splat: brighter, bluer (Spark `recolor`)
 try { const s = sessionStorage.getItem('rc.photo'); if (s === '0') photo.want = false; } catch { /* storage blocked */ }
 const depthCut = new THREE.Mesh(
   new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3)),
@@ -1254,6 +1273,7 @@ function clearSplat() {
   disposeSplat(photo.room); photo.room = null;
   for (const m of photo.bodies.values()) disposeSplat(m);
   photo.bodies.clear();
+  photo.grabbable = new Map();
   Object.assign(photo, { v: null, created: null, stage: '', step: null, capture: null });
   applyPhoto();
 }
@@ -1269,6 +1289,8 @@ function attachBodySplats() {
   for (const [name, m] of photo.bodies) {
     const rec = shown.bodies.get(shown.byName.get(name));
     if (rec) rec.node.add(m); else m.parent?.remove(m);
+    // A new bundle's splat for the body held or hovered right now keeps its tint.
+    glowSplat(m, !!rec && (rec.id === grab?.body || rec.id === hoverBody));
   }
   applyPhoto();
 }
@@ -1379,6 +1401,8 @@ async function refreshSplat() {
     for (const m of photo.bodies.values()) disposeSplat(m);
     photo.room = room; world.add(room);
     photo.bodies = new Map(loaded);
+    photo.grabbable = new Map(Object.entries(man.grabbable && typeof man.grabbable === 'object' ? man.grabbable : {})
+      .filter(([n, ok]) => typeof n === 'string' && typeof ok === 'boolean'));
     Object.assign(photo, { v, created: man.created ?? null, stage: String(man.stage || ''), step: man.step ?? null,
                            capture: captureSpots(man.capture) });
     attachBodySplats();

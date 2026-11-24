@@ -42,9 +42,17 @@ Two optional improvements for the views the scan barely saw (both off by default
 A re-cut (`SavedTrainer`) replays `RAW` through the same rules: a trained room is cleaned again
 with new rules on a laptop, no GPU.
 
+With ``instances`` (``--instances``; `splatcut` does it by default) the bodies are not slid
+onto the splat but put on the objects found in it (`instances`): RoomPlan's regularised row of
+chairs becomes one body per real chair, each cut by its cluster, and the physics written to match
+(``scene_splat.xml``: bodies re-posed with a free yaw and resized, clones for objects with no
+body, phantoms removed). Every bundle carries its move test (`instances.move_test`) and which
+bodies hold enough of a real object to be offered for grabbing (``"grabbable"``).
+
     litereality splatroom <scan> [--scene run/<scan>/objects/scene.xml] [--instant-only]
                          [--depth promptda] [--depth-loss-dense] [--normal-lambda F] [--clean]
-                         [--support-views N] [--recut --no-masks]
+                         [--support-views N] [--recut --no-masks] [--instances]
+    litereality splatcut <run/<scan>/splat> [--out DIR] [--scene XML] [--no-instances] [--check]
 """
 
 from __future__ import annotations
@@ -53,6 +61,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -63,6 +72,7 @@ from litereality_agent.models.splat import clean as splat_clean
 from litereality_agent.models.splat import dataset as splat_dataset
 from litereality_agent.models.splat import promptda, rgbd, spz
 from litereality_agent.models.splat import views as splat_views
+from litereality_agent.pipeline.splatroom import instances as object_instances
 from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, split
 
 DEFAULT_DIR = "splat"
@@ -72,9 +82,13 @@ SPLAT_SCENE = "scene_splat.xml"  # the physics with the bodies moved, beside the
 RAW = "raw.spz.bin"            # the latest snapshot uncut (not a bundle file: never served)
 RAW_CLEAN = "raw.clean.spz.bin"  # the same cleaned, as it was cut (`clean`, agreement)
 INSTANT_VOXEL = 0.016          # ~640k splats, ~6 MB for tea_room: on screen in seconds
-# Points per photo drawn from dense depth: up to this many, but no more in all than the trainer's
-# splat budget (MCMC never prunes its starting points, so 20000 x 300 photos would start it at 6M).
+# Points per photo drawn from dense depth: up to this many, but no more in all than
+# SEED_FRACTION of the trainer's splat budget. MCMC never prunes its starting points and only
+# grows below its budget: seeded at or over it, it never adds a splat where the photos need one
+# (the atrium's 557 photos x the LiDAR's 4000 started it at 2.228M against a cap of 800k, and it
+# ended there: results/diagnosis). Half the budget leaves it half to grow.
 DENSE_POINTS_MAX = 20_000
+SEED_FRACTION = 0.5
 CAP_MAX = 800_000              # the trainer's default splat budget (deploy/modal/splat "cap_max")
 TEST_EVERY = 8                 # the trainer's default hold-out ("test_every")
 # Capture spots a bundle carries (the browser keeps walkers near them): ~1 per photo of a thin
@@ -87,11 +101,18 @@ DEPTH_DEADLINE = 90.0
 _SAFE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
+def seed_points_for(photos: int, cap_max: int = CAP_MAX, *, most: int = DENSE_POINTS_MAX,
+                    fraction: float = SEED_FRACTION) -> int:
+    """Training points per photo: `fraction` of the splat budget shared out over the `photos`
+    that seed it, and at most `most`, so the trainer starts below its budget and can grow."""
+    share = int(int(cap_max) * float(fraction)) // max(1, int(photos))
+    return int(max(1, min(int(most), share)))
+
+
 def dense_points_for(photos: int, cap_max: int = CAP_MAX) -> int:
-    """The dense training set's points per photo when none is asked for: the splat budget shared
-    out over the photos, between the LiDAR's own `POINTS_PER_FRAME` and `DENSE_POINTS_MAX`."""
-    share = int(cap_max) // max(1, photos)
-    return int(min(DENSE_POINTS_MAX, max(splat_dataset.POINTS_PER_FRAME, share)))
+    """The dense training set's points per photo when none is asked for (`seed_points_for`, at
+    most `DENSE_POINTS_MAX`)."""
+    return seed_points_for(photos, cap_max, most=DENSE_POINTS_MAX)
 
 
 def wants_dense_maps(options: dict | None) -> bool:
@@ -150,6 +171,10 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
               "counts": {"room": len(parts.room), **parts.counts},
               "bytes": sum((out_dir / f).stat().st_size for f in keep),
               "created": round(time.time(), 3)}
+    if parts.grabbable:
+        bundle["grabbable"] = dict(sorted(parts.grabbable.items()))   # the browser's pick list
+    if parts.move_test:
+        bundle["move_test"] = move_test_summary(parts.move_test)
     if view is not None:
         bundle["view"] = view          # where a newcomer first stands (`views.best_view`)
     if capture:
@@ -164,6 +189,13 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
         if old.name not in keep and old.name not in spare:
             old.unlink(missing_ok=True)
     return bundle
+
+
+def move_test_summary(test: dict) -> dict:
+    """`instances.move_test` cut down for ``splat.json``: per object, its body and shares."""
+    keys = ("category", "centre", "splats", "body", "in_body", "in_room", "leak", "pass")
+    return {"pass": bool(test.get("pass")), "cut": test.get("cut"),
+            "objects": [{k: r[k] for k in keys} for r in test.get("objects", [])]}
 
 
 def add_view(out_dir: Path, scan_dir: Path) -> dict | None:
@@ -205,7 +237,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
           on_scene: Callable[[Path], None] | None = None,
           move_bodies: bool = True, refiner=None, dense_points: int | None = None,
           clean: bool = False, clean_options: dict | None = None,
-          depth_deadline: float = DEPTH_DEADLINE) -> dict:
+          depth_deadline: float = DEPTH_DEADLINE, instances: bool = False) -> dict:
     """The instant room, then (with a `trainer`) each trained snapshot, each written as a bundle
     the moment it exists. Returns the report (also written to `REPORT`).
 
@@ -223,7 +255,12 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
     With `clean`, every snapshot goes through `clean.clean` (keywords `clean_options`) first.
     ``clean_options["support_views"]`` (the agreement filter) works with or without `clean`:
     without it, agreement is the only rule that runs (the faint, outside and carving rules are
-    switched off), so each rule can be tried alone."""
+    switched off), so each rule can be tried alone.
+
+    With `instances` the first split puts the bodies on the objects found in the splat
+    (`instances.fit_scene`, written as ``scene_splat.xml``) instead of snapping them, every split
+    cuts them by cluster membership, and the photo masks (with `segment`) are asked for at the
+    fitted poses."""
     import threading
 
     from litereality_agent.pipeline.splatroom import masks as object_masks
@@ -266,7 +303,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                            "room_bounds": clean_kw["bounds"] is not None,
                            "test_every": test_every}
 
-    state: dict = {"corrections": None, "masks": None, "dense": None}
+    state: dict = {"corrections": None, "masks": None, "dense": None, "model": None,
+                   "fitted": None}
     clean_kw.setdefault("depth_cache", {})     # each frame's carving depth, read once per build
 
     def cleaned(splats: spz.Splats, dense: dict | None,
@@ -290,13 +328,45 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
         with publishing:
             _publish(splats, stage, step, extra)
 
+    def fit_bodies(splats: spz.Splats, stage: str) -> None:
+        """The bodies put on the objects found in `splats` (`instances.fit_scene`): on the first
+        room published, and once more on the first trained one, which is what is served from
+        then on (the instant room's LiDAR surfels can miss a thin chair)."""
+        state["fitted"] = stage
+        state["corrections"] = {}               # nothing is snapped after this
+        if not move_bodies:
+            return
+        fixed, fit = object_instances.fit_scene(splats.positions, splats.opacities,
+                                                Path(scene_xml), out_name=SPLAT_SCENE, log=log)
+        report["instances"] = fit
+        report["corrections"] = {}
+        report["corrected_scene"] = str(fixed) if fixed else None
+        if fixed:
+            state["model"] = mujoco.MjModel.from_xml_path(str(fixed))
+            log(f"  {len(fit['bodies']) + len(fit['clones'])} object(s) put where the splat "
+                f"shows them, {len(fit['removed'])} phantom(s) removed: {fixed}")
+            if on_scene:
+                on_scene(fixed)
+            return
+        # No object found: the scanned physics, and no earlier fit's left lying beside it.
+        stale = Path(scene_xml).with_name(SPLAT_SCENE)
+        if stale.resolve() != Path(scene_xml).resolve():
+            stale.unlink(missing_ok=True)
+        if state["model"] is not None and on_scene:
+            on_scene(Path(scene_xml))
+        state["model"] = None
+
     def _publish(splats: spz.Splats, stage: str, step: int | None, extra: dict) -> None:
         t = time.perf_counter()
+        if instances and (state["fitted"] is None
+                          or (stage == "trained" and state["fitted"] != "trained")):
+            fit_bodies(splats, stage)
         # Before the masks: boxes only, and no snapping when masks are on their way (the photos
         # will say where each object is). The first split with masks fixes the corrections.
         waiting = segment is not None and state["masks"] is None
-        parts = split(splats, model, corrections=state["corrections"], masks=state["masks"],
-                      snap_bodies=not waiting, move_bodies=move_bodies)
+        parts = split(splats, state["model"] or model, corrections=state["corrections"],
+                      masks=state["masks"], snap_bodies=not waiting, move_bodies=move_bodies,
+                      instances=instances)
         if state["corrections"] is None and not waiting:
             state["corrections"] = parts.corrections
             # An earlier run's moved physics may still be the served one; with nothing moved
@@ -321,6 +391,8 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                  "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
                  "bodies": len(parts.bodies), "masks": state["masks"] is not None,
                  "mb": round(bundle["bytes"] / 1e6, 2), **extra}
+        if parts.move_test:
+            entry["move_test"] = bool(parts.move_test.get("pass"))
         report["bundles"].append(entry)
         log(f"  {stage}{'' if step is None else f' step {step}'}: {len(splats):,} splats, "
             f"{len(parts.bodies)} objects cut out{' by photo masks' if entry['masks'] else ''}, "
@@ -424,12 +496,17 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
 
     mask_thread = None
     if segment is not None:
-        data = mujoco.MjData(model)
-        mujoco.mj_forward(model, data)                 # the scanned poses: what SAM 2 is shown
+        # The scanned poses, or where `fit_bodies` put the bodies: what SAM 2 is shown.
+        shown = state["model"] or model
+        data = mujoco.MjData(shown)
+        mujoco.mj_forward(shown, data)
         from litereality_agent.room_ops.roomcall.model_info import body_name, movable_body_ids
 
-        bodies = {body_name(model, b): b for b in sorted(movable_body_ids(model))}
-        views = object_masks.plan_views(frames, model, data, bodies)
+        bodies = {body_name(shown, b): b for b in sorted(movable_body_ids(shown))}
+        fitted = state["model"] is not None
+        views = object_masks.plan_views(frames, shown, data, bodies,
+                                        grow=object_masks.FITTED_GROW if fitted
+                                        else object_masks.GROW, centre_point=fitted)
 
         def fetch() -> None:
             t = time.perf_counter()
@@ -437,7 +514,7 @@ def build(scan_dir: Path, out_dir: Path, scene_xml: Path, *, trainer=None,
                 from litereality_agent.pipeline.splatroom.split import _static_boxes
 
                 # Walls included: a SAM candidate lying mostly on the wall is not the object.
-                static = _static_boxes(model, data, set(bodies.values()))
+                static = _static_boxes(shown, data, set(bodies.values()))
                 got = object_masks.request(views, segment, static_boxes=static)
             except Exception as exc:  # noqa: BLE001 — the boxes still cut the room
                 report["masks_error"] = f"{type(exc).__name__}: {exc}"
@@ -565,13 +642,14 @@ def training_set(frames: list, dense: dict, options: dict, dense_points: int | N
     photos it holds go in ``report["images"]`` (they set the trainer's hold-out order) and its
     make-up in ``report["dataset"]``."""
     maps = wants_dense_maps(options)
-    per_photo = splat_dataset.POINTS_PER_FRAME
     test_every = int(options.get("test_every", TEST_EVERY))
+    # Shared over the photos that seed it: the held-out ones give no points.
+    seeding = len(frames) - (-(-len(frames) // test_every) if test_every > 0 else 0)
+    cap = options.get("cap_max", CAP_MAX)
+    # The LiDAR's own points: at most its `POINTS_PER_FRAME` a photo, within the seed budget too.
+    per_photo = seed_points_for(seeding, cap, most=splat_dataset.POINTS_PER_FRAME)
     if dense:
-        # Shared over the photos that seed it: the held-out ones give no points.
-        seeding = len(frames) - (-(-len(frames) // test_every) if test_every > 0 else 0)
-        per_photo = int(dense_points or dense_points_for(seeding,
-                                                         options.get("cap_max", CAP_MAX)))
+        per_photo = int(dense_points or dense_points_for(seeding, cap))
     # The trainer's hold-out photos give no starting points: they score the room.
     ds = splat_dataset.build(frames, points_per_frame=per_photo, dense=dense or None,
                              depth_maps=maps and bool(dense),
@@ -588,6 +666,123 @@ def training_set(frames: list, dense: dict, options: dict, dense_points: int | N
                          "points_per_photo": per_photo, "dense_photos": ds.dense_images,
                          "depth_maps": depth_maps}
     return ds.tar()
+
+
+def _source_scene(src: Path, report: dict) -> Path:
+    """The scanned physics a bundle was cut against (``report["scene"]``, written relative to the
+    repo the run was started from), else the ``physics/scene.xml`` beside it."""
+    named = report.get("scene")
+    for cand in ([Path(named), src / "physics" / Path(named).name] if named else []) \
+            + [src / "physics" / "scene.xml"]:
+        if cand.expanduser().is_file():
+            return cand.expanduser()
+    raise FileNotFoundError(f"{src}: no physics scene to cut against (pass --scene)")
+
+
+def recut(src: Path, out: Path | None = None, scene_xml: Path | None = None, *,
+          instances: bool = True, log: Callable[[str], None] = print) -> dict:
+    """Cut a trained room again on a laptop, no GPU and no photos read: the last snapshot in
+    `src` (`RAW`, or `RAW_CLEAN` when that is what was served) against the scanned physics, the
+    bodies put on the objects found in it (`instances`; else snapped by their boxes as before).
+    Written to `out` (default `src`) as a bundle, beside a copy of the physics folder holding the
+    fitted ``scene_splat.xml`` (an `out` of its own never touches `src`), with the move test in
+    ``report.json``. Returns the report."""
+    src = Path(src)
+    out = Path(out) if out is not None else src
+    saved = SavedTrainer(src)
+    base = dict(saved.report)
+    raw_name = RAW_CLEAN if base.get("clean") and (src / RAW_CLEAN).is_file() else RAW
+    scene = Path(scene_xml) if scene_xml else _source_scene(src, base)
+    out.mkdir(parents=True, exist_ok=True)
+    if out.resolve() != src.resolve():
+        physics = out / "physics"
+        if scene.parent.resolve() != physics.resolve():
+            shutil.copytree(scene.parent, physics, dirs_exist_ok=True)
+            scene = physics / scene.name
+        for name in (RAW, RAW_CLEAN):
+            if (src / name).is_file():
+                shutil.copyfile(src / name, out / name)
+    t = time.perf_counter()
+    splats = spz.decode((src / raw_name).read_bytes())
+    model = mujoco.MjModel.from_xml_path(str(scene))
+    served, fit = None, None
+    if instances:
+        served, fit = object_instances.fit_scene(splats.positions, splats.opacities, scene,
+                                                 out_name=SPLAT_SCENE, log=log)
+        if served:
+            model = mujoco.MjModel.from_xml_path(str(served))
+        parts = split(splats, model, corrections={}, instances=True)
+    else:
+        parts = split(splats, model)
+        served = corrected_scene(scene, parts.corrections or {}, out_name=SPLAT_SCENE)
+    previous = read_bundle(src) or {}
+    bundle = write_bundle(out, parts, stage=previous.get("stage") or "trained",
+                          step=previous.get("step"), view=previous.get("view"),
+                          capture=previous.get("capture"))
+    entry = {"stage": bundle["stage"], "step": bundle["step"], "recut": True,
+             "split_write_s": round(time.perf_counter() - t, 2), "splats": len(splats),
+             "bodies": len(parts.bodies), "masks": False, "mb": round(bundle["bytes"] / 1e6, 2),
+             "move_test": bool(parts.move_test.get("pass"))}
+    report = {**base, "scene": str(scene), "corrected_scene": str(served) if served else None,
+              "corrections": parts.corrections, "instances": fit, "recut": True,
+              "recut_from": str(src), "cut": {"instances": instances, "raw": raw_name},
+              "move_test": parts.move_test,
+              "bundles": [*base.get("bundles", []), entry]}
+    (out / REPORT).write_text(json.dumps(report, indent=1))
+    test = parts.move_test
+    log(f"  move test: {'pass' if test.get('pass') else 'FAIL'} "
+        + ", ".join(f"{r['body'] or 'no body'} {r['in_body']:.0%} (room {r['in_room']:.0%}, "
+                    f"leak {r['leak']:.0%})" for r in test.get("objects", [])))
+    return report
+
+
+def bundle_move_test(out_dir: Path, scene_xml: Path | None = None) -> dict:
+    """The move test (`instances.move_test`) of a bundle as served: its room splat and each
+    body's splat put back at the body's pose in its physics (``corrected_scene``, else the scene
+    it was cut against), the real objects found afresh in that, and where each one's splats are.
+    Works on any bundle, old ones included."""
+    from litereality_agent.room_ops.roomcall.model_info import body_name, movable_body_ids
+
+    out_dir = Path(out_dir)
+    bundle = read_bundle(out_dir)
+    if bundle is None:
+        raise FileNotFoundError(f"{out_dir}: no {BUNDLE}")
+    try:
+        report = json.loads((out_dir / REPORT).read_text())
+    except (OSError, ValueError):
+        report = {}
+    if scene_xml is None:
+        named = report.get("corrected_scene")
+        scene_xml = Path(named) if named and Path(named).is_file() else _source_scene(out_dir,
+                                                                                      report)
+    model = mujoco.MjModel.from_xml_path(str(scene_xml))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    import numpy as np
+
+    room = spz.decode((out_dir / bundle["room"]).read_bytes())
+    fill = int((bundle.get("counts") or {}).get("floor_fill", 0))
+    room = room.subset(np.arange(len(room) - fill))       # the patch under objects is not the scan
+    parts, owner = [room], [np.full(len(room), -1)]
+    for name, file in (bundle.get("bodies") or {}).items():
+        b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        if b < 0:
+            raise ValueError(f"{scene_xml} has no body {name}")
+        local = spz.decode((out_dir / file).read_bytes())
+        with np.errstate(all="ignore"):         # Accelerate's matmul flags finite products
+            parts.append(local.transformed(np.asarray(data.xmat[b]).reshape(3, 3),
+                                           np.asarray(data.xpos[b])))
+        owner.append(np.full(len(local), b))
+    world = spz.Splats.concat(parts)
+    owner = np.concatenate(owner)
+    pos = world.positions.astype(np.float64)
+    cats = object_instances.categories(model, data, scene_xml)
+    found = object_instances.find(pos, world.opacities, model, data, cats=cats)
+    names = {b: body_name(model, b) for b in movable_body_ids(model)}
+    test = object_instances.move_test(found, pos, world.opacities, owner, names)
+    test["scene"] = str(scene_xml)
+    test["instances"] = [i.summary() for i in found.objects()]
+    return test
 
 
 class SavedTrainer:

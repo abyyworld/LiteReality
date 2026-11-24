@@ -6,8 +6,9 @@
 Its own app, `litereality-segment`, never included into `litereality`.
 
 `segment(request)`: ``{"frames": [{"id": str, "jpeg": bytes, "boxes": {name: [x0, y0, x1, y1]},
-"negatives": {name: [[x, y], ...]}}]}`` (negatives optional: points that are NOT the object, e.g.
-the table top a tucked chair's box also covers)
+"negatives": {name: [[x, y], ...]}, "positives": {name: [[x, y], ...]}}]}`` (negatives optional:
+points that are NOT the object, e.g. the table top a tucked chair's box also covers; positives
+optional: points that ARE, e.g. the centre of a body already put on its object)
 -> ``{"masks": {frame id: {name: PNG (1-bit, the photo's size)}}, "seconds", "gpu"}`` or
 ``{"error"}``. With ``"multimask": true`` each name maps to SAM 2's three candidate masks instead,
 ``{"pngs": [PNG, PNG, PNG], "scores": [float, float, float]}``, for the caller to choose from (a
@@ -95,15 +96,18 @@ def segment(request: dict) -> dict:
             predictor.set_image(rgb)
             boxes = np.asarray([f["boxes"][n] for n in names], dtype=np.float32)
             negatives = f.get("negatives") or {}
-            most = max((len(negatives.get(n) or []) for n in names), default=0)
+            positives = f.get("positives") or {}
+            prompts = {n: [(p, 1) for p in (positives.get(n) or [])]
+                       + [(p, 0) for p in (negatives.get(n) or [])] for n in names}
+            most = max((len(v) for v in prompts.values()), default=0)
             points = labels = None
             if most:
                 # Padded to the same count per box with label -1 (SAM's "no point").
                 points = np.zeros((len(names), most, 2), np.float32)
                 labels = np.full((len(names), most), -1, np.int32)
                 for i, n in enumerate(names):
-                    for k, (x, y) in enumerate((negatives.get(n) or [])[:most]):
-                        points[i, k], labels[i, k] = (x, y), 0
+                    for k, ((x, y), label) in enumerate(prompts[n][:most]):
+                        points[i, k], labels[i, k] = (x, y), label
             many = bool(request.get("multimask"))
             masks, scores, _ = predictor.predict(point_coords=points, point_labels=labels,
                                                  box=boxes, multimask_output=many)

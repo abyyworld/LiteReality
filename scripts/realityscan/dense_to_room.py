@@ -24,8 +24,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rs_common import POOL, angle_deg, read_model, save_sim3, stats  # noqa: E402
 from dense_report import arkit_rows  # noqa: E402
+from rs_common import POOL, angle_deg, read_model, save_sim3, stats  # noqa: E402
 
 
 def raw_to_pool() -> tuple[np.ndarray, dict]:

@@ -679,6 +679,59 @@ def _realroom(args) -> int:
     return 0
 
 
+def _splatcut(args) -> int:
+    """`litereality splatcut <dir>`: a trained splat room cut again on this machine (no GPU, no
+    photos): the bodies put on the objects found in the splat, the physics written to match, and
+    the move test; or, with --check, only the move test of the bundle there."""
+    from litereality_agent.pipeline import splatroom
+
+    src = Path(args.source).expanduser()
+    if args.check:
+        test = splatroom.bundle_move_test(src, Path(args.scene).expanduser() if args.scene
+                                          else None)
+        for r in test["objects"]:
+            print(f"  {r['category']} at {r['centre']}: {r['body'] or 'no body'} "
+                  f"{r['in_body']:.0%}, room {r['in_room']:.0%}, leak {r['leak']:.0%} "
+                  f"{'ok' if r['pass'] else 'FAIL'}")
+        print(f"  move test: {'pass' if test['pass'] else 'FAIL'} ({test['scene']})")
+        if args.json:
+            Path(args.json).expanduser().write_text(json.dumps(test, indent=1))
+        return 0 if test["pass"] else 1
+    out = Path(args.out).expanduser() if args.out else src
+    print(f"splatcut  {console.short(src)} -> {console.short(out)}"
+          f"{'' if args.instances else ' (boxes)'}")
+    report = splatroom.recut(src, out, Path(args.scene).expanduser() if args.scene else None,
+                             instances=args.instances)
+    served = report.get("corrected_scene") or report["scene"]
+    print(f"  {console.colour('dim')}walk it:{console.colour('off')} "
+          f"uv run litereality roomcall {console.short(Path(served))} --splat {console.short(out)}")
+    return 0 if report["move_test"].get("pass") else 1
+
+
+def _ephemeral_splat_trainer(stack, modal_kw: dict):
+    """This checkout's deploy/modal/splat/app.py as an EPHEMERAL Modal app (`app.run()`, torn
+    down when `stack` closes): its trainer patch and options as they are here, without deploying
+    over the `litereality-splat` app other runs use. Its image builds on first use (the layers
+    the deployed one shares are cached). `--ephemeral-trainer`."""
+    import importlib.util
+
+    import modal as modal_sdk
+
+    from litereality_agent.models.splat.remote import ModalSplatTrainer
+    from litereality_agent.room_ops.roomcall.hosted import _modal_credentials
+
+    path = Path(__file__).resolve().parents[2] / "deploy" / "modal" / "splat" / "app.py"
+    if not path.is_file():
+        raise SystemExit(f"--ephemeral-trainer needs a checkout: no {path}")
+    stack.enter_context(_modal_credentials(modal_kw["credentials"], modal_kw["profile"]))
+    spec = importlib.util.spec_from_file_location("litereality_splat_app_ephemeral", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    stack.enter_context(modal_sdk.enable_output())
+    stack.enter_context(module.app.run(environment_name=modal_kw["environment"] or "main"))
+    return ModalSplatTrainer(function=module.train)
+
+
 def _splatroom(args) -> int:
     """`litereality splatroom <scan>`: the photoreal room — the instant splat in seconds, then
     gsplat on Modal, each snapshot cut to the room's physics and written (and with `--publish`
@@ -708,8 +761,11 @@ def _splatroom(args) -> int:
     # up with the container's ambient credentials: there is no `.env` there.
     ambient = not settings.modal_configured() and _in_modal_container()
     trainer = None
+    ephemeral = bool(args.ephemeral_trainer) and not (args.recut or args.instant_only)
     if args.recut:
         trainer = splatroom.SavedTrainer(out)
+    elif ephemeral:
+        pass                          # made below, inside the ephemeral app (`app.run()`)
     elif not args.instant_only:
         from litereality_agent.models.splat.remote import APP_NAME, FUNCTION_NAME, ModalSplatTrainer
 
@@ -731,6 +787,14 @@ def _splatroom(args) -> int:
             options[key.strip()] = json.loads(raw)
         except ValueError:
             options[key.strip()] = raw
+    if args.trainer_preset:
+        from litereality_agent.models.splat import presets
+
+        # The preset's settings, then anything --steps / --trainer-option give (those win).
+        try:
+            options = presets.resolve({"preset": args.trainer_preset, **options})
+        except ValueError as exc:
+            raise SystemExit(f"--trainer-preset: {exc}") from exc
     if args.train_width:
         from litereality_agent.models.splat import dataset as splat_dataset
 
@@ -805,6 +869,8 @@ def _splatroom(args) -> int:
                 done = hosted.publish(fixed, name=name, volume=volume, label=args.label or name,
                                       stage="objects")
                 print(f"    physics published ({fixed.name}): {done.version}")
+        if ephemeral and not args.upload_only:
+            trainer = _ephemeral_splat_trainer(stack, modal)
         if args.upload_only:
             bundle = splatroom.add_view(out, scan_dir)
             if not args.publish or bundle is None:
@@ -818,7 +884,8 @@ def _splatroom(args) -> int:
                                  segment=segment, on_scene=on_scene,
                                  move_bodies=not args.keep_physics, refiner=refiner,
                                  dense_points=args.dense_points, clean=args.clean,
-                                 clean_options=clean_options)
+                                 clean_options=clean_options,
+                                 instances=bool(getattr(args, "instances", False)))
     if args.train_width and not args.recut:
         report["train_width"] = int(args.train_width)     # the photos' width this run trained at
         (out / splatroom.REPORT).write_text(json.dumps(report, indent=1))
@@ -1151,12 +1218,44 @@ def _parser() -> argparse.ArgumentParser:
                        help="a trainer option (deploy/modal/splat DEFAULTS: sh_degree, "
                             "batch_size, cap_max, trainer_args, ...); VALUE is read as JSON, "
                             "else as text. Repeatable")
+    splat.add_argument("--trainer-preset", default=None, metavar="NAME",
+                       help="a named set of trainer options (models/splat/presets.py: "
+                            "q_sh3_nogrid, q_sh3_affine, q_sh3_bilagrid_tv): SH 3 export, a "
+                            "growing splat budget, export-safe colour. --steps and "
+                            "--trainer-option still win. Needs --ephemeral-trainer until the "
+                            "litereality-splat app is redeployed")
+    splat.add_argument("--ephemeral-trainer", action="store_true",
+                       help="train with this checkout's deploy/modal/splat/app.py as an "
+                            "ephemeral Modal app (app.run(): built and torn down with the "
+                            "command) instead of the deployed litereality-splat")
     splat.add_argument("--support-views", type=int, default=None, metavar="N",
                        help="keep only splats at least N training photos saw on their measured "
                             "surface (try 3; default off): drops the speckle of a thin scan. "
                             "Alone it is the only rule; --clean adds the others. With --recut "
                             "--no-masks it re-cleans the last trained snapshot with no GPU")
+    splat.add_argument("--instances", action="store_true",
+                       help="put the bodies on the objects found in the splat (free yaw, resized, "
+                            "clones for objects with no body, phantoms removed) and cut each by "
+                            "its cluster, instead of snapping boxes")
     splat.set_defaults(handler=_splatroom)
+
+    cut = commands.add_parser(
+        "splatcut",
+        help="cut a trained splat room again with no GPU: each body put on the real object "
+             "found in the splat, the physics rewritten to match, and the move test",
+    )
+    cut.add_argument("source", metavar="DIR",
+                     help="a splatroom output folder (raw.spz.bin, report.json, splat.json)")
+    cut.add_argument("--out", metavar="DIR",
+                     help="where to write the new bundle and its physics (default: DIR itself)")
+    cut.add_argument("--scene", metavar="XML",
+                     help="the scanned physics to fit (default: the scene DIR was cut against)")
+    cut.add_argument("--no-instances", dest="instances", action="store_false",
+                     help="cut by the boxes, snapped, as splatroom always did")
+    cut.add_argument("--check", action="store_true",
+                     help="only the move test of the bundle in DIR (exit 1 when it fails)")
+    cut.add_argument("--json", metavar="FILE", help="with --check: write the full test here")
+    cut.set_defaults(handler=_splatcut)
 
     quick = commands.add_parser(
         "quickroom",
@@ -1295,6 +1394,21 @@ def _parser() -> argparse.ArgumentParser:
     stray_import.add_argument("--exclude-span", type=float, default=0.0, metavar="S",
                               help="with --exclude: also drop every frame within this many "
                                    "seconds of an excluded one (default 0)")
+    stray_import.add_argument("--picker", choices=("laplacian", "blur"), default=None,
+                              help="how each window's frame is chosen: the sharpest by the "
+                                   "Laplacian at 480 px (laplacian, the default), or the least "
+                                   "motion-blurred, scored at full resolution against the "
+                                   "frames around it (blur; see --max-blur-px)")
+    stray_import.add_argument("--max-blur-px", type=float, default=None, metavar="PX",
+                              help="with --picker blur: never keep a frame blurred by more than "
+                                   "this many pixels at 1920 wide (default 2; 0 or less: no "
+                                   "limit)")
+    stray_import.add_argument("--window-grow", type=float, default=None, metavar="W",
+                              help="with --picker blur: a window may take its frame from this "
+                                   "many windows either side (default 0.5)")
+    stray_import.add_argument("--score-width", type=int, default=None, metavar="PX",
+                              help="the width frames are scored at (default 480; --picker blur: "
+                                   "the video's own)")
     stray_import.add_argument("--allow-frame-mismatch", action="store_true",
                               help="pair rgb.mp4's frames with odometry rows from the first even "
                                    "when their PTS cannot explain a different count (refused by "
@@ -1359,6 +1473,14 @@ def _stray_selection_kwargs(args) -> dict:
     if args.exclude:
         kw["exclude"] = read_frame_list(args.exclude)
         kw["exclude_span"] = args.exclude_span
+    if args.picker:
+        kw["picker"] = args.picker
+    if args.max_blur_px is not None:
+        kw["max_blur_px"] = args.max_blur_px if args.max_blur_px > 0 else None
+    if args.window_grow is not None:
+        kw["window_grow"] = args.window_grow
+    if args.score_width:
+        kw["score_width"] = args.score_width
     return kw
 
 

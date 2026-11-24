@@ -417,11 +417,21 @@ def test_the_trainer_never_waits_for_the_dense_instant_room(tmp_path, box_scan, 
     assert report["instant_dense_s"] <= report["bundles"][-1]["at"]
 
 
-def test_the_dense_points_share_the_trainers_splat_budget():
-    assert splatroom.dense_points_for(40) == 20_000            # few photos: the cap
-    assert splatroom.dense_points_for(62) == 800_000 // 62
-    assert splatroom.dense_points_for(300) == 4000             # never below the LiDAR's own
-    assert splatroom.dense_points_for(100, cap_max=1_000_000) == 10_000
+def test_the_dense_points_share_half_the_trainers_splat_budget():
+    assert splatroom.dense_points_for(15) == 20_000            # few photos: the cap
+    assert splatroom.dense_points_for(62) == 400_000 // 62
+    assert splatroom.dense_points_for(100, cap_max=1_000_000) == 5_000
+    # Many photos: never more in all than half the budget, so MCMC can still grow (the atrium's
+    # 557 photos used to start at 4000 each: 2.228M seeds against a budget of 800k).
+    for photos, cap in ((300, 800_000), (557, 800_000), (557, 2_400_000), (5000, 800_000)):
+        assert 0 < splatroom.dense_points_for(photos, cap) * photos <= cap * 0.5
+
+
+def test_the_lidar_points_stay_within_the_seed_budget_too():
+    lidar = splatroom.splat_dataset.POINTS_PER_FRAME
+    assert splatroom.seed_points_for(20, most=lidar) == lidar
+    assert splatroom.seed_points_for(557, most=lidar) == 400_000 // 557
+    assert splatroom.seed_points_for(557, 2_400_000, most=lidar) == 1_200_000 // 557
 
 
 def test_the_options_splatroom_sends_are_the_trainers_own():

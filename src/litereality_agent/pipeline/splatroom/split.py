@@ -58,6 +58,10 @@ class Split:
     counts: dict[str, int] = field(default_factory=dict)
     # name -> {"dx", "dy", "dyaw_deg", "before", "after"}: snapped free bodies (see `snap`)
     corrections: dict[str, dict] = field(default_factory=dict)
+    # `instances.move_test` of this cut: where each real object found in the splat went
+    move_test: dict = field(default_factory=dict)
+    # name -> whether the body's splat holds enough of a real object to be offered for grabbing
+    grabbable: dict[str, bool] = field(default_factory=dict)
 
 
 COLLISION_GROUP = 3
@@ -433,14 +437,21 @@ def _quat_xyzw(mj_wxyz: np.ndarray) -> np.ndarray:
 def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
           floor: float = FLOOR, snap_bodies: bool = True, fill: bool = True,
           masks=None, corrections: dict[str, dict] | None = None,
-          move_bodies: bool = True) -> Split:
+          move_bodies: bool = True, instances: bool = False) -> Split:
     """Cut `splats` (see the module docstring). `masks` (`masks.ObjectMasks`) makes the photos'
     object outlines decide wherever a photo saw a splat. `corrections` (from an earlier split of
     the same room) are applied instead of snapping again, so every snapshot of a room is cut with
     the bodies where its first one put them; an empty dict means the first one moved nothing, and
     nothing moves. With masks, the photos place the bodies they outline (`_corrections_from_votes`)
     and the free bodies they do not are snapped. With `move_bodies` False nothing is moved (no
-    snap, no correction): for a room whose physics is already live and stays as it is."""
+    snap, no correction): for a room whose physics is already live and stays as it is.
+
+    With `instances` (`instances.find`, `instances.match`) every free body matched to an object
+    found in the splat takes that object's splats by cluster membership (its voxels grown by
+    `instances.GROW`), not its box; only the bodies no object matched (a door, a body of a
+    category with no object in sight) are cut by their boxes. Nothing is snapped: the bodies are
+    where `instances.fit_scene` put them. Every cut is checked by `instances.move_test`
+    (`Split.move_test`, `Split.grabbable`)."""
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     movable = sorted(movable_body_ids(model))
@@ -448,7 +459,7 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
     corrections = dict(corrections) if fixed else {}        # never the caller's dict
     if fixed:
         _apply(model, data, corrections)
-    snap_bodies = snap_bodies and move_bodies and not fixed
+    snap_bodies = snap_bodies and move_bodies and not fixed and not instances
     named: dict[str, int] = {}
     if masks is not None and len(masks):
         with_masks = {n for per in masks.masks.values() for n in per}
@@ -484,10 +495,19 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
             mujoco.mj_forward(model, data)
             corrections = kept
             _apply(model, data, corrections)
-    boxes = _geom_boxes(model, data, movable)
-    if not boxes or not len(splats):
+    from litereality_agent.pipeline.splatroom import instances as objects
+
+    cats = objects.categories(model, data)
+    found = objects.find(splats.positions, splats.opacities, model, data, cats=cats) \
+        if len(splats) else None
+    paired: dict[int, int] = {}
+    if instances and found is not None:
+        paired = objects.match(found, model, data, cats).pairs        # body -> instance
+    by_box = [b for b in movable if b not in paired]
+    boxes = _geom_boxes(model, data, by_box)
+    boxes += [_union_box(model, data, b) for b in by_box if _body_geoms(model, b)]
+    if (not boxes and not paired) or not len(splats):
         return Split(room=splats, corrections=corrections)
-    boxes += [_union_box(model, data, b) for b in movable if _body_geoms(model, b)]
     static_boxes = _static_boxes(model, data, movable)
 
     bottom: dict[int, float] = {}
@@ -521,6 +541,20 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
             best_body[np.flatnonzero(taken)[locked]] = -1
         owner[lo:lo + CHUNK] = best_body
 
+    if paired:
+        # Cluster membership: the object's voxels grown a little, faint splats too, never the
+        # floor under it or anything static (the desk top over a tucked chair).
+        to_body = np.full(max(found.instances, default=0) + 1, -1, dtype=np.int64)
+        for b, i in paired.items():
+            to_body[i] = b
+            bottom[b] = found.floor
+        claim = to_body[found.labels(pos)]
+        claim[pos[:, 2] <= found.floor + objects.CUT_FLOOR] = -1
+        if static_boxes and (claim >= 0).any():
+            took = np.flatnonzero(claim >= 0)
+            claim[took[_inside_any(pos[took], static_boxes, STATIC_KEEP)]] = -1
+        owner = np.where(claim >= 0, claim, owner)
+
     if named:
         from litereality_agent.pipeline.splatroom.masks import vote
 
@@ -530,20 +564,25 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         say &= pos[:, 2] > low[np.maximum(voted, 0)] + floor
         if static_boxes and say.any():
             say[np.flatnonzero(say)[_inside_any(pos[say], static_boxes, STATIC_KEEP)]] = False
+        # Only a body's own mask moves a splat to it. Seen and in no mask (-1) never takes a
+        # splat from the body whose box or cluster holds it: a photo that missed part of a chair
+        # (or whose mask was given to the chair beside it) says nothing about where it belongs.
         owner = np.where(say, voted, owner)
-        # Seen by the photos and in no mask: not the body the boxes gave it, but only if that
-        # body's own photos saw it. -1 says some body's box saw it, and a neighbour's grown
-        # prompt box seeing it outside the neighbour's mask says nothing about this body.
-        for name, b in named.items():
-            idx = np.flatnonzero((voted == -1) & (owner == b))
-            if len(idx):
-                own = vote(pos[idx], masks, model, data, {name: b})
-                owner[idx[own == -1]] = -1
         if from_votes:
             moved = _physical(model, _corrections_from_votes(model, data, owner, pos, named))
             corrections.update(moved)
             _apply(model, data, moved)
     result = Split(room=splats.subset(owner < 0), corrections=corrections)
+    if found is not None:
+        names = {b: body_name(model, b) for b in movable}
+        result.move_test = objects.move_test(found, pos, splats.opacities, owner, names)
+        result.move_test["cut"] = "instances" if paired else "boxes"
+        gated = {b for c, cat in cats.items() for b in cat.bodies
+                 if any(r["category"] == c for r in result.move_test["objects"])}
+        best = result.move_test["best_share"]
+        for b in movable:
+            if b in gated and (owner == b).any():
+                result.grabbable[names[b]] = best.get(names[b], 0.0) >= objects.GRAB_MIN
     for b in movable:
         mine = owner == b
         if not mine.any():

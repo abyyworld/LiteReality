@@ -83,14 +83,14 @@ class Splats:
                       None if self.sh is None else self.sh[index])
 
     def transformed(self, rot: np.ndarray, pos: np.ndarray) -> "Splats":
-        """The same splats under the rigid motion x -> rot @ x + pos. Higher SH coefficients are
-        kept as they are, not rotated: a view-dependent sheen turns slightly with a moved body."""
+        """The same splats under the rigid motion x -> rot @ x + pos, their higher SH turned with
+        them (`rotate_sh`), so each splat shows the same colour from the same side as before."""
         rot = np.asarray(rot, dtype=np.float64)
         q = matrix_to_quat(rot)
         return Splats((self.positions @ rot.T + pos).astype(np.float32), self.scales.copy(),
                       quat_multiply(np.broadcast_to(q, self.rotations.shape), self.rotations),
                       self.colors.copy(), self.opacities.copy(),
-                      None if self.sh is None else self.sh.copy())
+                      None if self.sh is None else rotate_sh(self.sh, rot))
 
     @staticmethod
     def concat(parts: list["Splats"]) -> "Splats":
@@ -117,6 +117,68 @@ class Splats:
 def empty() -> Splats:
     z3 = np.zeros((0, 3), np.float32)
     return Splats(z3, z3.copy(), np.zeros((0, 4), np.float32), z3.copy(), np.zeros(0, np.float32))
+
+
+# ── spherical harmonics (3DGS's real basis and order, which gsplat trains and Spark draws) ─────
+
+SH_C1 = 0.4886025119029199
+SH_C2 = (1.0925484305920792, -1.0925484305920792, 0.31539156525252005, -1.0925484305920792,
+         0.5462742152960396)
+SH_C3 = (-0.5900435899266435, 2.890611442640554, -0.4570457994644658, 0.3731763325901154,
+         -0.4570457994644658, 1.445305721320277, -0.5900435899266435)
+
+
+def sh_basis(dirs: np.ndarray, degree: int = 3) -> np.ndarray:
+    """The higher SH basis functions (degrees 1..`degree`, no DC) at unit directions `dirs`
+    (M x 3): M x sh_dim(degree), in the coefficient order SPZ and 3DGS PLYs store."""
+    d = np.asarray(dirs, np.float64)
+    x, y, z = d[:, 0], d[:, 1], d[:, 2]
+    out = [-SH_C1 * y, SH_C1 * z, -SH_C1 * x]
+    if degree >= 2:
+        xx, yy, zz = x * x, y * y, z * z
+        out += [SH_C2[0] * x * y, SH_C2[1] * y * z, SH_C2[2] * (2 * zz - xx - yy),
+                SH_C2[3] * x * z, SH_C2[4] * (xx - yy)]
+    if degree >= 3:
+        out += [SH_C3[0] * y * (3 * xx - yy), SH_C3[1] * x * y * z,
+                SH_C3[2] * y * (4 * zz - xx - yy), SH_C3[3] * z * (2 * zz - 3 * xx - 3 * yy),
+                SH_C3[4] * x * (4 * zz - xx - yy), SH_C3[5] * z * (xx - yy),
+                SH_C3[6] * x * (xx - 3 * yy)]
+    return np.stack(out[:sh_dim(degree)], axis=1)
+
+
+def _fibonacci_dirs(count: int) -> np.ndarray:
+    k = np.arange(count) + 0.5
+    z = 1.0 - 2.0 * k / count
+    r = np.sqrt(np.maximum(0.0, 1.0 - z * z))
+    phi = np.pi * (3.0 - np.sqrt(5.0)) * k
+    return np.stack([r * np.cos(phi), r * np.sin(phi), z], axis=1)
+
+
+def sh_rotation(rot: np.ndarray, degree: int) -> np.ndarray:
+    """The sh_dim(degree) x sh_dim(degree) matrix D that turns higher SH coefficients with a
+    rotation: coefficients c of a colour f(d) become D @ c, those of f(rot.T @ d) (the colour
+    carried along when the splat turns by `rot`). Each band rotates within itself, so D is fitted
+    exactly by least squares on well-spread directions."""
+    rot = np.asarray(rot, np.float64)
+    dirs = _fibonacci_dirs(64)
+    a = sh_basis(dirs, degree)                     # Y(d)
+    b = sh_basis(dirs @ rot, degree)               # Y(rot.T d), row by row
+    d = np.zeros((a.shape[1], a.shape[1]))
+    for lo in range(1, degree + 1):                # band by band (block diagonal)
+        i, j = sh_dim(lo - 1), sh_dim(lo)
+        d[i:j, i:j] = np.linalg.lstsq(a[:, i:j], b[:, i:j], rcond=None)[0]
+    return d
+
+
+def rotate_sh(sh: np.ndarray, rot: np.ndarray) -> np.ndarray:
+    """Higher SH coefficients (N x K x 3) of splats turned by the rotation `rot` (`sh_rotation`):
+    each keeps showing the colour it showed from each side. float32, like the input."""
+    sh = np.asarray(sh)
+    if sh.ndim != 3 or sh.shape[1] == 0:
+        return sh.copy()
+    degree = next(d for d in (1, 2, 3) if sh_dim(d) == sh.shape[1])
+    d = sh_rotation(rot, degree)
+    return np.einsum("kj,njc->nkc", d, sh.astype(np.float64)).astype(np.float32)
 
 
 # ── quaternions (x, y, z, w) ───────────────────────────────────────────────────────────────────

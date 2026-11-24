@@ -18,8 +18,10 @@ Where a room's bundle is:
     GET /splat.json?v=<version>   the bundle for that version's room (404 when it has none), with
                                   every file as a URL: {"name", "stage", "step", "created",
                                   "room": url, "bodies": {body name: url}}, and when the bundle
-                                  has them (well formed) "view" (where a newcomer stands) and
-                                  "capture" (the scan's camera spots: the walk zone)
+                                  has them (well formed) "view" (where a newcomer stands),
+                                  "capture" (the scan's camera spots: the walk zone) and
+                                  "grabbable" ({body name: false} for a body whose splat holds
+                                  too little of a real object to be offered for grabbing)
     GET /splat/<name>/<file>      one SPZ file (content-named: cached forever)
 """
 
@@ -149,6 +151,9 @@ class SplatSource:
         capture = _capture(raw.get("capture"))
         if capture is not None:
             out["capture"] = capture
+        grabbable = _grabbable(raw.get("grabbable"), raw["bodies"])
+        if grabbable:
+            out["grabbable"] = grabbable
         return out
 
     def file(self, name: str | None, file: str) -> bytes | None:
@@ -184,6 +189,14 @@ def _view(raw) -> dict | None:
             for v in nums)):
         return None
     return {"pos": [float(v) for v in pos], "yaw": float(yaw), "pitch": float(pitch)}
+
+
+def _grabbable(raw, bodies: dict) -> dict[str, bool] | None:
+    """Which of the bundle's bodies may be grabbed while their splat is shown (the cut's move
+    test, `pipeline/splatroom/instances`): ``{body: bool}`` for bodies the bundle has."""
+    if not isinstance(raw, dict):
+        return None
+    return {k: v for k, v in raw.items() if k in bodies and isinstance(v, bool)} or None
 
 
 def _number(v) -> bool:

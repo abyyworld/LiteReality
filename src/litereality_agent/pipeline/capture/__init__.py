@@ -94,6 +94,8 @@ def import_stray(recording: Path | str, out_dir: Path | str, *, align_to: Path |
                  accept_ambiguous: bool = False, allow_frame_mismatch: bool = False,
                  min_move: float = stray.MIN_MOVE, min_turn_deg: float = stray.MIN_TURN_DEG,
                  exclude: Iterable[int] | None = None, exclude_span: float = 0.0,
+                 picker: str = "laplacian", max_blur_px: float | None = stray.MAX_BLUR_PX,
+                 window_grow: float = stray.BLUR_WINDOW_GROW, score_width: int | None = None,
                  log: Callable[[str], None] = print) -> dict:
     """Import a Stray Scanner recording into `out_dir` (see the module docstring). Returns the
     report (also written to `REPORT`). Raises ValueError, before anything is written, when:
@@ -108,7 +110,15 @@ def import_stray(recording: Path | str, out_dir: Path | str, *, align_to: Path |
     `min_move` / `min_turn_deg` are the near-duplicate thresholds (`stray.select_frames`).
     `exclude` names recording frames (odometry ``frame`` numbers, as `frame_json` keeps them in
     ``stray.row``) never to train on, with every frame within `exclude_span` seconds of one: an
-    evaluation set held out of every import, so the views it scores stay unseen."""
+    evaluation set held out of every import, so the views it scores stay unseen.
+
+    `picker` "laplacian" (the default) keeps the sharpest frame of each window by the Laplacian at
+    `stray.SCORE_WIDTH`; "blur" scores every frame at full resolution (`score_width`, default the
+    video's own), estimates its motion blur in pixels at 1920 relative to the frames around it
+    (`stray.blur_estimate`) and keeps the least blurred frame of each window or `window_grow`
+    windows either side, never one blurred by more than `max_blur_px` (None: no limit)."""
+    if picker not in ("laplacian", "blur"):
+        raise ValueError(f"picker must be 'laplacian' or 'blur', not {picker!r}")
     t0 = time.perf_counter()
     timings: dict[str, float] = {}
     out = Path(out_dir).expanduser()
@@ -127,8 +137,10 @@ def import_stray(recording: Path | str, out_dir: Path | str, *, align_to: Path |
         warnings = list(rec.warnings)
         log(f"recording {rec.name}: {len(rec.frames)} poses, video {rec.size[0]}x{rec.size[1]}")
         t = time.perf_counter()
+        width = int(score_width or (stray.FULL_SCORE_WIDTH if picker == "blur"
+                                    else stray.SCORE_WIDTH))
         scan = stray.scan_video(
-            rec.video, rec.size, progress=lambda n: log(f"  scored {n} frames ..."))
+            rec.video, rec.size, width=width, progress=lambda n: log(f"  scored {n} frames ..."))
         scores = scan.scores
         timings["score_s"] = time.perf_counter() - t
         pairing = stray.pair_video(scan.pts, [f.row for f in rec.frames],
@@ -149,8 +161,14 @@ def import_stray(recording: Path | str, out_dir: Path | str, *, align_to: Path |
         held = excluded_mask(listed, times, exclude, exclude_span)
         if exclude and not held.any():
             warnings.append("--exclude named no frame of this recording")
+        scored_width = min(width, rec.size[0])
+        blur = (stray.blur_estimate(times, sharp, scored_width=scored_width)
+                if picker == "blur" else None)
         sel = stray.select_frames(times, poses, sharp, has_depth & tracking & ~held,
-                                  target=frames, min_move=min_move, min_turn_deg=min_turn_deg)
+                                  target=frames, min_move=min_move, min_turn_deg=min_turn_deg,
+                                  blur_px=blur, max_blur_px=max_blur_px if blur is not None
+                                  else None, window_grow=window_grow)
+        sel.stats["score_width"] = scored_width
         sel.stats.update({"no_depth": int((~has_depth).sum()),
                           "tracking_dropped": int((~tracking).sum()),
                           "min_move": min_move, "min_turn_deg": min_turn_deg})
@@ -220,7 +238,8 @@ def import_stray(recording: Path | str, out_dir: Path | str, *, align_to: Path |
                     j, c2w, f.K, f.timestamp, speed[i], turn[i],
                     {"recording": rec.name, "frame": f.name, "row": int(f.row),
                      "video_frame": int(k),
-                     "sharpness": round(float(sharp[i]), 3)}))
+                     "sharpness": round(float(sharp[i]), 3),
+                     **({"blur_px1920": round(float(blur[i]), 2)} if blur is not None else {})}))
                 stray.write_depth(f, out / f"depth_{stem}.png")
                 if f.conf is not None:
                     shutil.copyfile(f.conf, out / f"conf_{stem}.png")

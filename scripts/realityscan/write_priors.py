@@ -25,7 +25,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-
 from rs_common import FLIP, POOL
 
 XMP = """<x:xmpmeta xmlns:x="adobe:ns:meta/">

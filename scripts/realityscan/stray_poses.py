@@ -26,7 +26,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-
 from rs_common import REPO, angle_deg, arkit_pool, read_model, save_sim3, stats
 
 OUT = REPO / "results/realityscan/stray"

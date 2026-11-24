@@ -30,7 +30,18 @@ resolution, 0 = none; PromptDA's refinement of the LiDAR) and the trainer adds a
 rendered expected depth against it (weight "dense_depth_lambda"); options["normal_lambda"] > 0
 adds DN-Splatter's normal loss (rendered vs sensor depth normals). The trainer learns both from a
 small patch applied at image build (patch_trainer.py, litereality_dense.py beside this file);
-evaluation is untouched, so held-out PSNR / SSIM / LPIPS stay comparable with plain runs.
+evaluation is untouched, so held-out PSNR / SSIM / LPIPS stay comparable with plain runs (the
+patch only adds the colour-corrected cc_* metrics to runs without a bilateral grid too).
+
+Presets (options["preset"], `litereality_agent.models.splat.presets`): named settings applied
+over DEFAULTS and under the other options given, for the quality runs of results/diagnosis: SH 3
+kept in the export, a growing splat budget, and per-photo colour correction that the export can
+do without (no grid / one global affine map per photo / a heavily smoothed grid whose mean over
+the photos is held at the identity: options "bilateral_grid_shape", "bilateral_tv_lambda",
+"bilateral_mean_lambda"). The DEFAULTS themselves are unchanged, so an unflagged run trains as
+before. A preset needs this file's own trainer patch: run it with an ephemeral app
+(`litereality splatroom ... --ephemeral-trainer`, i.e. `app.run()` of this file), not the
+deployed `litereality-splat` until that is redeployed.
 
 `train(b"")` (an empty dataset) only boots a container and yields one "done" with "warm": True:
 sent when the scan arrives, it hides the GPU container's cold start behind the instant room.
@@ -83,6 +94,8 @@ DEFAULTS = {
     "snapshots": [400, 800, 1250],
     "cap_max": 800_000,           # MCMC's splat budget: ~16 MB of SPZ at SH degree 1
     "sh_degree": 3,               # trained with; snapshots keep degree 1 (export_sh_degree)
+    # 1 drops the texture the trainer put in degrees 2-3 (results/diagnosis: 3-10 dB at training
+    # views); the q_* presets keep 3 (~4.4 bytes a splat more after gzip; Spark draws SH 3).
     "export_sh_degree": 1,
     "test_every": 8,              # every 8th photo held out for PSNR/SSIM/LPIPS (paper numbers)
     "depth_lambda": 0.01,
@@ -101,8 +114,20 @@ DEFAULTS = {
     "dense_depth_lambda": 0.1,
     # DN-Splatter's normal loss against the dense depth's normals; 0 = off. Needs depths/ too.
     "normal_lambda": 0.0,
+    # The per-photo colour model (patch_trainer.py edits 9-11; all at gsplat's own values, so
+    # unset they change nothing): the grid's cells (X, Y, luma), the weight of its total
+    # variation (gsplat's fixed 10), and of a pull of the grids' mean over all photos to the
+    # identity (0 = none), so the splats keep the average photo's colours.
+    "bilateral_grid_shape": [16, 16, 8],
+    "bilateral_tv_lambda": 10.0,
+    "bilateral_mean_lambda": 0.0,
+    # A named set of the options above (`litereality_agent.models.splat.presets`), applied over
+    # these defaults and under any option given beside it.
+    "preset": None,
     "trainer_args": [],           # any further simple_trainer.py flags, as given
 }
+GRID_SHAPE = (16, 16, 8)          # gsplat's default `--bilateral-grid-shape`
+TV_LAMBDA = 10.0                  # gsplat's fixed total-variation weight
 SCHEDULE_STEPS = 7000
 # Lines the trainer prints on its way up, timed into the "done" event's "timing".
 MARKS = {"data_loaded": "Scene scale:", "model_ready": "Model initialized", "training": "it/s]"}
@@ -149,8 +174,10 @@ app = modal.App(APP_NAME)
 
 
 def _options(given: dict | None) -> dict:
+    from litereality_agent.models.splat import presets
+
     out = dict(DEFAULTS)
-    for key, value in (given or {}).items():
+    for key, value in presets.resolve(given).items():
         if key not in DEFAULTS:
             raise ValueError(f"unknown option {key!r}")
         out[key] = value
@@ -164,6 +191,25 @@ def _options(given: dict | None) -> dict:
         if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value < 1e3:
             raise ValueError(f"{key} must be a number from 0, not {value!r}")
         out[key] = float(value)
+    for key in ("bilateral_tv_lambda", "bilateral_mean_lambda"):
+        value = out[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value < 1e6:
+            raise ValueError(f"{key} must be a number from 0, not {value!r}")
+        out[key] = float(value)
+    shape = out["bilateral_grid_shape"]
+    if (not isinstance(shape, (list, tuple)) or len(shape) != 3
+            or not all(isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 64
+                       for v in shape)):
+        raise ValueError(f"bilateral_grid_shape must be 3 whole numbers 1..64, not {shape!r}")
+    out["bilateral_grid_shape"] = [int(v) for v in shape]
+    if out["fused_bilagrid"] and min(shape) < 2:
+        # gsplat's fused kernel is not relied on below 2 cells an axis (and the total variation
+        # of a 1-cell axis is 0 / 0): a single affine map a photo trains with the plain grid.
+        raise ValueError("a bilateral grid with a 1-cell axis needs fused_bilagrid false")
+    if not isinstance(out["export_sh_degree"], int) or not (
+            0 <= out["export_sh_degree"] <= min(3, int(out["sh_degree"]))):
+        raise ValueError(f"export_sh_degree must be 0..sh_degree (at most 3), not "
+                         f"{out['export_sh_degree']!r}")
     return out
 
 
@@ -189,6 +235,15 @@ def _command(data_dir: Path, result_dir: Path, opt: dict) -> list[str]:
         cmd.append("--use-fused-bilagrid")
     elif opt["bilateral_grid"]:
         cmd.append("--use-bilateral-grid")
+    # The colour model's settings, only when they differ from gsplat's (an unflagged command is
+    # the one the deployed trainer has always run).
+    if opt["fused_bilagrid"] or opt["bilateral_grid"]:
+        if tuple(opt["bilateral_grid_shape"]) != GRID_SHAPE:
+            cmd += ["--bilateral-grid-shape", *map(str, opt["bilateral_grid_shape"])]
+        if opt["bilateral_tv_lambda"] != TV_LAMBDA:
+            cmd += ["--bilateral-tv-lambda", str(opt["bilateral_tv_lambda"])]
+        if opt["bilateral_mean_lambda"] > 0:
+            cmd += ["--bilateral-mean-lambda", str(opt["bilateral_mean_lambda"])]
     if opt["antialiased"]:
         cmd.append("--antialiased")
     if opt["packed"]:

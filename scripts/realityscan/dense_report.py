@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from rs_common import FLIP, angle_deg, read_model, stats  # noqa: E402
 from compare_poses import umeyama  # noqa: E402
+from rs_common import FLIP, angle_deg, read_model, stats  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))

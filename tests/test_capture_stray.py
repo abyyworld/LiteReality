@@ -342,6 +342,69 @@ def test_select_frames_skips_unusable_and_blurry_windows():
     assert not np.any((rows >= 300) & (rows < 360))
 
 
+def test_blur_is_read_from_the_sharpness_relative_to_the_frames_around():
+    # The calibration's own points come back: the locally sharpest frame is 0 px, a frame at
+    # 0.4237 x its neighbour's Laplacian variance 4 px (at 1920); half the width doubles it.
+    assert stray.blur_px_from_ratio([1.0, 0.6932, 0.4237, 0.0828]) == pytest.approx(
+        [0.0, 2.0, 4.0, 24.0])
+    assert stray.blur_px_from_ratio([1e-9])[0] == pytest.approx(24.0)
+    times = np.arange(10) / 30.0                          # one 0.33 s moment of one view
+    scores = np.array([100.0, 69.32, 42.37, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+    assert stray.relative_sharpness(times, scores)[:3] == pytest.approx([1.0, 0.6932, 0.4237])
+    assert stray.blur_estimate(times, scores, scored_width=1920)[:3] == pytest.approx(
+        [0.0, 2.0, 4.0])
+    assert stray.blur_estimate(times, scores, scored_width=960)[2] == pytest.approx(8.0)
+    # Texture cancels: a plain wall scoring a tenth of a bookshelf is still sharp at its moment.
+    wall = np.r_[np.full(15, 500.0), np.full(15, 50.0)]
+    rel = stray.relative_sharpness(np.arange(30) / 2.0, wall)
+    assert np.all(rel == 1.0)
+
+
+def test_the_blur_picker_keeps_the_least_blurred_frames_under_the_limit():
+    times, poses = _walk(n=900, still=0, pan=(600, 660))
+    rng = np.random.default_rng(3)
+    blur = rng.uniform(0.0, 6.0, len(times))
+    blur[600:660] = 9.0                                    # a fast pan: nothing under the limit
+    sharp = 100.0 / (1.0 + blur)
+    usable = np.ones(len(times), bool)
+    usable[100:130] = False
+    sel = stray.select_frames(times, poses, sharp, usable, target=40, blur_px=blur,
+                              max_blur_px=2.0)
+    rows = sel.rows
+    assert len(rows) >= 18 and np.all(np.diff(rows) > 0)
+    assert np.all(blur[rows] <= 2.0) and usable[rows].all()
+    assert not np.any((rows >= 600) & (rows < 660))
+    assert sel.stats["picker"] == "blur" and sel.stats["over_max_blur"] == int(
+        np.sum(usable & (blur > 2.0)))
+    assert sel.stats["blur_px"]["kept_max"] <= 2.0
+    # Each pick is the least blurred candidate of its stretch: none within a window's width
+    # either side is cleaner and left out (a neighbour's pick may be).
+    picked = set(rows.tolist())
+    for r in rows:
+        near = np.arange(max(0, r - 3), min(len(times), r + 4))
+        near = near[usable[near] & (blur[near] <= 2.0)]
+        better = [k for k in near if blur[k] < blur[r] and k not in picked]
+        assert len(better) <= 3
+    # Without a limit every window keeps a frame, blurred or not, and fewer windows go empty.
+    loose = stray.select_frames(times, poses, sharp, usable, target=40, blur_px=blur)
+    assert len(loose.rows) > len(rows) and np.any((loose.rows >= 600) & (loose.rows < 660))
+
+
+def test_the_blur_picker_lets_a_window_borrow_a_cleaner_neighbour():
+    times, poses = _walk(n=600, still=0)
+    blur = np.full(len(times), 1.8)
+    blur[[300, 302]] = 0.1                    # two clean frames in one window (of 25 frames)
+    sharp = np.ones(len(times))
+    usable = np.ones(len(times), bool)
+    common = dict(target=24, blur_px=blur, max_blur_px=2.0, min_move=0.0, min_turn_deg=0.0)
+    alone = stray.select_frames(times, poses, sharp, usable, window_grow=0.0, **common).rows
+    grown = stray.select_frames(times, poses, sharp, usable, window_grow=0.5, **common).rows
+    assert len(alone) == len(grown) == 24
+    # Alone, the window holding both takes one; grown, its neighbour takes the other.
+    assert {300, 302} & set(alone.tolist()) != {300, 302}
+    assert {300, 302} <= set(grown.tolist())
+
+
 def test_select_frames_keeps_a_long_still_look_at_a_plain_surface():
     """The Laplacian measures texture as much as blur: three seconds looking at a white ceiling
     score a tenth of a bookshelf's and are still the only views of it, while half a second of a

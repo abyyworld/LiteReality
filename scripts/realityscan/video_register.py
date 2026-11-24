@@ -30,7 +30,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-
 from rs_common import FLIP, POOL, REPO, angle_deg, read_model, save_sim3, stats
 
 OUT = REPO / "results/realityscan/video"

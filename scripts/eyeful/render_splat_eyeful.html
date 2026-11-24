@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>eyeful spark render</title>
+<!-- pipeline/evaluate/render_splat.html, made configurable for the Eyeful Tower browser score
+     (scripts/eyeful/spark_score.py): the same three.js 0.180 + Spark 2.3.1, but each job says
+     how Spark draws (its SparkRenderer options, float32 centres or not) and how long a view is
+     left to settle its sort. The room call's own settings are one such job ("call"). -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.min.js"
+}}</script>
+<style>html, body { margin: 0; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true,
+                                           preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+// Transparent, so the score can report coverage; it composites on black, gsplat's eval
+// background (the PNG's straight alpha costs well under 1/255 where coverage is near 1).
+renderer.setClearColor(0x000000, 0);
+const scene = new THREE.Scene();
+const world = new THREE.Group();
+world.rotation.x = -Math.PI / 2;        // the SPZ frame is treated as Z up, as in the call
+scene.add(world);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+camera.matrixAutoUpdate = false;
+scene.add(camera);
+
+let spark = null, sparkKey = '';
+let loaded = null;
+const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+
+function setup(opts) {
+  // A new SparkRenderer when its construction-time options change (accumExtSplats).
+  const key = JSON.stringify({ ext: !!opts.ext });
+  if (spark && sparkKey === key) return false;
+  if (spark) { scene.remove(spark); spark.dispose?.(); }
+  spark = new SparkRenderer({ renderer, accumExtSplats: !!opts.ext });
+  scene.add(spark);
+  sparkKey = key;
+  return true;
+}
+
+function apply(opts) {
+  for (const k of ['maxStdDev', 'blurAmount', 'preBlurAmount', 'maxPixelRadius', 'minPixelRadius',
+                   'clipXY', 'sortRadial', 'minAlpha', 'falloff']) {
+    if (opts[k] !== undefined && opts[k] !== null) spark[k] = opts[k];
+  }
+}
+
+async function load(url, ext, fresh) {
+  const key = url + '|' + (ext ? 'ext' : 'packed');
+  if (loaded && loaded.key === key && !fresh) return;
+  const mesh = new SplatMesh(ext ? { url, extSplats: true } : { url });
+  await mesh.initialized;
+  if (loaded) { world.remove(loaded.mesh); loaded.mesh.dispose?.(); }
+  world.add(mesh);
+  loaded = { key, mesh };
+}
+
+function place(view) {
+  camera.matrix.fromArray(view.matrixWorld);
+  camera.matrixWorld.copy(camera.matrix);
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  camera.projectionMatrix.fromArray(view.projection);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+
+// A small 2D copy of the canvas: whether anything is drawn yet, and whether the picture has
+// stopped changing (Spark sorts in a worker; a view is read only once its sort has come back).
+const probe = document.createElement('canvas');
+probe.width = 96; probe.height = 144;
+const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+function snapshot() {
+  probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
+  return probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+}
+function same(a, b) {
+  if (!a || !b) return false;
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return false;
+  return true;
+}
+
+window.renderViews = async (job) => {
+  const opts = job.spark || {};
+  const fresh = setup(opts);
+  apply(opts);
+  await load(job.glb, !!opts.ext, fresh);
+  renderer.setSize(job.width, job.height, false);
+  const settleMs = job.settleMs ?? 0;
+  const out = [], frames = [];
+  for (const view of job.views) {
+    place(view);
+    const t0 = performance.now();
+    let n = 0, prev = null, stable = 0;
+    // The call's page drew 6 frames and read the 7th; with settleMs it keeps drawing until that
+    // long has passed AND three successive frames are identical (up to 20 s).
+    while (true) {
+      renderer.render(scene, camera); n++;
+      await frame();
+      const t = performance.now() - t0;
+      if (settleMs <= 0) { if (n >= 7) break; continue; }
+      if (t < settleMs) continue;
+      const snap = snapshot();
+      stable = same(snap, prev) ? stable + 1 : 0;
+      prev = snap;
+      if (stable >= 3 || t > 20000) break;
+    }
+    renderer.render(scene, camera);
+    frames.push({ n, ms: Math.round(performance.now() - t0) });
+    out.push(canvas.toDataURL('image/png'));
+  }
+  return { images: out, frames };
+};
+window.renderReady = true;
+</script>
+</body></html>

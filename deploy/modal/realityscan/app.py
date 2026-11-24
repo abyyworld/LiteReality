@@ -332,7 +332,7 @@ def run_align(images: str, out: str, focal35: float = 0.0, distortion_model: int
 @app.function(image=rs_image, cpu=2.0, memory=4096, timeout=900)
 def exe_strings(pattern: str = "sfm") -> str:
     """Setting keys in RealityScan.exe's strings (ASCII and UTF-16) matching `pattern`."""
-    exe = f"/opt/realityscan/support/realityscan/drive_c/Program Files/Epic Games/RealityScan"
+    exe = "/opt/realityscan/support/realityscan/drive_c/Program Files/Epic Games/RealityScan"
     res = _sh(f"cd '{exe}' 2>/dev/null || cd \"$(dirname \"$(find /opt/realityscan -name"
               f" RealityScan.exe | head -1)\")\"; pwd; for f in *.exe *.dll; do"
               f" strings -a \"$f\"; strings -a -el \"$f\"; done 2>/dev/null"
@@ -389,7 +389,7 @@ def align_dir(src: str, tag: str, focal35: float | None = None, distortion_model
     folder of *.xmp priors copied beside the images. INTERNAL RESEARCH ONLY."""
     import json
     import shutil
-    setup = _setup()
+    _setup()
     vol.reload()
     work = Path(tempfile.mkdtemp(prefix="rs-"))
     images = work / "images"

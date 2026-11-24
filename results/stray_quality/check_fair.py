@@ -1,7 +1,9 @@
 """Fairness check: no eval frame (by recording row) in any training scan, and the nearest
 training camera to each eval camera (pool world -> each scan's world)."""
-import json, sys
+import json
+import sys
 from pathlib import Path
+
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
@@ -17,7 +19,8 @@ def rows_poses(scan):
 def T(scan):
     return np.asarray(json.loads((scan / "scene_alignment.json").read_text())["strayImport"]["transform"], float)
 
-ev = [tuple(l.split("#")[0].split()[:2]) for l in (HERE / "eval_frames.txt").read_text().splitlines() if l.split("#")[0].strip()]
+ev = [tuple(line.split("#")[0].split()[:2])
+      for line in (HERE / "eval_frames.txt").read_text().splitlines() if line.split("#")[0].strip()]
 ev = [(int(r), s) for r, s in ev]
 pool = rows_poses(POOL)
 res = {"eval_frames": len(ev)}
@@ -26,7 +29,9 @@ for name in sys.argv[1:]:
     tr = rows_poses(scan)
     M = T(scan) @ np.linalg.inv(T(POOL))
     overlap = sorted(set(tr) & {r for r, _ in ev})
-    P = np.stack([p for p, _ in tr.values()]); times = np.array([t for _, t in tr.values()]); trows = np.array(list(tr))
+    P = np.stack([p for p, _ in tr.values()])
+    times = np.array([t for _, t in tr.values()])
+    trows = np.array(list(tr))
     dmin, amin, tmin, rowgap, near = [], [], [], [], []
     for r, s in ev:
         e = M @ pool[r][0]
@@ -36,7 +41,10 @@ for name in sys.argv[1:]:
         # "same view" = close in both: combined score
         if ((d < 0.05) & (ang < 5.0)).any():
             near.append(r)
-        dmin.append(d.min()); amin.append(ang[np.argmin(d)]); tmin.append(np.abs(times - pool[r][1]).min()); rowgap.append(np.abs(trows - r).min())
+        dmin.append(d.min())
+        amin.append(ang[np.argmin(d)])
+        tmin.append(np.abs(times - pool[r][1]).min())
+        rowgap.append(np.abs(trows - r).min())
     res[scan.name] = {"train_frames": len(tr), "eval_rows_in_train": overlap,
                       "min_row_gap": int(min(rowgap)), "min_time_gap_s": round(float(min(tmin)), 3),
                       "nearest_train_cam_m": {"min": round(float(min(dmin)), 3), "median": round(float(np.median(dmin)), 3)},

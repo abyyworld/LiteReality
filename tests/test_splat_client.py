@@ -67,7 +67,7 @@ const THREE = { NormalBlending: 1, CustomBlending: 5, AddEquation: 100, OneFacto
 const retrySplat = () => {};
 const console = { warn() {}, info() {}, log() {} };
 const keys = new Set();
-let capture = null, joined = true, welcomed = true, grab = null, sceneReady = false, bodies = new Map();
+let capture = null, joined = true, welcomed = true, grab = null, hoverBody = null, sceneReady = false, bodies = new Map();
 const closePanels = () => {};
 const world = { kids: new Set(), add(o) { this.kids.add(o); o.parent = this; },
                 remove(o) { this.kids.delete(o); if (o.parent === this) o.parent = null; } };
@@ -258,8 +258,8 @@ def run(tmp_path_factory) -> dict:
     functions = "\n".join([
         _line("const SPLAT_URL = "), _line("const photo = "), _line("const photoShown = "),
         _line("const versionOf = "), _line("const ROOM_NAME_RE = "), _line("const pickName = "),
-        _line("const finite = "), _line("const BACKDROP_ORDER = "),
-        *(_function(n) for n in ("disposeSplat", "clearSplat", "detachBodySplats",
+        _line("const finite = "), _line("const BACKDROP_ORDER = "), _line("const SPLAT_GLOW = "),
+        *(_function(n) for n in ("disposeSplat", "clearSplat", "detachBodySplats", "glowSplat",
                                  "attachBodySplats", "meshRole", "setBackdrop", "applyPhoto",
                                  "captureSpots", "refreshSplat", "togglePhoto",
                                  "installVersion", "roomByName", "defaultRoom", "notePick",

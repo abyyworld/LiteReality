@@ -1,0 +1,34 @@
+# 30 evaluation frames at RANDOM times (seed 20261124, >= 1.0 s apart) of 901a305fdf, in /Users/abyyworld/LiteReality-scans/stray_atrium_pool_random (pick_eval_random.py).
+# Not chosen by sharpness: blur_px is each frame's estimated motion blur at 1920.
+# New train scans: import-stray ... --exclude results/stray_quality/eval_frames_all.txt --exclude-span 0.2
+# row     pool_frame    t_s     blur_px
+000068  frame_00000    1.65     5.74
+000184  frame_00001    4.42     8.28
+000252  frame_00002    5.99     0.75
+000324  frame_00003    7.65     3.92
+000453  frame_00004   10.82     4.31
+000524  frame_00005   12.49     4.77
+000573  frame_00006   13.76     1.18
+000670  frame_00007   16.37     2.61
+000821  frame_00008   20.09     3.55
+000880  frame_00009   21.64     2.84
+000933  frame_00010   22.89     1.35
+000992  frame_00011   24.33     2.96
+001097  frame_00012   26.78     5.21
+001226  frame_00013   29.78     1.70
+001281  frame_00014   31.11     2.14
+001372  frame_00015   33.20     4.23
+001437  frame_00016   34.73     7.07
+001515  frame_00017   36.66     0.74
+001582  frame_00018   38.27     1.78
+001643  frame_00019   39.65     2.90
+001691  frame_00020   40.93     2.31
+001766  frame_00021   42.85     8.01
+001823  frame_00022   44.22     1.62
+001881  frame_00023   45.68     8.35
+001950  frame_00024   47.55     3.85
+001997  frame_00025   48.80    24.00
+002052  frame_00026   50.22     2.79
+002138  frame_00027   52.42     2.64
+002256  frame_00028   55.15     7.30
+002343  frame_00029   56.77     2.05

@@ -39,7 +39,6 @@ import struct
 from pathlib import Path
 
 import numpy as np
-
 from rs_common import ARKIT_TO_Z_UP, FLIP, arkit_pool, load_sim3, read_model
 
 MAX_DEPTH = 6.0          # m: points farther from every training camera are dropped
@@ -130,7 +129,7 @@ def main() -> None:
     per_image_obs = []
     for image_id, n in enumerate(train, 1):
         im = imgs[n]
-        cam = cams[im.camera_id]
+        cams[im.camera_id]  # every image's camera is known (KeyError otherwise)
         with PImage.open(scan / "rs_input/images" / n) as f:
             rgb = np.asarray(f.convert("RGB"))
         h0, w0 = rgb.shape[:2]

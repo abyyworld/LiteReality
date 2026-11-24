@@ -5,7 +5,8 @@ Every variant is judged the same way, by the same renderer:
 * renderer: `pipeline/evaluate`'s `SplatRenderer` - headless Chromium (Playwright), SwiftShader
   software WebGL, Spark 2.3.1 on three.js 0.180 (the room call's own splat renderer), so the
   numbers are what a viewer sees, at the export's SH degree (deploy/modal/splat
-  "export_sh_degree", 1). Not gsplat: the trainer's own PSNR is in report.json beside it.
+  "export_sh_degree": 1 by default, 3 in the q_* presets; the SPZ header says, "spz_sh_degree").
+  Not gsplat: the trainer's own PSNR is in report.json beside it.
 * eval set: the frames in eval_frames.txt (odometry rows of recording 901a305fdf, picked by
   pick_eval.py from the pool import ~/LiteReality-scans/stray_atrium_pool). Every training scan
   was imported with `--exclude eval_frames.txt --exclude-span 0.2`, so no variant trained on
@@ -15,6 +16,24 @@ Every variant is judged the same way, by the same renderer:
   fit (`psnr_cc`, as gsplat's cc_psnr: ARKit re-exposes every frame), SSIM (luma, 11x11
   Gaussian), LPIPS (AlexNet, lpips 0.1.4), and PSNR inside RoomPlan's door/window boxes
   (`psnr_openings`) and on the chairs/table (`psnr_objects`) from `fidelity.view_regions`.
+  480 x 360 cannot see blur: a photo blurred by sigma 2 px still scores 37 dB against itself
+  there (31.5 at 1920; results/diagnosis/review_blur/scale_check.json). So:
+* `--full`: the same metrics at the photo's own 1920 x 1440 (rendered 1:1, ~2 min a view in
+  SwiftShader; `--views N` scores an even spread of N), plus `psnr_cc_480` from the same render.
+* sharpness, at either size (`sharpness`): the render's high-frequency power over the photo's in
+  the top band of the scored image (`hf_ratio`, HF_BAND cycles/pixel: 0.125-0.5 at 1920 is
+  detail the 480 metric never sees), the Laplacian-variance ratio (`lap_ratio`) and the
+  frequency where the render keeps half the photo's power (`half_power_cyc_px1920`), all on
+  grey, contrast-matched, central 80 %. 1 = as sharp as the photo; misregistration does not
+  lower it (a power spectrum ignores where detail is), so it reads blur, not pose error.
+* `--eval-set random`: the second set (eval_frames_random.txt, pick_eval_random.py): frames at
+  random times rather than the walk's sharpest moments. A view within LEAK_S of a frame of the
+  variant's training scan is marked ``"unseen": false`` (scans imported before this set existed
+  did not exclude it), and ``summary_unseen`` scores the others alone. Outputs carry the set and
+  size in their name (``<variant>_random_full_scores.json``); the default is the old run's.
+* `--settle`: each view drawn twice, the second scored. Spark sorts asynchronously, and the first
+  draw after a jump to a distant view can still use the last view's order (-0.47 dB on one
+  view; results/fix_v4/render_order_check.json). Off by default only to match earlier numbers.
 * wander: 3 fixed cameras in the room frame (Z up, metres; WANDER below), the same for every
   variant, rendered at 960 x 720 (2x supersampled) from the SERVED room: the bundle's room splat
   plus each body's splat placed at its pose in the corrected physics (what the room call draws,
@@ -43,8 +62,18 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 POOL = Path("~/LiteReality-scans/stray_atrium_pool").expanduser()
 EVAL_FRAMES = HERE / "eval_frames.txt"
+# The eval sets: rows file and the pool scan holding their photos and poses.
+EVAL_SETS = {
+    "sharp": (EVAL_FRAMES, POOL),
+    "random": (HERE / "eval_frames_random.txt",
+               Path("~/LiteReality-scans/stray_atrium_pool_random").expanduser()),
+}
+LEAK_S = 0.2                      # a training frame this close in time saw the same view
 SIZE = (480, 360)                 # metric resolution
 SCALE = 2                         # rendered at 2x and box-filtered (as `fidelity`)
+FULL_CHUNK = 4                    # --full: views per renderer call (bounds memory)
+HF_BAND = (0.125, 0.5)            # cycles/pixel of the scored image: `sharpness`
+SPECTRUM_BINS = 48
 WANDER_SIZE = (960, 720)
 # A phone camera (the recording's own: fx 1335.5 at 1920 x 1440, ~71 deg wide).
 WANDER_K = np.array([[1335.5, 0.0, 960.0], [0.0, 1335.5, 720.0], [0.0, 0.0, 1.0]])
@@ -101,7 +130,7 @@ def look_at(eye, target) -> np.ndarray:
     return pose
 
 
-def eval_views(scan: Path, pool: Path = POOL) -> tuple[list, dict]:
+def eval_views(scan: Path, pool: Path = POOL, rows: Path = EVAL_FRAMES) -> tuple[list, dict]:
     """The eval frames as `fidelity.View`s in `scan`'s world, and how far that world is from
     the pool's (the per-import alignment difference)."""
     fd = _fd()
@@ -114,7 +143,7 @@ def eval_views(scan: Path, pool: Path = POOL) -> tuple[list, dict]:
         # in its world (to the ~1 cm of both alignments).
         T = np.eye(4)
     views = []
-    for row, stem in eval_rows():
+    for row, stem in eval_rows(rows):
         meta = json.loads((pool / f"{stem}.json").read_text())
         if int(meta["stray"]["row"]) != row:
             raise ValueError(f"{pool}/{stem}.json is row {meta['stray']['row']}, not {row}")
@@ -138,6 +167,81 @@ def colour_fit(render: np.ndarray, real: np.ndarray) -> np.ndarray:
     A = np.concatenate([x, np.ones((len(x), 1))], axis=1)
     M, *_ = np.linalg.lstsq(A, real.reshape(-1, 3), rcond=None)
     return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+
+
+def _grey_centre(img: np.ndarray, keep: float = 0.8) -> np.ndarray:
+    g = img[..., 0] * 0.299 + img[..., 1] * 0.587 + img[..., 2] * 0.114
+    h, w = g.shape
+    dy, dx = int(round(h * (1 - keep) / 2)), int(round(w * (1 - keep) / 2))
+    return g[dy:h - dy, dx:w - dx]
+
+
+def radial_power(grey: np.ndarray, bins: int = SPECTRUM_BINS) -> tuple[np.ndarray, np.ndarray]:
+    """Mean power of `grey` (Hann-windowed, mean removed) in `bins` rings of radial frequency
+    0..0.5 cycles/pixel, and the rings' centres."""
+    g = grey - grey.mean()
+    win = np.outer(np.hanning(g.shape[0]), np.hanning(g.shape[1]))
+    power = np.abs(np.fft.fft2(g * win)) ** 2
+    fy = np.fft.fftfreq(g.shape[0])[:, None]
+    fx = np.fft.fftfreq(g.shape[1])[None, :]
+    r = np.hypot(fy, fx).ravel()
+    edges = np.linspace(0.0, 0.5, bins + 1)
+    idx = np.clip(np.digitize(r, edges) - 1, 0, bins)        # bins = beyond 0.5 (corners)
+    total = np.bincount(idx, power.ravel(), minlength=bins + 1)[:bins]
+    count = np.bincount(idx, minlength=bins + 1)[:bins]
+    return total / np.maximum(count, 1), 0.5 * (edges[1:] + edges[:-1])
+
+
+def _lap_var(grey: np.ndarray) -> float:
+    lap = (grey[1:-1, :-2] + grey[1:-1, 2:] + grey[:-2, 1:-1] + grey[2:, 1:-1]
+           - 4 * grey[1:-1, 1:-1])
+    return float(lap.var())
+
+
+def sharpness(render: np.ndarray, real: np.ndarray, band=HF_BAND) -> dict:
+    """How much of the photo's fine detail the render has (1 = as much), grey, central 80 %, the
+    render's contrast matched to the photo's (mean and standard deviation; not the colour fit,
+    whose least squares shrink a misregistered render's contrast and would read pose error as
+    blur): `hf_ratio` the power ratio in `band` (cycles/pixel of these images), `lap_ratio` the
+    Laplacian-variance ratio, `half_power_cyc_px1920` the lowest frequency where the render has
+    under half the photo's power, in cycles/pixel at 1920 wide (None: never)."""
+    gr, gp = _grey_centre(render), _grey_centre(real)
+    gr = (gr - gr.mean()) * (gp.std() / max(float(gr.std()), 1e-12)) + gp.mean()
+    pr, f = radial_power(gr)
+    pp, _ = radial_power(gp)
+    inband = (f >= band[0]) & (f <= band[1])
+    ratio = pr / np.maximum(pp, 1e-20)
+    low = np.flatnonzero((ratio < 0.5) & (f > 0.01))
+    scale = real.shape[1] / 1920.0
+    return {"hf_ratio": float(pr[inband].sum() / max(pp[inband].sum(), 1e-20)),
+            "lap_ratio": _lap_var(gr) / max(_lap_var(gp), 1e-20),
+            "half_power_cyc_px1920": float(f[low[0]] * scale) if len(low) else None}
+
+
+def _box(img: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    h, w = img.shape[:2]
+    fy, fx = h // size[1], w // size[0]
+    return img[:fy * size[1], :fx * size[0]].reshape(size[1], fy, size[0], fx, -1).mean((1, 3))
+
+
+def training_times(scan: Path) -> np.ndarray:
+    """The capture time of every frame of a training scan (its frame_*.json "time")."""
+    out = []
+    for meta in sorted(scan.glob("frame_*.json")):
+        try:
+            out.append(float(json.loads(meta.read_text())["time"]))
+        except (OSError, ValueError, KeyError):
+            continue
+    return np.asarray(out, float)
+
+
+def spz_sh_degree(path: Path) -> int | None:
+    """The SH degree in an SPZ file's header (byte 12 of the gzipped stream)."""
+    import gzip
+
+    with gzip.open(path, "rb") as fh:
+        head = fh.read(16)
+    return int(head[12]) if len(head) == 16 else None
 
 
 class Lpips:
@@ -203,42 +307,96 @@ def load_run(out_dir: Path) -> dict:
     return report
 
 
-def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin") -> dict:
+def score_name(variant: str, eval_set: str = "sharp", full: bool = False) -> str:
+    """The name a score is written under: the variant alone for the original 480 x 360 score on
+    the first set (as every earlier run), else with the set and size."""
+    if eval_set == "sharp" and not full:
+        return variant
+    return f"{variant}_{eval_set}" + ("_full" if full else "")
+
+
+def _spread(items: list, most: int | None) -> list:
+    if not most or most >= len(items):
+        return items
+    return [items[i] for i in np.linspace(0, len(items) - 1, most).round().astype(int)]
+
+
+def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin", *,
+          eval_set: str = "sharp", full: bool = False, views_limit: int | None = None,
+          results: Path = HERE, settle: bool = False) -> dict:
     fd = _fd()
     from litereality_agent.pipeline.quickroom.roomplan import parse_room
 
     report = load_run(out_dir)
     scan = Path(report["scan"]).expanduser()
-    views, drift = eval_views(scan)
+    rows_file, pool = EVAL_SETS[eval_set]
+    views, drift = eval_views(scan, pool, rows_file)
+    views = _spread(views, views_limit)
+    train_t = training_times(scan)
+    seen_s = {}
+    for v in views:
+        t_eval = float(json.loads((pool / f"{v.image.stem}.json").read_text())["time"])
+        seen_s[v.index] = float(np.min(np.abs(train_t - t_eval))) if len(train_t) else None
     plan = parse_room(scan)
     objects, openings = fd.scan_boxes(plan)
     spz_bytes = (out_dir / spz_file).read_bytes()
-    renderer = fd.SplatRenderer(timeout_s=600)
-    big = (SIZE[0] * SCALE, SIZE[1] * SCALE)
-    t = time.perf_counter()
-    renders = renderer.render(spz_bytes, [fd.three_camera(v, big) for v in views], big)
-    render_s = time.perf_counter() - t
+    renderer = fd.SplatRenderer(timeout_s=3600 if full else 600)
+    size = SIZE
     lp = Lpips()
     rows, sheet = [], []
-    for v, rgba in zip(views, renders, strict=True):
-        real = fd.load_photo(v.image, SIZE)
-        render, cover = fd.composite(rgba, SIZE)
-        reg = fd.view_regions(v, plan, objects, openings, SIZE)
-        smap = fd.ssim_map(real, render)
-        row = {"row": v.index, "image": v.image.name,
-               "psnr": fd.psnr(real, render), "psnr_cc": fd.psnr(real, colour_fit(render, real)),
-               "ssim": float(smap.mean()), "lpips": lp(real, render),
-               "coverage": float(cover.mean())}
-        for name in ("openings", "objects"):
-            m = reg[name]
-            row[f"frac_{name}"] = float(m.mean())
-            row[f"psnr_{name}"] = (fd.psnr(real, colour_fit(render, real), m)
-                                   if m.mean() >= fd.MIN_MASK_FRACTION else None)
-        rows.append({k: (round(x, 4) if isinstance(x, float) else x) for k, x in row.items()})
-        sheet.append((real, render, row))
+    render_s = 0.0
+    chunk = FULL_CHUNK if full else max(1, len(views))
+    for at in range(0, len(views), chunk):
+        part = views[at:at + chunk]
+        if full:
+            size = tuple(part[0].full)            # the photo's own size, rendered 1:1
+            big = size
+        else:
+            big = (SIZE[0] * SCALE, SIZE[1] * SCALE)
+        t = time.perf_counter()
+        cams = [fd.three_camera(v, big) for v in part]
+        if settle:
+            # Each camera twice, the second kept: the first draw after a jump to a new view can
+            # still use the previous view's sort (results/fix_v4/render_order_check.json: -0.47
+            # dB on one view, the repeat stable to 0.001 dB).
+            cams = [c for c in cams for _ in (0, 1)]
+        renders = renderer.render(spz_bytes, cams, big)
+        if settle:
+            renders = renders[1::2]
+        render_s += time.perf_counter() - t
+        for v, rgba in zip(part, renders, strict=True):
+            real = fd.load_photo(v.image, size)
+            render, cover = fd.composite(rgba, size)
+            reg = fd.view_regions(v, plan, objects, openings, size)
+            fitted = colour_fit(render, real)
+            seen = seen_s[v.index]
+            row = {"row": v.index, "image": v.image.name,
+                   "psnr": fd.psnr(real, render), "psnr_cc": fd.psnr(real, fitted),
+                   "ssim": float(fd.ssim_map(real, render).mean()), "lpips": lp(real, render),
+                   "coverage": float(cover.mean()), **sharpness(render, real),
+                   "train_frame_s": None if seen is None else round(seen, 3),
+                   "unseen": seen is None or seen > LEAK_S}
+            if full:
+                r480, p480 = _box(render, SIZE), _box(real, SIZE)
+                row["psnr_cc_480"] = fd.psnr(p480, colour_fit(r480, p480))
+            for name in ("openings", "objects"):
+                m = reg[name]
+                row[f"frac_{name}"] = float(m.mean())
+                row[f"psnr_{name}"] = (fd.psnr(real, fitted, m)
+                                       if m.mean() >= fd.MIN_MASK_FRACTION else None)
+            rows.append({k: (round(x, 4) if isinstance(x, float) else x) for k, x in row.items()})
+            sheet.append((*((_box(real, SIZE), _box(render, SIZE)) if full else (real, render)),
+                          row))
+            print(f"  row {v.index}: PSNR cc {row['psnr_cc']:.2f}, hf_ratio "
+                  f"{row['hf_ratio']:.3f}", flush=True)
+        del renders
 
-    def mean(key):
-        vals = [r[key] for r in rows if r.get(key) is not None]
+    keys = ("psnr", "psnr_cc", "ssim", "lpips", "coverage", "psnr_openings", "psnr_objects",
+            "hf_ratio", "lap_ratio", "half_power_cyc_px1920") + (("psnr_cc_480",) if full else ())
+    unseen = [r for r in rows if r["unseen"]]
+
+    def mean(key, subset=None):
+        vals = [r[key] for r in (rows if subset is None else subset) if r.get(key) is not None]
         return round(float(np.mean(vals)), 4) if vals else None
 
     stats = report.get("stats") or {}
@@ -249,13 +407,18 @@ def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin") -> dict:
     other_s = float(depth.get("seconds") or 0) * (0 if depth.get("cached") else 1) \
         + float(masks.get("gpu_s") or 0)
     raw = out_dir / spz_file
+    name = score_name(variant, eval_set, full)
     out = {
         "variant": variant, "out_dir": str(out_dir), "scan": str(scan), "spz": spz_file,
+        "spz_sh_degree": spz_sh_degree(raw),
         "renderer": f"{renderer.name} {renderer.version} (SwiftShader, Spark 2.3.1)",
-        "size": list(SIZE), "render_scale": SCALE, "views": len(rows),
+        "eval_set": eval_set, "eval_rows": str(rows_file), "pool": str(pool), "settle": settle,
+        "size": list(size), "render_scale": 1 if full else SCALE, "views": len(rows),
         "alignment_vs_pool": drift, "render_s": round(render_s, 1),
-        "summary": {k: mean(k) for k in ("psnr", "psnr_cc", "ssim", "lpips", "coverage",
-                                         "psnr_openings", "psnr_objects")},
+        "summary": {k: mean(k) for k in keys},
+        "unseen_views": len(unseen),
+        "summary_unseen": ({k: mean(k, unseen) for k in keys}
+                           if len(unseen) < len(rows) else None),
         "train": {"frames": report.get("frames"), "dataset": report.get("dataset"),
                   "options": report.get("options"),
                   "train_width": report.get("train_width") or 960, "trainer_s": trainer_s,
@@ -271,16 +434,19 @@ def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin") -> dict:
                   "corrected_scene": report.get("corrected_scene")},
         "per_view": rows,
     }
-    (HERE / f"{variant}_scores.json").write_text(json.dumps(out, indent=1) + "\n")
-    _eval_sheet(variant, sheet)
+    results.mkdir(parents=True, exist_ok=True)
+    (results / f"{name}_scores.json").write_text(json.dumps(out, indent=1) + "\n")
+    _eval_sheet(name, sheet, results)
     s = out["summary"]
-    print(f"{variant}: PSNR {s['psnr']} (cc {s['psnr_cc']}), SSIM {s['ssim']}, LPIPS {s['lpips']}, "
-          f"openings {s['psnr_openings']}, objects {s['psnr_objects']}, coverage {s['coverage']} "
-          f"over {len(rows)} views; render {render_s:.0f} s; alignment vs pool {drift}")
+    print(f"{name}: PSNR {s['psnr']} (cc {s['psnr_cc']}), SSIM {s['ssim']}, LPIPS {s['lpips']}, "
+          f"openings {s['psnr_openings']}, objects {s['psnr_objects']}, coverage {s['coverage']}, "
+          f"hf_ratio {s['hf_ratio']}, lap_ratio {s['lap_ratio']} over {len(rows)} views "
+          f"({len(unseen)} unseen) at {size[0]}x{size[1]}; render {render_s:.0f} s; "
+          f"alignment vs pool {drift}")
     return out
 
 
-def _eval_sheet(variant: str, sheet: list, picks: int = 6) -> None:
+def _eval_sheet(variant: str, sheet: list, results: Path = HERE, picks: int = 6) -> None:
     idx = np.linspace(0, len(sheet) - 1, min(picks, len(sheet))).round().astype(int)
     w, h = SIZE
     canvas = Image.new("RGB", (2 * w, h * len(idx)), (0, 0, 0))
@@ -289,7 +455,7 @@ def _eval_sheet(variant: str, sheet: list, picks: int = 6) -> None:
         canvas.paste(_label(_to_img(real), f"photo row {row['row']}"), (0, k * h))
         canvas.paste(_label(_to_img(render), f"{variant}  PSNR {row['psnr']:.1f} cc "
                             f"{row['psnr_cc']:.1f} LPIPS {row['lpips']:.3f}"), (w, k * h))
-    canvas.save(HERE / f"{variant}_eval_sheet.jpg", quality=88)
+    canvas.save(results / f"{variant}_eval_sheet.jpg", quality=88)
 
 
 def wander(variant: str, out_dir: Path, raw: bool = False) -> Path:
@@ -370,6 +536,18 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument("out_dir")
         s.add_argument("--spz", default="raw.spz.bin", help="eval: the splat file in out_dir")
         s.add_argument("--raw", action="store_true", help="wander: the uncut raw snapshot")
+        s.add_argument("--eval-set", choices=sorted(EVAL_SETS), default="sharp",
+                       help="eval: the first set's sharpest moments (sharp, default) or frames "
+                            "at random times (random)")
+        s.add_argument("--full", action="store_true",
+                       help="eval: score at the photo's own resolution (1920 x 1440, slow)")
+        s.add_argument("--views", type=int, default=None, metavar="N",
+                       help="eval: an even spread of N of the set's views (default all)")
+        s.add_argument("--settle", action="store_true",
+                       help="eval: draw each view twice and score the second (the first after "
+                            "a camera jump may use the last view's splat sort); 2x render time")
+        s.add_argument("--results", default=None, metavar="DIR",
+                       help="where scores and sheets go (default beside this script)")
     for cmd in ("table", "compare"):
         s = sub.add_parser(cmd)
         s.add_argument("variants", nargs="+")
@@ -378,7 +556,10 @@ def main(argv: list[str] | None = None) -> int:
         out = Path(a.out_dir)
         out = out if out.is_absolute() else REPO / out
         if a.cmd in ("run", "eval"):
-            score(a.variant, out, a.spz)
+            results = Path(a.results).expanduser() if a.results else HERE
+            score(a.variant, out, a.spz, eval_set=a.eval_set, full=a.full, views_limit=a.views,
+                  results=results if results.is_absolute() else REPO / results,
+                  settle=a.settle)
         if a.cmd in ("run", "wander"):
             wander(a.variant, out, raw=a.raw)
     elif a.cmd == "table":

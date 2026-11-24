@@ -2,7 +2,7 @@
 
     python patch_trainer.py /opt/gsplat/examples/simple_trainer.py      # at image build
 
-Adds three trainer flags, all off by default so an unflagged run is gsplat's own:
+Adds five trainer flags, all at gsplat's own behaviour by default so an unflagged run is gsplat's:
 
     --dense-depth               load depths/<image>.png per photo; L1 of rendered expected depth
                                 against it on the pixels both have (metres)
@@ -12,8 +12,18 @@ Adds three trainer flags, all off by default so an unflagged run is gsplat's own
 
 gsplat's sparse `--depth-loss` (the LiDAR points, in disparity) still works beside them, with one
 fix: a point the render does not cover gets no loss instead of a NaN gradient (edit 8; the same
-loss wherever the render covers the point). Evaluation (held-out PSNR / SSIM / LPIPS) is not
-touched at all.
+loss wherever the render covers the point).
+
+The per-photo colour model (edits 9-12, for export-safe colour; app.py "bilateral_*" options):
+
+    --bilateral-tv-lambda 10    the bilateral grids' total-variation weight (gsplat's fixed 10;
+                                0 = none, as a 1 x 1 x 1 grid needs: one affine map per photo)
+    --bilateral-mean-lambda 0   pull the grids' mean over all photos to the identity map
+                                (`litereality_dense.grid_regularisers`): what every photo shares
+                                stays in the splats, which is all the export carries
+
+Evaluation's held-out PSNR / SSIM / LPIPS are not touched; the colour-corrected cc_* metrics are
+reported for every run (edit 12), with or without a grid, by the same correction.
 
 Each edit is anchored on exact text of the pinned file and must match exactly once: a different
 gsplat fails the image build here, loudly, instead of training without the loss.
@@ -35,8 +45,8 @@ EDITS: list[tuple[str, str]] = [
         "from utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed\n",
         "from utils import AppearanceOptModule, CameraOptModule, knn, rgb_to_sh, set_random_seed\n"
         f"{MARKER}\n"
-        "from litereality_dense import (DenseDepthData, dense_depth_l1, depth_normal_loss,\n"
-        "                               sparse_disparity)\n",
+        "from litereality_dense import (DenseDepthData, color_correct, dense_depth_l1,\n"
+        "                               depth_normal_loss, grid_regularisers, sparse_disparity)\n",
     ),
     # 2. The flags (tyro: --dense-depth, --dense-depth-lambda, --normal-lambda).
     (
@@ -107,6 +117,44 @@ EDITS: list[tuple[str, str]] = [
         "                    (alphas > 0.0).float().permute(0, 3, 1, 2), grid, align_corners=True\n"
         "                ).squeeze(3).squeeze(1)  # [1, M]\n"
         "                disp, disp_gt = sparse_disparity(depths, covered, depths_gt)\n",
+    ),
+    # 9. The per-photo colour model's flags (tyro: --bilateral-tv-lambda, --bilateral-mean-
+    #    lambda), at gsplat's own behaviour by default: TV weight 10, no pull to the identity.
+    (
+        "    bilateral_grid_shape: Tuple[int, int, int] = (16, 16, 8)\n",
+        "    bilateral_grid_shape: Tuple[int, int, int] = (16, 16, 8)\n"
+        f"    {MARKER}\n"
+        "    # Weight of the bilateral grids' total variation (gsplat's fixed 10); 0 = none\n"
+        "    bilateral_tv_lambda: float = 10.0\n"
+        "    # Weight pulling the grids' mean over all photos to the identity map; 0 = off\n"
+        "    bilateral_mean_lambda: float = 0.0\n",
+    ),
+    # 10. The grids' starting mean (the identity map), what edit 11 pulls their mean back to.
+    (
+        "            ).to(self.device)\n            self.bil_grid_optimizers = [\n",
+        "            ).to(self.device)\n"
+        f"            {MARKER}\n"
+        "            self.bil_grid_identity = self.bil_grids.grids.detach().mean(0, keepdim=True)\n"
+        "            self.bil_grid_optimizers = [\n",
+    ),
+    # 11. The grids' regulariser: gsplat's TV at its weight (10 unless flagged), plus the pull.
+    (
+        "                tvloss = 10 * total_variation_loss(self.bil_grids.grids)\n",
+        f"                {MARKER}\n"
+        "                tvloss = grid_regularisers(\n"
+        "                    self.bil_grids.grids, self.bil_grid_identity, total_variation_loss,\n"
+        "                    cfg.bilateral_tv_lambda, cfg.bilateral_mean_lambda)\n",
+    ),
+    # 12. The held-out cc_* metrics for every run, not only those with a grid (the colour-free
+    #     PSNR / SSIM / LPIPS are untouched): a run without a per-photo colour model is then
+    #     compared on the same cc_psnr as one with.
+    (
+        "                if cfg.use_bilateral_grid:\n"
+        "                    cc_colors = color_correct(colors, pixels)\n",
+        f"                {MARKER}\n"
+        "                if True:  # cc_* for every run: gsplat's correction, or with no grid\n"
+        "                    # litereality_dense's copy of it (the grid's module brings gsplat's)\n"
+        "                    cc_colors = color_correct(colors, pixels)\n",
     ),
 ]
 

@@ -94,6 +94,114 @@ def test_bad_dense_options_are_refused(given):
         app._options(given)
 
 
+# ── presets and the colour model ─────────────────────────────────────────────────────────────────
+
+
+def test_the_defaults_and_an_unflagged_command_are_what_they_were():
+    opt = app._options({})
+    assert opt["export_sh_degree"] == 1 and opt["cap_max"] == 800_000 and opt["steps"] == 1250
+    assert opt["fused_bilagrid"] is True and opt["preset"] is None
+    cmd = app._command(Path("/d"), Path("/r"), opt)
+    assert "--use-fused-bilagrid" in cmd
+    assert not {"--bilateral-grid-shape", "--bilateral-tv-lambda",
+                "--bilateral-mean-lambda"} & set(cmd)
+
+
+def _flag(cmd: list[str], name: str, count: int = 1) -> list[str]:
+    i = cmd.index(name)
+    return cmd[i + 1:i + 1 + count]
+
+
+def test_the_affine_preset_is_one_colour_map_a_photo_pulled_to_the_identity():
+    opt = app._options({"preset": "q_sh3_affine"})
+    assert opt["export_sh_degree"] == 3 and opt["sh_degree"] == 3
+    assert opt["cap_max"] == 2_400_000 and opt["steps"] == 10_000
+    cmd = app._command(Path("/d"), Path("/r"), opt)
+    assert "--use-bilateral-grid" in cmd and "--use-fused-bilagrid" not in cmd
+    assert _flag(cmd, "--bilateral-grid-shape", 3) == ["1", "1", "1"]
+    assert _flag(cmd, "--bilateral-tv-lambda") == ["0.0"]
+    assert _flag(cmd, "--bilateral-mean-lambda") == ["10.0"]
+    assert _flag(cmd, "--strategy.cap-max") == ["2400000"]
+
+
+def test_the_no_grid_preset_trains_without_a_colour_model():
+    cmd = app._command(Path("/d"), Path("/r"), app._options({"preset": "q_sh3_nogrid"}))
+    assert not {"--use-bilateral-grid", "--use-fused-bilagrid", "--bilateral-tv-lambda",
+                "--bilateral-mean-lambda", "--bilateral-grid-shape"} & set(cmd)
+
+
+def test_the_smoothed_grid_preset_keeps_the_fused_grid_with_a_heavy_tv():
+    opt = app._options({"preset": "q_sh3_bilagrid_tv"})
+    cmd = app._command(Path("/d"), Path("/r"), opt)
+    assert "--use-fused-bilagrid" in cmd and "--bilateral-grid-shape" not in cmd
+    assert _flag(cmd, "--bilateral-tv-lambda") == ["1000.0"]
+    assert _flag(cmd, "--bilateral-mean-lambda") == ["10.0"]
+
+
+def test_options_given_beside_a_preset_win_and_every_preset_is_valid():
+    from litereality_agent.models.splat import presets
+
+    opt = app._options({"preset": "q_sh3_affine", "steps": 3000, "cap_max": 1_000_000})
+    assert opt["steps"] == 3000 and opt["cap_max"] == 1_000_000
+    assert opt["export_sh_degree"] == 3 and opt["preset"] == "q_sh3_affine"
+    for name in presets.names():
+        app._command(Path("/d"), Path("/r"), app._options({"preset": name}))
+    assert presets.resolve({}) == {} and presets.resolve({"preset": None, "steps": 5}) == {
+        "steps": 5}
+
+
+@pytest.mark.parametrize("given", [
+    {"preset": "q_best"}, {"bilateral_grid_shape": [16, 16]},
+    {"bilateral_grid_shape": [0, 1, 1]}, {"bilateral_grid_shape": "16 16 8"},
+    {"bilateral_tv_lambda": -1}, {"bilateral_mean_lambda": True},
+    # the fused kernel is not run on a 1-cell axis
+    {"bilateral_grid_shape": [1, 1, 1]},
+    {"export_sh_degree": 4}, {"export_sh_degree": 3, "sh_degree": 1},
+])
+def test_bad_colour_and_export_options_are_refused(given):
+    with pytest.raises(ValueError):
+        app._options(given)
+
+
+def test_the_grid_regulariser_is_gsplats_tv_by_default_and_finite_on_one_cell():
+    def tv(x):                         # gsplat's total_variation_loss, in numpy
+        out = 0.0
+        for axis in range(2, x.ndim):
+            d = np.diff(x, axis=axis)
+            out += (d ** 2).sum() / d.size
+        return out / x.shape[0]
+
+    rng = np.random.default_rng(0)
+    grids = rng.normal(size=(5, 12, 8, 16, 16))
+    identity = grids.mean(0, keepdims=True)
+    assert dense.grid_regularisers(grids, identity, tv, 10.0, 0.0) == pytest.approx(
+        10 * tv(grids))
+    # The mean term: 0 while the grids' mean is the identity, and grows when all photos drift
+    # the same way (the colour the splats should hold instead).
+    assert dense.grid_regularisers(grids, identity, tv, 0.0, 10.0) == pytest.approx(0.0)
+    drifted = grids + 0.1
+    assert dense.grid_regularisers(drifted, identity, tv, 0.0, 10.0) == pytest.approx(0.1)
+    # One cell a photo: gsplat's TV would be 0 / 0; at weight 0 it is never evaluated.
+    one = rng.normal(size=(5, 12, 1, 1, 1))
+
+    def boom(_x):
+        raise AssertionError("TV evaluated at weight 0")
+
+    out = dense.grid_regularisers(one, one.mean(0, keepdims=True), boom, 0.0, 10.0)
+    assert np.isfinite(out) and out == pytest.approx(0.0)
+
+
+def test_colour_correction_undoes_a_colour_map():
+    torch = pytest.importorskip("torch")
+    rng = np.random.default_rng(1)
+    ref = torch.tensor(rng.uniform(0.1, 0.9, size=(1, 40, 50, 3)), dtype=torch.float32)
+    img = (0.8 * ref + 0.05).clamp(0, 1)[..., [0, 1, 2]]
+    img[..., 2] = (1.1 * ref[..., 2] - 0.05).clamp(0, 1)
+    out = dense.color_correct(img, ref)
+    assert out.shape == ref.shape
+    assert float((out - ref).abs().max()) < 1e-3
+
+
 def _tar(files: dict[str, bytes]) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -138,10 +246,20 @@ def test_the_patch_applies_to_gsplat_1_5_3_and_adds_only_the_dense_losses(upstre
     diff = difflib.unified_diff(upstream_trainer.splitlines(), patched.splitlines(), n=0,
                                 lineterm="")
     removed = [line[1:] for line in diff if line.startswith("-") and not line.startswith("---")]
+    # Then the colour model: gsplat's fixed TV weight, now `grid_regularisers` (10 x the same TV
+    # by default), and the eval's cc_* metrics, now for runs without a grid too.
     assert removed == [
         '                render_mode="RGB+ED" if cfg.depth_loss else "RGB",',
         "                disp = torch.where(depths > 0.0, 1.0 / depths, torch.zeros_like(depths))",
-        "                disp_gt = 1.0 / depths_gt  # [1, M]"]
+        "                disp_gt = 1.0 / depths_gt  # [1, M]",
+        "                tvloss = 10 * total_variation_loss(self.bil_grids.grids)",
+        "                if cfg.use_bilateral_grid:"]
+    for field in ("bilateral_tv_lambda: float = 10.0", "bilateral_mean_lambda: float = 0.0"):
+        assert field in patched
+    assert "self.bil_grid_identity = self.bil_grids.grids.detach().mean(0, keepdim=True)" in patched
+    # The grid's regulariser is computed where upstream's TV was, and still added to the loss.
+    at = patched.index("tvloss = grid_regularisers(")
+    assert patched.index("loss += tvloss", at) - at < 300
     # The validation set and the eval are untouched: the held-out numbers stay gsplat's.
     assert 'self.valset = Dataset(self.parser, split="val")' in patched
     with pytest.raises(ValueError, match="already patched"):

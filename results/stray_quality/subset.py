@@ -1,7 +1,9 @@
 """Stricter view of the fixed eval set: means over the eval frames that have NO training camera
 within 5 cm and 5 deg in either training scan (fairness.json), plus paired per-view wins."""
-import json, sys
+import json
+import sys
 from pathlib import Path
+
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
@@ -18,7 +20,9 @@ out = [f"Far subset: {len(far)} of {len(rows)} eval frames (no training camera w
        "| variant | PSNR (far) | PSNR cc (far) | SSIM (far) | LPIPS (far) | views where PSNR cc beats " + variants[0] + " |",
        "|---|---|---|---|---|---|"]
 for v in variants:
-    m = lambda k: np.mean([d[v][r][k] for r in far])
+    def m(k, v=v):
+        return np.mean([d[v][r][k] for r in far])
+
     wins = sum(d[v][r]["psnr_cc"] > d[variants[0]][r]["psnr_cc"] for r in rows)
     out.append(f"| {v} | {m('psnr'):.2f} | {m('psnr_cc'):.2f} | {m('ssim'):.3f} | {m('lpips'):.3f} | {wins}/{len(rows)} |")
 text = "\n".join(out) + "\n"

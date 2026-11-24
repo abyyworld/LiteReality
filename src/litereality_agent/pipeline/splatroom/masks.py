@@ -8,6 +8,12 @@ says the splat is visible there (not hidden behind something nearer), it counts 
 inside the object's mask. A splat seen inside the mask in at least `MIN_VOTES` photos and in at
 least `MIN_RATIO` of the photos that saw it belongs to the object (FlashSplat-style labelling, by
 projection instead of rasterisation). A splat no photo saw keeps what the boxes said.
+
+Each body votes only on the splats in its own box (+ `REACH`), never on its neighbours', and a
+photo's masks are made exclusive first (`_exclusive`: a pixel two masks claim goes to the object
+nearer the camera), so one chair's outline can never take, or veto, the chair beside it. Once
+`instances.fit_scene` has put the bodies on the objects found in the splat, SAM 2 is prompted at
+that pose, with the box grown only `FITTED_GROW` and the object's centre as a positive point.
 """
 
 from __future__ import annotations
@@ -31,6 +37,7 @@ REACH = 0.30                   # metres around a body's box where splats vote
 # The projected box grows by this much of its size on each side before it prompts SAM 2 (and
 # bounds the votes): RoomPlan boxes can sit 20-30 cm off, and the object must be inside the box.
 GROW = 0.30
+FITTED_GROW = 0.08             # ... once the bodies stand on the objects found in the splat
 # A splat is visible in a photo if no farther than its LiDAR depth + a + b * depth. Generous: the
 # depth map is 256 x 192, so an object's edge pixel often holds the wall behind it.
 VISIBLE_TOL = (0.08, 0.05)
@@ -43,6 +50,7 @@ class View:
     size: tuple[int, int]
     boxes: dict[str, list[float]] = field(default_factory=dict)       # body name -> x0 y0 x1 y1
     negatives: dict[str, list[list[float]]] = field(default_factory=dict)   # name -> [[x, y]]
+    positives: dict[str, list[list[float]]] = field(default_factory=dict)   # name -> [[x, y]]
 
 
 @dataclass
@@ -93,10 +101,13 @@ def _furniture_tops(model: mujoco.MjModel, data: mujoco.MjData, movable: set[int
 
 
 def plan_views(frames: list[Frame], model: mujoco.MjModel, data: mujoco.MjData,
-               bodies: dict[str, int], *, per_object: int = VIEWS_PER_OBJECT) -> dict[str, View]:
+               bodies: dict[str, int], *, per_object: int = VIEWS_PER_OBJECT,
+               grow: float = GROW, centre_point: bool = False) -> dict[str, View]:
     """For every body, the photos that see its box largest and most whole, with the box each
-    should prompt SAM 2 with, and as negative points the tops of static furniture inside that
-    box. Photos are shared: one view holds every body it was chosen for."""
+    should prompt SAM 2 with (grown by `grow` of its size per side), and as negative points the
+    tops of static furniture inside that box; with `centre_point`, the box's centre as a positive
+    point (for bodies already put on their objects, `instances.fit_scene`). Photos are shared:
+    one view holds every body it was chosen for."""
     from litereality_agent.room_ops.roomcall.model_info import movable_body_ids
 
     tops = _furniture_tops(model, data, movable_body_ids(model))
@@ -114,7 +125,7 @@ def plan_views(frames: list[Frame], model: mujoco.MjModel, data: mujoco.MjData,
                 continue
             x0, x1, y0, y1 = u.min(), u.max(), v.min(), v.max()
             area = (x1 - x0) * (y1 - y0)
-            gx, gy = GROW * (x1 - x0), GROW * (y1 - y0)
+            gx, gy = grow * (x1 - x0), grow * (y1 - y0)
             cx0, cx1, cy0, cy1 = max(x0, 0), min(x1, W), max(y0, 0), min(y1, H)
             inside = max(cx1 - cx0, 0) * max(cy1 - cy0, 0)
             if area <= 0 or inside / area < MIN_INSIDE or inside / (W * H) < MIN_AREA:
@@ -128,6 +139,10 @@ def plan_views(frames: list[Frame], model: mujoco.MjModel, data: mujoco.MjData,
             key = f"{f.index:05d}"
             view = views.setdefault(key, View(f, K, size))
             view.boxes[name] = box
+            if centre_point:
+                u, v, z = _project(K, f.c2w, own[None])
+                if z[0] > 0.2 and 0 <= u[0] < size[0] and 0 <= v[0] < size[1]:
+                    view.positives[name] = [[float(u[0]), float(v[0])]]
             if len(tops):
                 u, v, z = _project(K, f.c2w, tops)
                 _, _, z_own = _project(K, f.c2w, own[None])
@@ -199,7 +214,8 @@ def request(views: dict[str, View], call: Callable[[dict], dict], *,
         buf = io.BytesIO()
         small.save(buf, format="JPEG", quality=92)
         frames.append({"id": key, "jpeg": buf.getvalue(), "boxes": view.boxes,
-                       "negatives": view.negatives})
+                       "negatives": view.negatives,
+                       **({"positives": view.positives} if view.positives else {})})
     reply = call({"frames": frames, "multimask": bool(static_boxes)})
     if not isinstance(reply, dict) or "masks" not in reply:
         raise RuntimeError(f"segment: {reply.get('error') if isinstance(reply, dict) else reply}")
@@ -229,27 +245,50 @@ def _depth(frame: Frame):
         return np.asarray(im, dtype=np.float32) / 1000.0
 
 
+def _exclusive(per: dict[str, np.ndarray], view: View, model: mujoco.MjModel,
+               data: mujoco.MjData, bodies: dict[str, int]) -> dict[str, np.ndarray]:
+    """One photo's masks with no pixel in two of them: a pixel both claim goes to the object
+    whose box centre is nearer the camera (the one in front)."""
+    names = [n for n in per if n in bodies]
+    if len(names) < 2:
+        return per
+    depth = {}
+    for n in names:
+        _, _, z = _project(view.K, view.frame.c2w, _box_corners(model, data, bodies[n]).mean(0)[None])
+        depth[n] = float(z[0])
+    out = dict(per)
+    taken = np.zeros_like(per[names[0]], dtype=bool)
+    for n in sorted(names, key=lambda k: depth[k]):
+        out[n] = per[n] & ~taken
+        taken |= per[n]
+    return out
+
+
 def vote(positions: np.ndarray, masks: ObjectMasks, model: mujoco.MjModel, data: mujoco.MjData,
          bodies: dict[str, int], *, reach: float = REACH) -> np.ndarray:
     """Per splat: the body id its votes give it, -1 for none, -2 where no photo saw it (the
-    caller keeps the boxes' answer there)."""
+    caller keeps the boxes' answer there). A body votes only on the splats within `reach` of its
+    own box, and each photo's masks are made exclusive (`_exclusive`)."""
     pos = positions.astype(np.float64)
     owner = np.full(len(pos), -2, dtype=np.int64)
-    near = np.zeros(len(pos), bool)
-    for name, body in bodies.items():
-        corners = _box_corners(model, data, body)
+    names = list(bodies)
+    own = np.zeros((len(names), len(pos)), bool)
+    for k, name in enumerate(names):
+        corners = _box_corners(model, data, bodies[name])
         lo, hi = corners.min(0) - reach, corners.max(0) + reach
-        near |= np.all((pos >= lo) & (pos <= hi), axis=1)
+        own[k] = np.all((pos >= lo) & (pos <= hi), axis=1)
+    near = own.any(0)
     idx = np.flatnonzero(near)
     if not len(idx):
         return owner
     p = pos[idx]
-    names = list(bodies)
+    own = own[:, idx]
     inside = np.zeros((len(names), len(idx)), np.int32)
     seen = np.zeros((len(names), len(idx)), np.int32)
     seen_any = np.zeros(len(idx), bool)
     for key, per in masks.masks.items():
         view = masks.views[key]
+        per = _exclusive(per, view, model, data, bodies)
         W, H = view.size
         u, v, z = _project(view.K, view.frame.c2w, p)
         ok = (z > 0.05) & (u >= 0) & (u < W) & (v >= 0) & (v < H)
@@ -265,7 +304,8 @@ def vote(positions: np.ndarray, masks: ObjectMasks, model: mujoco.MjModel, data:
             box = view.boxes.get(name)
             if m is None or box is None:
                 continue
-            in_box = ok & (u >= box[0]) & (u <= box[2]) & (v >= box[1]) & (v <= box[3])
+            in_box = ok & own[k] & (u >= box[0]) & (u <= box[2]) & (v >= box[1]) \
+                & (v <= box[3])
             seen[k] += in_box
             inside[k] += in_box & m[vi, ui]
             seen_any |= in_box

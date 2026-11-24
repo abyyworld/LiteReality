@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-
 from rs_common import qvec_to_R
 
 

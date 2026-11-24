@@ -116,6 +116,23 @@ BLUR_SPAN_S = 1.5
 BLUR_PERCENTILE = 90
 BLUR_TURN_RATE = 0.6       # rad/s (~35 deg/s: ~10 px of blur at 1920 wide in a 1/60 s exposure)
 BLUR_SPEED = 0.5           # m/s
+# The blur picker (`select_frames` with `blur_px`, import-stray --max-blur-px). The Laplacian at
+# 480 px wide cannot see 2-4 px of motion blur at 1920 (results/diagnosis/blur: 28% of the q600
+# training frames were blurred by 4+ px), so it scores the frame at full resolution and RELATIVE
+# to the sharpest frame within +-BLUR_REL_SPAN_S (the same view a few frames on: texture cancels),
+# and turns that ratio into a blur length in pixels at BLUR_REF_WIDTH by the curve measured on
+# this phone's own still frames box-blurred by a known length (blur_stats.json "blur_calibration":
+# Laplacian variance ratio vs box length; its 1 px point, still 1.0, is left out so the curve is
+# strictly monotone).
+FULL_SCORE_WIDTH = 1 << 16  # "score at the video's own width" (scan_video clamps to it)
+BLUR_REL_SPAN_S = 0.25
+BLUR_REF_WIDTH = 1920
+BLUR_CURVE_PX = (0.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0)
+BLUR_CURVE_RATIO = (1.0, 0.6932, 0.5161, 0.4237, 0.2931, 0.2215, 0.1551, 0.122, 0.0828)
+MAX_BLUR_PX = 2.0          # px at BLUR_REF_WIDTH: picks blurrier than this are not trained on
+# Each window's pick may come from this many windows' width either side of it as well (never a
+# frame another window took), so a window that falls on a fast pan takes a sharp frame next to it.
+BLUR_WINDOW_GROW = 0.5
 VIDEO_RATE = 60            # the writer's timescale: a frame's PTS x 60 = its ARKit frame counter
 # Rows at the end of the odometry with no video frame that are accepted without --allow-frame-
 # mismatch (the writer finished before the last append landed).
@@ -604,10 +621,75 @@ class Selection:
     stats: dict
 
 
+def relative_sharpness(times: np.ndarray, scores: np.ndarray,
+                       span: float = BLUR_REL_SPAN_S) -> np.ndarray:
+    """Each frame's sharpness over the sharpest within +-`span` seconds of it (1 = the sharpest
+    of its moment). Every frame counts as a reference, usable or not: they show the same view."""
+    t = np.asarray(times, float)
+    s = np.asarray(scores, float)
+    order = np.argsort(t, kind="stable")
+    ts, ss = t[order], np.where(np.isfinite(s[order]), s[order], 0.0)
+    lo = np.searchsorted(ts, ts - span, side="left")
+    hi = np.searchsorted(ts, ts + span, side="right")
+    best = np.array([ss[a:b].max() for a, b in zip(lo, hi)]) if len(ts) else np.zeros(0)
+    out = np.empty(len(t))
+    out[order] = np.where(best > 0, ss / np.maximum(best, 1e-12), 0.0)
+    return out
+
+
+def blur_px_from_ratio(ratio) -> np.ndarray:
+    """A relative Laplacian-variance ratio as a motion-blur length in pixels at `BLUR_REF_WIDTH`
+    (`BLUR_CURVE_RATIO` / `BLUR_CURVE_PX`, interpolated in log ratio; past the curve's end it
+    stays at its last length)."""
+    r = np.clip(np.asarray(ratio, float), 1e-6, 1.0)
+    return np.interp(-np.log(r), -np.log(np.asarray(BLUR_CURVE_RATIO)), np.asarray(BLUR_CURVE_PX))
+
+
+def blur_estimate(times: np.ndarray, scores: np.ndarray, *, scored_width: int,
+                  span: float = BLUR_REL_SPAN_S) -> np.ndarray:
+    """Motion blur of every frame, in pixels at `BLUR_REF_WIDTH`, from `scan_video` scores taken
+    at `scored_width` (`relative_sharpness`, `blur_px_from_ratio`): the curve gives pixels at the
+    width scored, scaled to `BLUR_REF_WIDTH`. It was measured at full resolution (1920): scores
+    of a downscaled frame see less of the blur, and the scaling is then only a rough correction.
+    Score at full resolution."""
+    px = blur_px_from_ratio(relative_sharpness(times, scores, span))
+    return px * (BLUR_REF_WIDTH / float(scored_width))
+
+
+def _blur_picks(window: np.ndarray, progress: np.ndarray, target: int, blur: np.ndarray,
+                sharp: np.ndarray, grow: float) -> np.ndarray:
+    """One pick per window (positions into the candidate arrays): the least blurred candidate
+    within the window widened by `grow` windows either side, never one already taken; ties go to
+    the sharper. Windows choose cleanest first, so a sharp frame goes to the window it sits in
+    before a neighbour can borrow it."""
+    pos = np.asarray(progress, float) * target         # in window units
+    by_pos = np.argsort(pos, kind="stable")
+    sorted_pos = pos[by_pos]
+    taken = np.zeros(len(pos), bool)
+    best_in = {}
+    for w in np.unique(window):
+        inside = window == w
+        best_in[int(w)] = float(blur[inside].min())
+    picks = []
+    for w in sorted(best_in, key=lambda k: (best_in[k], k)):
+        a = np.searchsorted(sorted_pos, w - grow, side="left")
+        b = np.searchsorted(sorted_pos, w + 1 + grow, side="left")
+        near = by_pos[a:b]
+        near = near[~taken[near]]
+        if not len(near):
+            continue
+        k = int(near[np.lexsort((-sharp[near], blur[near]))[0]])
+        taken[k] = True
+        picks.append(k)
+    return np.sort(np.asarray(picks, int))
+
+
 def select_frames(times: np.ndarray, poses: np.ndarray, sharpness: np.ndarray,
                   usable: np.ndarray, target: int = TARGET_FRAMES, *,
                   min_move: float = MIN_MOVE, min_turn_deg: float = MIN_TURN_DEG,
-                  blur_floor: float = BLUR_FLOOR) -> Selection:
+                  blur_floor: float = BLUR_FLOOR, blur_px: np.ndarray | None = None,
+                  max_blur_px: float | None = None,
+                  window_grow: float = BLUR_WINDOW_GROW) -> Selection:
     """The training set: the recording cut into `target` windows of equal progress, where
     progress is half elapsed time and half camera motion (metres walked + angle turned, 10 cm ~
     10 degrees), so a slow look around a corner gets as many frames as a quick walk past a
@@ -616,11 +698,30 @@ def select_frames(times: np.ndarray, poses: np.ndarray, sharpness: np.ndarray,
     is a pick taken while the camera moved fast (`BLUR_TURN_RATE`, `BLUR_SPEED`) and blurrier
     than `blur_floor` x the sharp end of the frames within `BLUR_SPAN_S` of it (a fast pan with
     no sharp frame; a steady look at a plain surface keeps its sharpest frames however low the
-    Laplacian scores texture-less views)."""
+    Laplacian scores texture-less views).
+
+    With `blur_px` (each frame's motion blur in pixels at `BLUR_REF_WIDTH`, `blur_estimate`) the
+    picks are the LEAST BLURRED frames instead: each window takes the least blurred usable frame
+    within it or `window_grow` windows either side (`_blur_picks`), and with `max_blur_px` no
+    frame blurrier than that is a candidate at all (a window with none stays empty: fewer, sharp
+    frames rather than smeared ones). The `blur_floor` rule is then not used, and a near-duplicate
+    pair keeps its less blurred frame."""
     times = np.asarray(times, float)
     sharp = np.asarray(sharpness, float)
-    idx = np.flatnonzero(np.asarray(usable, bool) & np.isfinite(sharp))
+    ok = np.asarray(usable, bool) & np.isfinite(sharp)
+    blur = None
+    over = np.zeros(len(times), bool)
+    if blur_px is not None:
+        blur = np.asarray(blur_px, float)
+        ok &= np.isfinite(blur)
+        if max_blur_px is not None:
+            over = ok & (blur > max_blur_px)
+            ok &= ~over
+    idx = np.flatnonzero(ok)
     stats = {"candidates": int(len(idx)), "recording_frames": int(len(times))}
+    if blur is not None:
+        stats.update(picker="blur", max_blur_px=max_blur_px, over_max_blur=int(over.sum()),
+                     window_grow=window_grow)
     if len(idx) == 0 or target <= 0:
         return Selection(np.zeros(0, int), {**stats, "kept": 0})
     P = poses[idx]
@@ -632,21 +733,28 @@ def select_frames(times: np.ndarray, poses: np.ndarray, sharpness: np.ndarray,
     progress = (0.5 * t_norm + 0.5 * motion / motion[-1]) if motion[-1] > 0 else t_norm
     window = np.minimum((progress * target).astype(int), target - 1)
 
-    # The sharpest candidate of each window: sort by (window, -sharpness), first of each run.
-    order = np.lexsort((-sharp[idx], window))
-    firsts = order[np.r_[True, window[order][1:] != window[order][:-1]]]
-    picks = np.sort(idx[firsts])
+    if blur is not None:
+        firsts = np.unique(window)
+        picks = idx[_blur_picks(window, progress, target, blur[idx], sharp[idx], window_grow)]
+        blurry = np.zeros(0, bool)
+        better = -blur                     # a near-duplicate pair keeps the less blurred
+    else:
+        # The sharpest candidate of each window: sort by (window, -sharpness), first of each run.
+        order = np.lexsort((-sharp[idx], window))
+        firsts = order[np.r_[True, window[order][1:] != window[order][:-1]]]
+        picks = np.sort(idx[firsts])
 
-    t_usable = times[idx]
-    s_usable = sharp[idx]
-    lo = np.searchsorted(t_usable, times[picks] - BLUR_SPAN_S, side="left")
-    hi = np.searchsorted(t_usable, times[picks] + BLUR_SPAN_S, side="right")
-    floor = np.array([blur_floor * np.percentile(s_usable[a:b], BLUR_PERCENTILE)
-                      for a, b in zip(lo, hi)])
-    speed, turn = velocities(times, poses)
-    moving = (turn[picks] > BLUR_TURN_RATE) | (speed[picks] > BLUR_SPEED)
-    blurry = (sharp[picks] < floor) & moving
-    picks = picks[~blurry]
+        t_usable = times[idx]
+        s_usable = sharp[idx]
+        lo = np.searchsorted(t_usable, times[picks] - BLUR_SPAN_S, side="left")
+        hi = np.searchsorted(t_usable, times[picks] + BLUR_SPAN_S, side="right")
+        floor = np.array([blur_floor * np.percentile(s_usable[a:b], BLUR_PERCENTILE)
+                          for a, b in zip(lo, hi)])
+        speed, turn = velocities(times, poses)
+        moving = (turn[picks] > BLUR_TURN_RATE) | (speed[picks] > BLUR_SPEED)
+        blurry = (sharp[picks] < floor) & moving
+        picks = picks[~blurry]
+        better = sharp
 
     min_turn = np.deg2rad(min_turn_deg)
 
@@ -659,7 +767,7 @@ def select_frames(times: np.ndarray, poses: np.ndarray, sharpness: np.ndarray,
         if kept and near(int(i), kept[-1]):
             # One view of the spot: the sharper of the two (a window edge can split a pause, its
             # blurry start in one window and its sharp middle in the next).
-            if sharp[i] > sharp[kept[-1]] and not (len(kept) > 1 and near(int(i), kept[-2])):
+            if better[i] > better[kept[-1]] and not (len(kept) > 1 and near(int(i), kept[-2])):
                 kept[-1] = int(i)
             continue
         kept.append(int(i))
@@ -675,6 +783,15 @@ def select_frames(times: np.ndarray, poses: np.ndarray, sharpness: np.ndarray,
                       "kept_percentile_of_all": round(float(
                           100.0 * np.mean(s_all <= np.median(s_kept))), 1)},
     })
+    if blur is not None:
+        b_all, b_kept = blur[idx], blur[rows] if len(rows) else np.zeros(1)
+        stats["blur_px"] = {"candidates_median": round(float(np.median(b_all)), 2),
+                            "kept_median": round(float(np.median(b_kept)), 2),
+                            "kept_p90": round(float(np.percentile(b_kept, 90)), 2),
+                            "kept_max": round(float(np.max(b_kept)), 2),
+                            "recording_median": round(float(np.nanmedian(blur)), 2),
+                            "recording_frac_le_max": (round(float(np.mean(blur <= max_blur_px)), 3)
+                                                      if max_blur_px is not None else None)}
     return Selection(rows, stats)
 
 
