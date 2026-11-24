@@ -53,6 +53,7 @@ import io
 import json
 import math
 import os
+import re
 import shlex
 import tempfile
 import threading
@@ -94,6 +95,10 @@ THREE_VERSION = "0.168.0"
 CDN = f"https://cdn.jsdelivr.net/npm/three@{THREE_VERSION}/"
 RENDER_PAGE = Path(__file__).with_name("render.html")
 RENDER_SPLAT_PAGE = Path(__file__).with_name("render_splat.html")
+# The room call's client: its SPARK_OPTIONS line is how the call's SparkRenderer draws splats, and
+# `SplatRenderer` draws with the same options, read from there.
+ROOM_CALL_APP_JS = Path(__file__).resolve().parents[2] / "room_ops" / "roomcall" / "web" / "app.js"
+_SPARK_OPTIONS_LINE = re.compile(r"^const SPARK_OPTIONS = (\{.*\});\s*$", re.M)
 
 # (x, y, z) -> (x, z, -y): the client's `world.rotation.x = -PI/2`, as a matrix.
 Z_UP_TO_THREE = np.array([[1.0, 0.0, 0.0, 0.0],
@@ -585,6 +590,28 @@ CHROMIUM_ARGS = ("--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-s
                  "--ignore-gpu-blocklist")
 # A bare Chromium build (no Playwright-managed browser, often in a container) also needs these.
 EXTERNAL_CHROMIUM_ARGS = ("--no-sandbox", "--in-process-gpu", "--no-zygote")
+# `SplatRenderer(gl=...)`: SwiftShader (the default, as every earlier number) or the Mac's GPU
+# through ANGLE on Metal, what a browser on a laptop does (scripts/eyeful/spark_score.py; ~1 s a
+# 1920 x 1440 view where SwiftShader takes 60-110 s). A GPU path needs `settle_ms`: it draws the
+# page's 6 frames before Spark's sort worker answers.
+GL_ARGS = {
+    "swiftshader": CHROMIUM_ARGS,
+    "metal": ("--use-gl=angle", "--use-angle=metal", "--ignore-gpu-blocklist",
+              "--enable-gpu-rasterization"),
+}
+
+
+def room_call_spark_options(app_js: Path = ROOM_CALL_APP_JS) -> dict:
+    """The room call's SparkRenderer options (`const SPARK_OPTIONS = {...};` in web/app.js, one
+    JSON line). Raises when the line is missing or not JSON, so a score never silently draws with
+    settings the call does not use."""
+    m = _SPARK_OPTIONS_LINE.search(app_js.read_text("utf-8"))
+    if not m:
+        raise RuntimeError(f"{app_js}: no one-line `const SPARK_OPTIONS = {{...}};`")
+    opts = json.loads(m.group(1))
+    if not isinstance(opts, dict):
+        raise RuntimeError(f"{app_js}: SPARK_OPTIONS is not an object")
+    return opts
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
@@ -650,11 +677,18 @@ class PlaywrightRenderer:
         self.version = ""
 
     def _args(self) -> list[str]:
-        args = list(CHROMIUM_ARGS)
+        args = list(self._gl_args())
         if self.executable:
             args += EXTERNAL_CHROMIUM_ARGS
         args += shlex.split(os.environ.get("LR_EVAL_CHROMIUM_ARGS", ""))
         return args
+
+    def _gl_args(self) -> Sequence[str]:
+        return CHROMIUM_ARGS
+
+    def _job(self) -> dict:
+        """What each page job carries beyond the asset, size and views."""
+        return {}
 
     def _route_three(self, page) -> None:
         if not self.three_dir:
@@ -702,7 +736,7 @@ class PlaywrightRenderer:
                                        f"{errors or exc}") from exc
                 for i in range(0, len(cameras), BATCH):
                     job = {"glb": self.asset, "width": size[0], "height": size[1],
-                           "views": cameras[i:i + BATCH]}
+                           "views": cameras[i:i + BATCH], **self._job()}
                     urls = page.evaluate("job => window.renderViews(job)", job)
                     for url in urls:
                         png = base64.b64decode(url.split(",", 1)[1])
@@ -715,13 +749,33 @@ class PlaywrightRenderer:
 
 class SplatRenderer(PlaywrightRenderer):
     """`PlaywrightRenderer` for a splat room: `render_splat.html` draws an SPZ with Spark 2.3.1 on
-    three.js 0.180, in the same software WebGL, from the same cameras. Its ``render`` takes the
-    SPZ bytes where the glb renderer takes a glb. three.js and Spark come from the CDN."""
+    three.js 0.180, from the same cameras. Its ``render`` takes the SPZ bytes where the glb
+    renderer takes a glb. three.js and Spark come from the CDN.
+
+    ``spark``: the SparkRenderer options, by default the room call's own (`room_call_spark_options`),
+    so a score is what the call draws. ``gl``: "swiftshader" (default, software WebGL, as the glb
+    renderer) or "metal" (this Mac's GPU, `GL_ARGS`). ``settle_ms``: draw each view at least this
+    long and until three frames match before reading it (0: the page's 6 frames)."""
 
     name = "playwright-chromium-spark"
     page_file = RENDER_SPLAT_PAGE
     asset = "scene.spz"
     asset_kind = "application/octet-stream"
+
+    def __init__(self, *, spark: dict | None = None, gl: str = "swiftshader", settle_ms: int = 0,
+                 **kwargs) -> None:
+        super().__init__(**kwargs)
+        if gl not in GL_ARGS:
+            raise ValueError(f"gl must be one of {sorted(GL_ARGS)}, not {gl!r}")
+        self.spark = dict(room_call_spark_options() if spark is None else spark)
+        self.gl = gl
+        self.settle_ms = int(settle_ms)
+
+    def _gl_args(self) -> Sequence[str]:
+        return GL_ARGS[self.gl]
+
+    def _job(self) -> dict:
+        return {"spark": self.spark, "settleMs": self.settle_ms}
 
     def _route_three(self, page) -> None:     # $LR_EVAL_THREE_DIR holds 0.168, not 0.180
         return

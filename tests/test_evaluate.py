@@ -1047,3 +1047,24 @@ def test_render_tests_are_opt_in():
     """The render marker is registered and deselected by default (pyproject addopts)."""
     text = (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
     assert "render:" in text and "not render" in text
+
+
+def test_splat_scores_draw_with_the_room_calls_own_spark_options(tmp_path):
+    """The splat scorer reads the call's SparkRenderer options from web/app.js (one JSON line),
+    the call builds its SparkRenderer from that same object, and the render page applies them."""
+    opts = fidelity.room_call_spark_options()
+    assert opts["maxStdDev"] == pytest.approx(math.sqrt(5))
+    assert opts["maxPixelRadius"] > 512              # Spark's default cap, lifted
+    app = fidelity.ROOM_CALL_APP_JS.read_text("utf-8")
+    assert "new mod.SparkRenderer({ renderer, ...SPARK_OPTIONS })" in app
+    assert app.count("new mod.SparkRenderer(") == 1
+    page = fidelity.RENDER_SPLAT_PAGE.read_text("utf-8")
+    for key in opts:
+        assert f"'{key}'" in page
+    bad = tmp_path / "app.js"
+    bad.write_text("const SPARK_OPTIONS = { maxStdDev: Math.sqrt(5) };\n")
+    with pytest.raises(json.JSONDecodeError):
+        fidelity.room_call_spark_options(bad)
+    bad.write_text("const nothing = 1;\n")
+    with pytest.raises(RuntimeError):
+        fidelity.room_call_spark_options(bad)

@@ -1,0 +1,6 @@
+  B_5000 view 70: spark 25.79 dB, trainer 25.20 dB, spark vs trainer 29.61 dB, coverage 0.937
+B_5000_splats_sh3_metal_call_r2048: 71 views, Spark PSNR 24.563 vs trainer 24.952 (gap -0.389 dB); SSIM 0.8526 vs 0.8662; LPIPS 0.3730 vs 0.3818; render 168 s
+  B_1250 view 70: spark 23.05 dB, trainer 23.84 dB, spark vs trainer 29.28 dB, coverage 0.867
+B_1250_splats_sh3_metal_call_r2048: 71 views, Spark PSNR 21.916 vs trainer 23.870 (gap -1.953 dB); SSIM 0.8031 vs 0.8469; LPIPS 0.4991 vs 0.4959; render 165 s
+B_1250_splats_sh3_metal_call_r1e5: 71 views, Spark PSNR 21.927 vs trainer 23.870 (gap -1.943 dB); SSIM 0.8046 vs 0.8469; LPIPS 0.4984 vs 0.4959; render 162 s
+B_5000_splats_sh3_metal_call_r4096: 71 views, Spark PSNR 24.651 vs trainer 24.952 (gap -0.300 dB); SSIM 0.8539 vs 0.8662; LPIPS 0.3723 vs 0.3818; render 157 s

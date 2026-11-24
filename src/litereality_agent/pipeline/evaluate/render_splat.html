@@ -18,6 +18,9 @@
 // each camera it is given, hand back PNGs. Splats carry the photos' own light, so there are no
 // lights, environment or tone mapping here (as in the call, where Spark draws them unlit).
 // Spark sorts splats asynchronously, so each view is drawn a few times before it is read.
+// Each job carries the call's own SparkRenderer options (`spark`, read from roomcall web/app.js
+// SPARK_OPTIONS by fidelity.py) and may ask for each view to be drawn until its sort settles
+// (`settleMs`): a fast GPU draws the usual 6 frames before the sort worker answers.
 import * as THREE from 'three';
 import { SparkRenderer, SplatMesh } from '@sparkjsdev/spark';
 
@@ -27,7 +30,12 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true
 renderer.setPixelRatio(1);
 renderer.setClearColor(0x000000, 0);
 const scene = new THREE.Scene();
-scene.add(new SparkRenderer({ renderer, maxStdDev: Math.sqrt(5) }));
+// The call's settings before 2026-11 (maxStdDev sqrt(5), Spark's defaults otherwise), for a job
+// that names none; a job's `spark` options are set on top, each job.
+const spark = new SparkRenderer({ renderer, maxStdDev: Math.sqrt(5) });
+scene.add(spark);
+const SPARK_KEYS = ['maxStdDev', 'minPixelRadius', 'maxPixelRadius', 'minAlpha', 'blurAmount',
+                    'preBlurAmount', 'clipXY', 'falloff', 'focalAdjustment', 'sortRadial'];
 const world = new THREE.Group();
 world.rotation.x = -Math.PI / 2;
 scene.add(world);
@@ -60,13 +68,24 @@ function place(view) {
 const probe = document.createElement('canvas');
 probe.width = 64; probe.height = 48;
 const probeCtx = probe.getContext('2d', { willReadFrequently: true });
-function drawn() {
+function snapshot() {
   probeCtx.clearRect(0, 0, probe.width, probe.height);
   probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
-  const px = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+  return probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+}
+function drawn() {
+  const px = snapshot();
   for (let k = 3; k < px.length; k += 4) if (px[k]) return true;
   return false;
 }
+function same(a, b) {
+  if (!a || !b) return false;
+  for (let k = 0; k < a.length; k++) if (a[k] !== b[k]) return false;
+  return true;
+}
+// With `settleMs`, a view keeps being drawn until that long has passed AND three successive
+// frames look the same (up to this long): the view is read only once its own sort is in.
+const SETTLE_MAX_MS = 20000;
 // Right after a load Spark draws nothing until its first sort comes back from its worker: those
 // renders return in milliseconds, and six of them pass before it does. The first view used to be
 // read then, blank. So a view whose usual renders left nothing keeps rendering, up to this long
@@ -74,13 +93,31 @@ function drawn() {
 const DRAW_WAIT_MS = 60000;
 
 window.renderViews = async (job) => {
+  for (const k of SPARK_KEYS) {
+    if (job.spark && job.spark[k] !== undefined && job.spark[k] !== null) spark[k] = job.spark[k];
+  }
   await load(job.glb);
   renderer.setSize(job.width, job.height, false);
+  const settleMs = job.settleMs ?? 0;
   const out = [];
   for (const view of job.views) {
     place(view);
     for (let i = 0; i < 6; i++) { renderer.render(scene, camera); await frame(); }
     renderer.render(scene, camera);
+    if (settleMs > 0) {
+      const t0 = performance.now();
+      let prev = null, stable = 0;
+      while (true) {
+        await frame();
+        renderer.render(scene, camera);
+        const t = performance.now() - t0;
+        if (t < settleMs) continue;
+        const snap = snapshot();
+        stable = same(snap, prev) ? stable + 1 : 0;
+        prev = snap;
+        if (stable >= 3 || t > SETTLE_MAX_MS) break;
+      }
+    }
     if (!drawn()) {
       const until = performance.now() + DRAW_WAIT_MS;
       while (performance.now() < until) {

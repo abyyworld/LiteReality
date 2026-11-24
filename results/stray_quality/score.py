@@ -2,11 +2,16 @@
 
 Every variant is judged the same way, by the same renderer:
 
-* renderer: `pipeline/evaluate`'s `SplatRenderer` - headless Chromium (Playwright), SwiftShader
-  software WebGL, Spark 2.3.1 on three.js 0.180 (the room call's own splat renderer), so the
-  numbers are what a viewer sees, at the export's SH degree (deploy/modal/splat
-  "export_sh_degree": 1 by default, 3 in the q_* presets; the SPZ header says, "spz_sh_degree").
-  Not gsplat: the trainer's own PSNR is in report.json beside it.
+* renderer: `pipeline/evaluate`'s `SplatRenderer` - headless Chromium (Playwright), Spark 2.3.1
+  on three.js 0.180 with the room call's own SparkRenderer options (SPARK_OPTIONS in roomcall
+  web/app.js, read from there; `--spark KEY=VALUE` overrides one, e.g. maxPixelRadius=512 for the
+  call before 2026-11), so the numbers are what a viewer sees, at the export's SH degree
+  (deploy/modal/splat "export_sh_degree": 1 by default, 3 in the q_* presets; the SPZ header
+  says, "spz_sh_degree"). Not gsplat: the trainer's own PSNR is in report.json beside it.
+  `--gl metal` (default) draws on this Mac's GPU (ANGLE on Metal, ~1 s a full-size view) and
+  reads each view once its sort has settled (`--settle-ms`, 1000); `--gl swiftshader` is the
+  software WebGL every score before 2026-11 used (60-110 s a full-size view, read after 6 frames,
+  which can be before the sort is in: results/eyeful/README.md).
 * eval set: the frames in eval_frames.txt (odometry rows of recording 901a305fdf, picked by
   pick_eval.py from the pool import ~/LiteReality-scans/stray_atrium_pool). Every training scan
   was imported with `--exclude eval_frames.txt --exclude-span 0.2`, so no variant trained on
@@ -19,7 +24,8 @@ Every variant is judged the same way, by the same renderer:
   480 x 360 cannot see blur: a photo blurred by sigma 2 px still scores 37 dB against itself
   there (31.5 at 1920; results/diagnosis/review_blur/scale_check.json). So:
 * `--full`: the same metrics at the photo's own 1920 x 1440 (rendered 1:1, ~2 min a view in
-  SwiftShader; `--views N` scores an even spread of N), plus `psnr_cc_480` from the same render.
+  SwiftShader, seconds on Metal; `--views N` scores an even spread of N), plus `psnr_cc_480` from
+  the same render.
 * sharpness, at either size (`sharpness`): the render's high-frequency power over the photo's in
   the top band of the scored image (`hf_ratio`, HF_BAND cycles/pixel: 0.125-0.5 at 1920 is
   detail the 480 metric never sees), the Laplacian-variance ratio (`lap_ratio`) and the
@@ -321,9 +327,23 @@ def _spread(items: list, most: int | None) -> list:
     return [items[i] for i in np.linspace(0, len(items) - 1, most).round().astype(int)]
 
 
+def spark_settings(overrides: list[str] | None = None) -> dict:
+    """The room call's SparkRenderer options, with `KEY=VALUE` overrides (numbers or true/false)."""
+    opts = _fd().room_call_spark_options()
+    for item in overrides or []:
+        key, _, value = item.partition("=")
+        if not key or not value:
+            raise SystemExit(f"--spark wants KEY=VALUE, not {item!r}")
+        opts[key] = {"true": True, "false": False}.get(value.lower(), None)
+        if opts[key] is None:
+            opts[key] = float(value)
+    return opts
+
+
 def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin", *,
           eval_set: str = "sharp", full: bool = False, views_limit: int | None = None,
-          results: Path = HERE, settle: bool = False) -> dict:
+          results: Path = HERE, settle: bool = False, gl: str = "metal",
+          settle_ms: int | None = None, spark: dict | None = None) -> dict:
     fd = _fd()
     from litereality_agent.pipeline.quickroom.roomplan import parse_room
 
@@ -340,7 +360,10 @@ def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin", *,
     plan = parse_room(scan)
     objects, openings = fd.scan_boxes(plan)
     spz_bytes = (out_dir / spz_file).read_bytes()
-    renderer = fd.SplatRenderer(timeout_s=3600 if full else 600)
+    spark = spark_settings() if spark is None else spark
+    settle_ms = (1000 if gl != "swiftshader" else 0) if settle_ms is None else settle_ms
+    renderer = fd.SplatRenderer(timeout_s=3600 if full else 600, spark=spark, gl=gl,
+                                settle_ms=settle_ms)
     size = SIZE
     lp = Lpips()
     rows, sheet = [], []
@@ -411,7 +434,8 @@ def score(variant: str, out_dir: Path, spz_file: str = "raw.spz.bin", *,
     out = {
         "variant": variant, "out_dir": str(out_dir), "scan": str(scan), "spz": spz_file,
         "spz_sh_degree": spz_sh_degree(raw),
-        "renderer": f"{renderer.name} {renderer.version} (SwiftShader, Spark 2.3.1)",
+        "renderer": f"{renderer.name} {renderer.version} ({gl}, Spark 2.3.1)",
+        "gl": gl, "settle_ms": settle_ms, "spark": spark,
         "eval_set": eval_set, "eval_rows": str(rows_file), "pool": str(pool), "settle": settle,
         "size": list(size), "render_scale": 1 if full else SCALE, "views": len(rows),
         "alignment_vs_pool": drift, "render_s": round(render_s, 1),
@@ -548,6 +572,14 @@ def main(argv: list[str] | None = None) -> int:
                             "a camera jump may use the last view's splat sort); 2x render time")
         s.add_argument("--results", default=None, metavar="DIR",
                        help="where scores and sheets go (default beside this script)")
+        s.add_argument("--gl", choices=("metal", "swiftshader"), default="metal",
+                       help="eval: this Mac's GPU (default) or software WebGL (earlier scores)")
+        s.add_argument("--settle-ms", type=int, default=None, metavar="MS",
+                       help="eval: draw each view at least this long and until 3 frames match "
+                            "(default 1000 on metal, 0 = 6 frames on swiftshader)")
+        s.add_argument("--spark", action="append", default=[], metavar="KEY=VALUE",
+                       help="eval: override one of the call's SparkRenderer options, e.g. "
+                            "maxPixelRadius=512 (repeatable)")
     for cmd in ("table", "compare"):
         s = sub.add_parser(cmd)
         s.add_argument("variants", nargs="+")
@@ -559,7 +591,8 @@ def main(argv: list[str] | None = None) -> int:
             results = Path(a.results).expanduser() if a.results else HERE
             score(a.variant, out, a.spz, eval_set=a.eval_set, full=a.full, views_limit=a.views,
                   results=results if results.is_absolute() else REPO / results,
-                  settle=a.settle)
+                  settle=a.settle, gl=a.gl, settle_ms=a.settle_ms,
+                  spark=spark_settings(a.spark))
         if a.cmd in ("run", "wander"):
             wander(a.variant, out, raw=a.raw)
     elif a.cmd == "table":

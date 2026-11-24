@@ -1179,6 +1179,15 @@ function stepAvatars(dt, realDt = dt) {
 // removing it — Spark shows those only after its next (asynchronous) depth sort; `opacity` shows
 // at once. Anything Spark cannot do here leaves everyone a capsule and hologram, as before.
 const spark = { mod: null, sr: null, loading: null, failed: false, why: '' };
+// How the one SparkRenderer draws every splat (the photoreal room and the bodies), on top of
+// Spark 2.3.1's defaults. Keep it one JSON line: the browser scorer reads it from here
+// (pipeline/evaluate/fidelity.py `room_call_spark_options`), so scores are what the call draws.
+// maxStdDev sqrt(5) (Spark's default is sqrt(8)). maxPixelRadius 4096 (Spark's default 512):
+// Spark shrinks any splat wider than this on screen, which cost the Eyeful room's short-trained
+// splats 1.9-2.0 dB (B_5000 22.74 -> 24.65 dB at 4096, the same as no cap; 2048 gives 24.56).
+// Frame rate is unchanged on atrium v2 at 1920x1080 (M4, Metal); the cap stays finite so a splat
+// right in front of the camera cannot fill the screen (results/spark_cap/README.md).
+const SPARK_OPTIONS = {"maxStdDev": 2.23606797749979, "maxPixelRadius": 4096};
 const bodyTmp = { q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3() };
 let floorY = 0;                                    // three Y of the room's floor (manifest floor_z)
 
@@ -1194,7 +1203,7 @@ function loadSpark() {
   if (spark.failed) return Promise.reject(new Error('full bodies unavailable: ' + spark.why));
   spark.loading ??= (async () => {
     const mod = await withTimeout(import('@sparkjsdev/spark'), 30000);
-    const sr = new mod.SparkRenderer({ renderer, maxStdDev: Math.sqrt(5) });
+    const sr = new mod.SparkRenderer({ renderer, ...SPARK_OPTIONS });
     sr.renderOrder = 1;                            // splats first, then live faces and labels
     scene.add(sr);
     spark.mod = mod; spark.sr = sr;

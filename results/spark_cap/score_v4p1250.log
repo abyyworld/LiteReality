@@ -1,0 +1,4 @@
+v4p1250_r512_random_full: PSNR 19.102 (cc 20.8229), SSIM 0.8293, LPIPS 0.3714, openings 20.5842, objects 18.5599, coverage 0.9671, hf_ratio 0.4763, lap_ratio 0.9913 over 
+v4p1250_r512_sharp_full: PSNR 18.7811 (cc 20.3084), SSIM 0.7789, LPIPS 0.4235, openings 19.6113, objects 18.3369, coverage 0.9631, hf_ratio 0.1111, lap_ratio 0.2772 over 
+v4p1250_r1e5_random_full: PSNR 19.099 (cc 20.8278), SSIM 0.8295, LPIPS 0.3715, openings 20.5865, objects 18.5585, coverage 0.9672, hf_ratio 0.4754, lap_ratio 0.9913 over 
+v4p1250_r1e5_sharp_full: PSNR 18.7971 (cc 20.319), SSIM 0.7793, LPIPS 0.4233, openings 19.6198, objects 18.377, coverage 0.9632, hf_ratio 0.1108, lap_ratio 0.2762 over 29
