@@ -1,0 +1,268 @@
+{
+ "scene": "office1b",
+ "split": "official: train 1491 / test 71 (all camera 17)",
+ "resolution": "images_4 undistorted PINHOLE ~1477x2250, data_factor 1",
+ "metric_impl": "gsplat simple_trainer eval: torchmetrics PSNR(data_range=1), SSIM, LPIPS(alex, normalize=True), mean over the 71 test images, SH3 render, no colour correction (cc_* = after per-image affine colour fit, for reference only)",
+ "published_3dgs_mean_pinhole": {
+  "psnr": 27.42,
+  "ssim": 0.877,
+  "lpips": 0.291
+ },
+ "runs": {
+  "A_30000": {
+   "arm": "A",
+   "steps": 30000,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "copy_s": 1.7,
+   "train_s": 702.3,
+   "total_s": 727.7,
+   "splats": 1759494,
+   "ply_mb": 415.2,
+   "renders": 71,
+   "command": [
+    "/opt/gsplat/examples/simple_trainer.py",
+    "default",
+    "--data-dir",
+    "/tmp/eyeful/data",
+    "--data-factor",
+    "1",
+    "--result-dir",
+    "/tmp/eyeful/result",
+    "--disable-viewer",
+    "--disable-video",
+    "--tb-every",
+    "0",
+    "--max-steps",
+    "30000",
+    "--save-ply",
+    "--ply-steps",
+    "30000",
+    "--save-steps",
+    "30000",
+    "--eval-steps",
+    "7000",
+    "30000"
+   ],
+   "env": {},
+   "spz_mb": {
+    "spz_sh3_mb": 31.6
+   },
+   "metrics": {
+    "val_step29999": {
+     "psnr": 27.5697,
+     "ssim": 0.884,
+     "lpips": 0.3413,
+     "cc_psnr": 29.4964,
+     "cc_ssim": 0.8868,
+     "cc_lpips": 0.342,
+     "ellipse_time": 0.0034,
+     "num_GS": 1759494
+    },
+    "val_step6999": {
+     "psnr": 26.8207,
+     "ssim": 0.8685,
+     "lpips": 0.4549,
+     "cc_psnr": 28.4935,
+     "cc_ssim": 0.8727,
+     "cc_lpips": 0.4552,
+     "ellipse_time": 0.0032,
+     "num_GS": 1561082
+    }
+   },
+   "world_transform_colmap_to_splat_frame": [
+    [
+     0.5364334236861283,
+     -0.0817069625595112,
+     -0.03422803833419423,
+     0.4970839180253433
+    ],
+    [
+     -0.03324522971242856,
+     0.00903830906629931,
+     -0.5426061813658588,
+     -0.12512659801612744
+    ],
+    [
+     0.08211175945207233,
+     0.5374483097231962,
+     0.003921443762465335,
+     0.06802208893140982
+    ],
+    [
+     0.0,
+     0.0,
+     0.0,
+     1.0
+    ]
+   ],
+   "scene_scale": 1.4000096480273347,
+   "modal_cost": {
+    "app": "ap-AQyVscUfktVB80FuPoOHGF",
+    "usd": 0.956,
+    "note": "includes ~60 s idle scaledown before the app was stopped by hand"
+   }
+  },
+  "B_5000": {
+   "arm": "B",
+   "steps": 5000,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "copy_s": 1.1,
+   "train_s": 362.7,
+   "total_s": 377.9,
+   "splats": 1290323,
+   "ply_mb": 304.5,
+   "renders": 71,
+   "command": [
+    "/opt/gsplat/examples/simple_trainer.py",
+    "mcmc",
+    "--data-dir",
+    "/tmp/eyeful/data",
+    "--data-factor",
+    "1",
+    "--result-dir",
+    "/tmp/eyeful/result",
+    "--disable-viewer",
+    "--disable-video",
+    "--tb-every",
+    "0",
+    "--max-steps",
+    "5000",
+    "--save-ply",
+    "--ply-steps",
+    "5000",
+    "--save-steps",
+    "5000",
+    "--no-normalize-world-space",
+    "--batch-size",
+    "4",
+    "--eval-steps",
+    "5000",
+    "--sh-degree",
+    "3",
+    "--strategy.cap-max",
+    "800000",
+    "--use-fused-bilagrid",
+    "--antialiased",
+    "--visible-adam",
+    "--strategy.refine-start-iter",
+    "357",
+    "--strategy.refine-every",
+    "71",
+    "--sh-degree-interval",
+    "714"
+   ],
+   "env": {
+    "LR_TRAIN_CROP": "1"
+   },
+   "spz_mb": {
+    "spz_sh3_mb": 23.2,
+    "spz_sh1_mb": 21.8
+   },
+   "metrics": {
+    "val_step4999": {
+     "psnr": 24.9394,
+     "ssim": 0.8681,
+     "lpips": 0.3944,
+     "cc_psnr": 28.2547,
+     "cc_ssim": 0.8788,
+     "cc_lpips": 0.3856,
+     "ellipse_time": 0.0032,
+     "num_GS": 1290323
+    }
+   },
+   "modal_cost": {
+    "app": "ap-7W32oSjtH916mYXHrBa4iv",
+    "usd": 0.462
+   }
+  },
+  "B_1250": {
+   "arm": "B",
+   "steps": 1250,
+   "gpu": "NVIDIA H100 80GB HBM3",
+   "copy_s": 10.4,
+   "train_s": 269.7,
+   "total_s": 304.3,
+   "splats": 1290323,
+   "ply_mb": 304.5,
+   "renders": 71,
+   "command": [
+    "/opt/gsplat/examples/simple_trainer.py",
+    "mcmc",
+    "--data-dir",
+    "/tmp/eyeful/data",
+    "--data-factor",
+    "1",
+    "--result-dir",
+    "/tmp/eyeful/result",
+    "--disable-viewer",
+    "--disable-video",
+    "--tb-every",
+    "0",
+    "--max-steps",
+    "1250",
+    "--save-ply",
+    "--ply-steps",
+    "1250",
+    "--save-steps",
+    "1250",
+    "--no-normalize-world-space",
+    "--batch-size",
+    "4",
+    "--eval-steps",
+    "1250",
+    "--sh-degree",
+    "3",
+    "--strategy.cap-max",
+    "800000",
+    "--use-fused-bilagrid",
+    "--antialiased",
+    "--visible-adam",
+    "--strategy.refine-start-iter",
+    "89",
+    "--strategy.refine-every",
+    "18",
+    "--sh-degree-interval",
+    "179"
+   ],
+   "env": {
+    "LR_TRAIN_CROP": "1"
+   },
+   "spz_mb": {
+    "spz_sh3_mb": 20.0,
+    "spz_sh1_mb": 19.9
+   },
+   "metrics": {
+    "val_step1249": {
+     "psnr": 23.8818,
+     "ssim": 0.8488,
+     "lpips": 0.515,
+     "cc_psnr": 26.6085,
+     "cc_ssim": 0.8603,
+     "cc_lpips": 0.5079,
+     "ellipse_time": 0.0023,
+     "num_GS": 1290323
+    }
+   },
+   "modal_cost": {
+    "app": "ap-aZ5mXe1zouCGUEWnbPKMUP",
+    "usd": 0.386,
+    "note": "eval wrote 2K PNGs (~150 s); fixed to JPEG for later runs"
+   }
+  }
+ },
+ "modal_spend": {
+  "this_step_by_app_usd": 1.804,
+  "step1_usd": 0.024,
+  "workflow_total_usd": 1.83,
+  "workspace_metered_before_after": [
+   16.56,
+   18.75
+  ],
+  "workspace_ephemeral_before_after": [
+   6.88,
+   9.07
+  ],
+  "note": "workspace totals also include other apps run today by others (litereality-splat deployed H100 0.32, diag-gsplat-render 0.02); billing may lag a few cents. No eyeful app left running."
+ },
+ "volume": "litereality-eyeful: /office1b/runs/{A_30000,B_5000,B_1250}/ (point_cloud.ply, splats_sh*.spz, 71 render JPGs, stats, trainer.log, result.json)"
+}

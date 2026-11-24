@@ -1,0 +1,159 @@
+{
+ "run": "A_30000",
+ "spz": "splats_sh3.spz",
+ "spz_mb": 31.6,
+ "splats": 1759494,
+ "renderer": "playwright-chromium-spark 159.0.8154.6",
+ "gl": "swiftshader",
+ "settle": false,
+ "prerotate": false,
+ "preset": "call",
+ "page": "render_splat_eyeful.html",
+ "spark_options": {
+  "maxStdDev": 2.23606797749979,
+  "ext": false,
+  "near": 0.05
+ },
+ "settle_ms": 30000,
+ "settle_frames": [
+  {
+   "n": 16,
+   "ms": 71099
+  },
+  {
+   "n": 6,
+   "ms": 72807
+  },
+  {
+   "n": 6,
+   "ms": 81473
+  },
+  {
+   "n": 6,
+   "ms": 71262
+  }
+ ],
+ "views": 4,
+ "view_indices": [
+  0,
+  20,
+  40,
+  60
+ ],
+ "size": [
+  1478,
+  2232
+ ],
+ "render_scale": 1,
+ "background": "black",
+ "render_s": 349.6,
+ "trainer_reported_all71": {
+  "psnr": 27.569747924804688,
+  "ssim": 0.8840305209159851,
+  "lpips": 0.3412942886352539
+ },
+ "summary": {
+  "coverage": 0.995,
+  "spark_psnr": 26.1258,
+  "spark_ssim": 0.8618,
+  "spark_lpips": 0.4005,
+  "trainer_psnr": 28.226,
+  "trainer_ssim": 0.8805,
+  "trainer_lpips": 0.3416,
+  "spark_vs_trainer_psnr": 29.6707,
+  "gap_psnr_db": -2.1002,
+  "gap_ssim": -0.0187,
+  "gap_lpips": 0.0589
+ },
+ "metric_cpu_fallbacks": 0,
+ "per_view": [
+  {
+   "i": 0,
+   "name": "17_DSC0001.jpg",
+   "coverage": 0.9952,
+   "spark_psnr": 27.282688895596916,
+   "spark_ssim": 0.8891662329886849,
+   "spark_lpips": 0.3543710708618164,
+   "trainer_psnr": 26.3257233864425,
+   "trainer_ssim": 0.8920474855051419,
+   "trainer_lpips": 0.3296758234500885,
+   "spark_vs_trainer_psnr": 28.945980016229296,
+   "mean_rgb_spark": [
+    0.3623,
+    0.3762,
+    0.3842
+   ],
+   "mean_rgb_trainer": [
+    0.3502,
+    0.3654,
+    0.3765
+   ]
+  },
+  {
+   "i": 20,
+   "name": "17_DSC0181.jpg",
+   "coverage": 0.9933,
+   "spark_psnr": 26.995540241189573,
+   "spark_ssim": 0.8513231880751364,
+   "spark_lpips": 0.4188987612724304,
+   "trainer_psnr": 28.99454220047516,
+   "trainer_ssim": 0.8666755298530945,
+   "trainer_lpips": 0.378997802734375,
+   "spark_vs_trainer_psnr": 32.26251474210131,
+   "mean_rgb_spark": [
+    0.2655,
+    0.2799,
+    0.286
+   ],
+   "mean_rgb_trainer": [
+    0.2704,
+    0.2838,
+    0.292
+   ]
+  },
+  {
+   "i": 40,
+   "name": "17_DSC0361.jpg",
+   "coverage": 0.9937,
+   "spark_psnr": 24.322565237291087,
+   "spark_ssim": 0.8087006537055808,
+   "spark_lpips": 0.4453284740447998,
+   "trainer_psnr": 29.586325833126676,
+   "trainer_ssim": 0.8548466228946745,
+   "trainer_lpips": 0.3305853307247162,
+   "spark_vs_trainer_psnr": 25.72255255588302,
+   "mean_rgb_spark": [
+    0.2418,
+    0.2578,
+    0.2701
+   ],
+   "mean_rgb_trainer": [
+    0.2549,
+    0.2728,
+    0.2875
+   ]
+  },
+  {
+   "i": 60,
+   "name": "17_DSC0541.jpg",
+   "coverage": 0.9979,
+   "spark_psnr": 25.9025674819554,
+   "spark_ssim": 0.8980349693058555,
+   "spark_lpips": 0.38347846269607544,
+   "trainer_psnr": 27.99732522374134,
+   "trainer_ssim": 0.9084535161268302,
+   "trainer_lpips": 0.32725855708122253,
+   "spark_vs_trainer_psnr": 31.75156520526365,
+   "mean_rgb_spark": [
+    0.3406,
+    0.3568,
+    0.3686
+   ],
+   "mean_rgb_trainer": [
+    0.3396,
+    0.3554,
+    0.3632
+   ]
+  }
+ ]
+}

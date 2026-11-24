@@ -1,0 +1,513 @@
+{
+ "step": "3 (browser score): Spark 2.3.1 render of each arm's exported SPZ at the 71 official camera-17 test cameras, scored against the same ground truth as the trainer",
+ "headline_gap_db_call_settings": {
+  "A_30000": -0.5,
+  "B_5000": -2.21,
+  "B_1250": -3.98
+ },
+ "headline_gap_db_matched_settings": {
+  "A_30000": -0.12,
+  "B_5000": -0.06,
+  "B_1250": -1.58
+ },
+ "protocol": {
+  "renderer": "headless Chromium (Playwright chromium_headless_shell 1255, Chromium 159) on this Mac's GPU (ANGLE Metal), three.js 0.180 + Spark 2.3.1, page scripts/eyeful/render_splat_eyeful.html",
+  "cameras": "COLMAP world->camera R,t + PINHOLE K from the dataset's sparse/0 (scripts/eyeful/fetch_eval.py), 1478x2232 rendered 1:1; arm A moved into gsplat's renormalised frame by result.json world_transform (scale removed from the rotation)",
+  "background": "black, as gsplat eval",
+  "settle": "each view drawn >= 1000 ms and until 3 successive frames agree (Spark sorts in a worker); the pipeline/evaluate page draws 6 frames and can read a view before its sort is back",
+  "metrics": "PSNR (data range 1, float64), SSIM = torchmetrics' definition re-implemented in float64 numpy (within 3e-4 of torchmetrics), LPIPS = torchmetrics AlexNet normalize=True on MPS (double-checked, CPU fallback). Mean over all 71 test images.",
+  "trainer_reference": "the trainer's own q92 JPEG renders scored with the same code (A 27.53 / 0.880 / 0.335 vs the trainer's float 27.57 / 0.884 / 0.341), so the gap is Spark minus trainer on identical ground truth and code"
+ },
+ "findings": [
+  "Arm A (gsplat default 30k): with the room call's Spark settings the browser loses 0.50 dB PSNR (27.03 vs 27.53), SSIM -0.008, LPIPS +0.024. Matching Spark to the trainer recovers all but 0.12 dB.",
+  "Arm A split: maxStdDev sqrt(5)->3 +0.09 dB; preBlur 0.3 without opacity compensation (A trained without --antialiased; Spark's default blurAmount compensates) +0.06; lifting maxPixelRadius 512, minAlpha 1/255, near 0.01, depth sort +0.22; float32 centres (extSplats) +0.01 PSNR, +0.001 SSIM.",
+  "Arm B (our room settings): the call settings lose 2.21 dB (B_5000) and 3.98 dB (B_1250). Almost all of it is Spark's maxPixelRadius 512 cap: lifting only that takes B_5000 from -2.21 to -0.30 dB. B's MCMC splats were never densified past the 1.29M tie-point seeds, so near the camera they are large and get clipped, leaving holes (coverage 0.85 / 0.76).",
+  "B_1250 keeps -1.58 dB even matched: its test views sit inside huge near-camera 'fog' splats whose centres are off screen; gsplat renders them with a clamped EWA Jacobian, Spark culls them (clipXY 1.4). Raising clipXY makes it worse: Spark does not clamp the Jacobian, so such splats blow up (A, 7 views: clipXY 100 -> 15.6 dB).",
+  "SH1 export (the deployed default) costs only 0.05-0.11 dB more than SH3 for B.",
+  "Sort timing: the pipeline/evaluate render page reads a view after 6 frames; for a 1.7M-splat room that can be before Spark's sort for the new view is back (A view 40: chair missing, 24.32 vs 28.02 dB settled). In SwiftShader (the software path every earlier score used) views 20 and 40 stayed stale even after 70 s of drawing; views 0 and 60 matched Metal to 0.01 dB. So SwiftShader-based scores of big rooms may carry stale-sort errors.",
+  "Bottom line: for a properly trained splat (A) the browser path costs about 0.5 dB as deployed, 0.1 dB at best; for our room-preset splats (B) the deployed Spark settings cost 2-4 dB, mostly the 512 px splat radius cap."
+ ],
+ "modal_cost_this_step_usd": 0.0003,
+ "modal_note": "Only scripts/eyeful/fetch_eval.py (one 1-CPU container, staged by the first attempt at this step) touched Modal: $0.0003. Billing for today's litereality-eyeful apps: 0.956 + 0.498 + 0.386 + 0.017 + 0.0074 + 0.0003 = $1.865 for the whole workflow. No eyeful app running, nothing deployed.",
+ "views": 71,
+ "runs": {
+  "A_30000": {
+   "trainer_reported_all71": {
+    "psnr": 27.5697,
+    "ssim": 0.884,
+    "lpips": 0.3413
+   },
+   "trainer_jpeg_recomputed_all71": {
+    "psnr": 27.5285,
+    "ssim": 0.8805,
+    "lpips": 0.3351
+   },
+   "spark": {
+    "sh3_call": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 27.0305,
+      "ssim": 0.8725,
+      "lpips": 0.3589
+     },
+     "trainer_same_views": {
+      "psnr": 27.5285,
+      "ssim": 0.8805,
+      "lpips": 0.3351
+     },
+     "gap_psnr_db": -0.498,
+     "gap_ssim": -0.008,
+     "gap_lpips": 0.0238,
+     "spark_vs_trainer_psnr": 29.0193,
+     "coverage": 0.9913,
+     "render_s": 117.7,
+     "settle_ms_mean": 1263,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    },
+    "sh3_std3": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 27.1151,
+      "ssim": 0.8751,
+      "lpips": 0.3571
+     },
+     "trainer_same_views": {
+      "psnr": 27.5285,
+      "ssim": 0.8805,
+      "lpips": 0.3351
+     },
+     "gap_psnr_db": -0.4134,
+     "gap_ssim": -0.0054,
+     "gap_lpips": 0.022,
+     "spark_vs_trainer_psnr": 29.05,
+     "coverage": 0.992,
+     "render_s": 122.5,
+     "settle_ms_mean": 1336,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    },
+    "sh3_blur": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": false,
+      "near": 0.05,
+      "preBlurAmount": 0.3,
+      "blurAmount": 0.0
+     },
+     "spark": {
+      "psnr": 27.1789,
+      "ssim": 0.874,
+      "lpips": 0.3528
+     },
+     "trainer_same_views": {
+      "psnr": 27.5285,
+      "ssim": 0.8805,
+      "lpips": 0.3351
+     },
+     "gap_psnr_db": -0.3496,
+     "gap_ssim": -0.0065,
+     "gap_lpips": 0.0177,
+     "spark_vs_trainer_psnr": 29.1421,
+     "coverage": 0.9927,
+     "render_s": 124.4,
+     "settle_ms_mean": 1363,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    },
+    "sh3_limits": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": false,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false,
+      "preBlurAmount": 0.3,
+      "blurAmount": 0.0
+     },
+     "spark": {
+      "psnr": 27.3975,
+      "ssim": 0.8778,
+      "lpips": 0.3439
+     },
+     "trainer_same_views": {
+      "psnr": 27.5285,
+      "ssim": 0.8805,
+      "lpips": 0.3351
+     },
+     "gap_psnr_db": -0.131,
+     "gap_ssim": -0.0027,
+     "gap_lpips": 0.0088,
+     "spark_vs_trainer_psnr": 32.3554,
+     "coverage": 0.9946,
+     "render_s": 129.5,
+     "settle_ms_mean": 1438,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    },
+    "sh3_matched": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": true,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false,
+      "preBlurAmount": 0.3,
+      "blurAmount": 0.0
+     },
+     "spark": {
+      "psnr": 27.4122,
+      "ssim": 0.8791,
+      "lpips": 0.3418
+     },
+     "trainer_same_views": {
+      "psnr": 27.5285,
+      "ssim": 0.8805,
+      "lpips": 0.3351
+     },
+     "gap_psnr_db": -0.1163,
+     "gap_ssim": -0.0014,
+     "gap_lpips": 0.0067,
+     "spark_vs_trainer_psnr": 32.3386,
+     "coverage": 0.9944,
+     "render_s": 116.1,
+     "settle_ms_mean": 1300,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    },
+    "sh3_call_swiftshader": {
+     "views": 4,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 26.2016,
+      "ssim": 0.8627,
+      "lpips": 0.3967
+     },
+     "trainer_same_views": {
+      "psnr": 28.226,
+      "ssim": 0.8805,
+      "lpips": 0.3416
+     },
+     "gap_psnr_db": -2.0244,
+     "gap_ssim": -0.0178,
+     "gap_lpips": 0.0551,
+     "spark_vs_trainer_psnr": 30.0974,
+     "coverage": 0.995,
+     "render_s": 318.1,
+     "settle_ms_mean": 64963,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 31.6
+    }
+   }
+  },
+  "B_5000": {
+   "trainer_reported_all71": {
+    "psnr": 24.9394,
+    "ssim": 0.8681,
+    "lpips": 0.3944
+   },
+   "trainer_jpeg_recomputed_all71": {
+    "psnr": 24.9517,
+    "ssim": 0.8662,
+    "lpips": 0.3818
+   },
+   "spark": {
+    "sh3_call": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 22.7431,
+      "ssim": 0.8253,
+      "lpips": 0.3902
+     },
+     "trainer_same_views": {
+      "psnr": 24.9517,
+      "ssim": 0.8662,
+      "lpips": 0.3818
+     },
+     "gap_psnr_db": -2.2086,
+     "gap_ssim": -0.0409,
+     "gap_lpips": 0.0084,
+     "spark_vs_trainer_psnr": 23.4218,
+     "coverage": 0.8463,
+     "render_s": 160.5,
+     "settle_ms_mean": 1923,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 23.2
+    },
+    "sh3_limits": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": false,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false
+     },
+     "spark": {
+      "psnr": 24.9199,
+      "ssim": 0.8588,
+      "lpips": 0.3728
+     },
+     "trainer_same_views": {
+      "psnr": 24.9517,
+      "ssim": 0.8662,
+      "lpips": 0.3818
+     },
+     "gap_psnr_db": -0.0318,
+     "gap_ssim": -0.0074,
+     "gap_lpips": -0.009,
+     "spark_vs_trainer_psnr": 29.4372,
+     "coverage": 0.9011,
+     "render_s": 138.5,
+     "settle_ms_mean": 1673,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 23.2
+    },
+    "sh3_matched": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": true,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false
+     },
+     "spark": {
+      "psnr": 24.8938,
+      "ssim": 0.8588,
+      "lpips": 0.3719
+     },
+     "trainer_same_views": {
+      "psnr": 24.9517,
+      "ssim": 0.8662,
+      "lpips": 0.3818
+     },
+     "gap_psnr_db": -0.0579,
+     "gap_ssim": -0.0074,
+     "gap_lpips": -0.0099,
+     "spark_vs_trainer_psnr": 29.3325,
+     "coverage": 0.8996,
+     "render_s": 147.7,
+     "settle_ms_mean": 1775,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 23.2
+    },
+    "sh1_call": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 22.6283,
+      "ssim": 0.8255,
+      "lpips": 0.3885
+     },
+     "trainer_same_views": {
+      "psnr": 24.9517,
+      "ssim": 0.8662,
+      "lpips": 0.3818
+     },
+     "gap_psnr_db": -2.3234,
+     "gap_ssim": -0.0407,
+     "gap_lpips": 0.0067,
+     "spark_vs_trainer_psnr": 23.4006,
+     "coverage": 0.8463,
+     "render_s": 155.5,
+     "settle_ms_mean": 1869,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 21.8
+    },
+    "sh3_call_maxPixelRadius1e5": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05,
+      "maxPixelRadius": 100000
+     },
+     "spark": {
+      "psnr": 24.6502,
+      "ssim": 0.854,
+      "lpips": 0.3722
+     },
+     "trainer_same_views": {
+      "psnr": 24.9517,
+      "ssim": 0.8662,
+      "lpips": 0.3818
+     },
+     "gap_psnr_db": -0.3015,
+     "gap_ssim": -0.0122,
+     "gap_lpips": -0.0096,
+     "spark_vs_trainer_psnr": 28.2941,
+     "coverage": 0.8928,
+     "render_s": 351.4,
+     "settle_ms_mean": 3541,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 23.2
+    }
+   }
+  },
+  "B_1250": {
+   "trainer_reported_all71": {
+    "psnr": 23.8818,
+    "ssim": 0.8488,
+    "lpips": 0.515
+   },
+   "trainer_jpeg_recomputed_all71": {
+    "psnr": 23.8698,
+    "ssim": 0.8469,
+    "lpips": 0.4959
+   },
+   "spark": {
+    "sh3_call": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 19.8887,
+      "ssim": 0.7549,
+      "lpips": 0.5344
+     },
+     "trainer_same_views": {
+      "psnr": 23.8698,
+      "ssim": 0.8469,
+      "lpips": 0.4959
+     },
+     "gap_psnr_db": -3.9811,
+     "gap_ssim": -0.092,
+     "gap_lpips": 0.0385,
+     "spark_vs_trainer_psnr": 21.5732,
+     "coverage": 0.7563,
+     "render_s": 159.8,
+     "settle_ms_mean": 1994,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 20.0
+    },
+    "sh3_limits": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": false,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false
+     },
+     "spark": {
+      "psnr": 22.3006,
+      "ssim": 0.8154,
+      "lpips": 0.4972
+     },
+     "trainer_same_views": {
+      "psnr": 23.8698,
+      "ssim": 0.8469,
+      "lpips": 0.4959
+     },
+     "gap_psnr_db": -1.5692,
+     "gap_ssim": -0.0315,
+     "gap_lpips": 0.0013,
+     "spark_vs_trainer_psnr": 28.1025,
+     "coverage": 0.8347,
+     "render_s": 126.7,
+     "settle_ms_mean": 1528,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 20.0
+    },
+    "sh3_matched": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 3.0,
+      "ext": true,
+      "near": 0.01,
+      "maxPixelRadius": 100000.0,
+      "clipXY": 1.4,
+      "minAlpha": 0.00392156862745098,
+      "sortRadial": false
+     },
+     "spark": {
+      "psnr": 22.291,
+      "ssim": 0.8151,
+      "lpips": 0.497
+     },
+     "trainer_same_views": {
+      "psnr": 23.8698,
+      "ssim": 0.8469,
+      "lpips": 0.4959
+     },
+     "gap_psnr_db": -1.5788,
+     "gap_ssim": -0.0318,
+     "gap_lpips": 0.0011,
+     "spark_vs_trainer_psnr": 28.1249,
+     "coverage": 0.8333,
+     "render_s": 127.0,
+     "settle_ms_mean": 1524,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 20.0
+    },
+    "sh1_call": {
+     "views": 71,
+     "spark_options": {
+      "maxStdDev": 2.23606797749979,
+      "ext": false,
+      "near": 0.05
+     },
+     "spark": {
+      "psnr": 19.8353,
+      "ssim": 0.7549,
+      "lpips": 0.5335
+     },
+     "trainer_same_views": {
+      "psnr": 23.8698,
+      "ssim": 0.8469,
+      "lpips": 0.4959
+     },
+     "gap_psnr_db": -4.0345,
+     "gap_ssim": -0.092,
+     "gap_lpips": 0.0376,
+     "spark_vs_trainer_psnr": 21.5862,
+     "coverage": 0.7563,
+     "render_s": 233.2,
+     "settle_ms_mean": 2734,
+     "renderer": "playwright-chromium-spark 159.0.8154.6",
+     "spz_mb": 19.9
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+  "scene": "office1b",
+  "why": "Eyeful v2 = pinhole (22 cams); indoor office room; 71 rig positions / 1562 images (2K JPEG 2 GB); shown as a pinhole example in HybridNeRF Fig. 7 (Office 1B, Office View 2, Riverview, Apartment).",
+  "pinhole_v2_scenes": ["apartment", "kitchen (19 cams)", "office1b", "office_view1", "office_view2", "riverview", "raf_emptyroom (Apr 2024)", "raf_furnishedroom (Apr 2024)"],
+  "fisheye_scenes": {"v1_9cams": ["office1a", "office2", "seating_area", "table", "workshop"], "v3_14cams_Mar2026": ["meeting_room", "vr_room", "lounge_room", "workshop2", "office1c", "eyeful_room", "playroom", "playroom_med", "playroom_small"]},
+  "urls": {
+    "bucket": "s3://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15/EyefulTower/office1b/ (public, --no-sign-request)",
+    "https": "https://fb-baas-f32eacb9-8abb-11eb-b2b8-4857dd089e15.s3.amazonaws.com/EyefulTower/office1b/",
+    "fetched": ["cameras.json", "splits.json", "md5sums.txt", "colmap/md5sums.txt", "colmap/sparse/0/{cameras,images,points3D}.bin", "colmap/images_4/*.jpg (1562)", "images-jpeg-2k/{10..31}/*.jpg (1562)"]
+  },
+  "protocol": {
+    "split": "splits.json; v2 rule = all images of camera 17 held out. office1b: 1491 train / 71 test.",
+    "resolution": "2K (HybridNeRF: 'HDR images at 2K resolution'). Raw 2K JPEG = 1368x2048 distorted; COLMAP export images_4 = undistorted PINHOLE ~1477x2250 (per-camera 1471-1486 x 2232-2260).",
+    "colour": "NeRF methods trained on HDR in PQ space, evaluated after tonemap to sRGB; 3DGS is a non-HDR baseline (sRGB). JPEGs = HDR x per-scene WB (office1b 0.725535,1,1.839938) + sRGB curve. No per-image exposure/colour correction stated -> compare plain PSNR, not PSNR_cc.",
+    "metrics": "PSNR, SSIM, LPIPS (AlexNet).",
+    "unstated": "exact pinhole scene list, how 3DGS handled radial-tangential distortion (COLMAP export did not exist until Oct 2024), 3DGS iterations/settings, metric code."
+  },
+  "published": {
+    "source": "HybridNeRF (Turki et al., CVPR 2024) Table 1 'Eyeful Tower results', Pinhole columns = MEAN over pinhole scenes; identical in Turki thesis CMU-CS-24-132 Table 4.1",
+    "3DGS": {"psnr": 27.42, "ssim": 0.877, "lpips": 0.291},
+    "Zip-NeRF": {"psnr": 29.71, "ssim": 0.868, "lpips": 0.305},
+    "VR-NeRF": {"psnr": 28.08, "ssim": 0.834, "lpips": 0.326},
+    "HybridNeRF": {"psnr": 29.07, "ssim": 0.880, "lpips": 0.268},
+    "iNGP": {"psnr": 27.35, "ssim": 0.826, "lpips": 0.361},
+    "per_scene": "NOT PUBLISHED: no per-scene Eyeful table in HybridNeRF arXiv HTML, CVPR PDF, or the thesis; VR-NeRF Table 2 is iNGP ablations at 1K over all scenes, no 3DGS."
+  },
+  "volume": "litereality-eyeful (env main)",
+  "dataset_path": "/office1b/gsplat_2k  (images/, sparse/0/{cameras,images,points3D}.bin, test_images.txt, train_images.txt)",
+  "raw_path": "/office1b/raw",
+  "verified": "pycolmap 3.10 loads it: 22 PINHOLE cams, 1562 images, 1,290,323 points; 0 size mismatches; test all cam 17, no overlap; reprojection median 0.13 px, p90 0.39 px; COLMAP frame == cameras.json frame (metric, y-up), similarity scale 1.0, residual 1.6e-7 m",
+  "modal_cost_usd": "~0.03 (ephemeral 6.85 -> 6.88; metered 16.53 -> 16.56)"
+}

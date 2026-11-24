@@ -1,0 +1,165 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-AQyVscUfktVB80FuPoOHGF
+Building image im-YbEB4GrG6cwB7JtfEU1PAt
+
+=> Step 0: FROM base
+
+=> Step 1: COPY . /
+Saving image...
+Image saved, took 612.26ms
+
+Built image im-YbEB4GrG6cwB7JtfEU1PAt in 3.46s
+
+
+Building image im-ZecPAFGQ4zhTKk4DQJZ2uM
+
+=> Step 0: FROM base
+
+=> Step 1: RUN python /opt/litereality/patch_colmap_split.py /opt/gsplat/examples/datasets/colmap.py
+patched /opt/gsplat/examples/datasets/colmap.py (2 edits)
+
+=> Step 2: RUN python /opt/litereality/patch_colmap_split.py --eval-jpeg /opt/gsplat/examples/simple_trainer.py
+patched /opt/gsplat/examples/simple_trainer.py (eval renders as JPEG)
+
+=> Step 3: RUN python -c "import imageio, numpy as np; imageio.imwrite('/tmp/t.jpg', np.zeros((8, 8, 3), np.uint8), quality=92)"
+Saving image...
+Image saved, took 1.30s
+
+Built image im-ZecPAFGQ4zhTKk4DQJZ2uM in 5.20s
+
+
+✓ Created objects.
+├── 🔨 Created mount /Users/abyyworld/LiteReality/scripts/eyeful/train_eyeful.py
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/patch_trainer.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/scripts/eyeful/patch_colmap_split.py
+└── 🔨 Created function train.
+spawned A_30000: fc-01M85PZM7MVY70V4T0VHDYYT8Z
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+[A_30000] NVIDIA H100 80GB HBM3; copied 2.49 GB in 2 s; default --data-dir /tmp/eyeful/data --data-factor 1 --result-dir /tmp/eyeful/result --disable-viewer --disable-video --tb-every 0 --max-steps 30000 --save-ply --ply-steps 30000 --save-steps 30000 --eval-steps 7000 30000
+[A_30000] 62 s | loss=0.037| sh degree=1| :   6%|▌         | 1809/30000 [00:34<08:16, 56.78it/s]
+[A_30000] 123 s | loss=0.102| sh degree=3| :  17%|█▋        | 5186/30000 [01:35<07:27, 55.41it/s]
+[A_30000] 183 s | loss=0.051| sh degree=3| :  23%|██▎       | 6995/30000 [02:20<06:56, 55.27it/s]
+[A_30000] 244 s | loss=0.033| sh degree=3| :  27%|██▋       | 8060/30000 [03:36<08:22, 43.67it/s]
+[A_30000] 306 s | loss=0.037| sh degree=3| :  38%|███▊      | 11404/30000 [04:38<05:43, 54.15it/s]
+[A_30000] 366 s | loss=0.035| sh degree=3| :  49%|████▉     | 14670/30000 [05:38<04:37, 55.25it/s]
+[A_30000] 427 s | loss=0.020| sh degree=3| :  60%|██████    | 18074/30000 [06:39<03:27, 57.52it/s]
+[A_30000] 488 s | loss=0.047| sh degree=3| :  72%|███████▏  | 21558/30000 [07:40<02:28, 56.66it/s]
+[A_30000] 549 s | loss=0.027| sh degree=3| :  84%|████████▎ | 25056/30000 [08:41<01:24, 58.84it/s]
+[A_30000] 610 s | loss=0.046| sh degree=3| :  95%|█████████▌| 28567/30000 [09:42<00:24, 59.68it/s]
+[A_30000] 671 s | loss=0.037| sh degree=3| : 100%|█████████▉| 29994/30000 [10:20<00:00, 56.74it/s]
+Warning: image_path not found for reconstruction
+[Parser] 1562 images, taken by 22 cameras.
+[A_30000] done in 727.7 s: exit 0; {"val_step29999": {"psnr": 27.5697, "ssim": 0.884, "lpips": 0.3413, "cc_psnr": 29.4964, "cc_ssim": 0.8868, "cc_lpips": 0.342, "ellipse_time": 0.0034, "num_GS": 1759494}, "val_step6999": {"psnr": 26.8207, "ssim": 0.8685, "lpips": 0.4549, "cc_psnr": 28.4935, "cc_ssim": 0.8727, "cc_lpips": 0.4552, "ellipse_time": 0.0032, "num_GS": 1561082}}
+{
+ "arm": "A",
+ "name": "A_30000",
+ "scene": "office1b",
+ "steps": 30000,
+ "gpu": "NVIDIA H100 80GB HBM3",
+ "command": [
+  "/opt/gsplat/examples/simple_trainer.py",
+  "default",
+  "--data-dir",
+  "/tmp/eyeful/data",
+  "--data-factor",
+  "1",
+  "--result-dir",
+  "/tmp/eyeful/result",
+  "--disable-viewer",
+  "--disable-video",
+  "--tb-every",
+  "0",
+  "--max-steps",
+  "30000",
+  "--save-ply",
+  "--ply-steps",
+  "30000",
+  "--save-steps",
+  "30000",
+  "--eval-steps",
+  "7000",
+  "30000"
+ ],
+ "env": {},
+ "copy_s": 1.7,
+ "train_s": 702.3,
+ "exit": 0,
+ "stats": {
+  "val_step29999": {
+   "psnr": 27.569747924804688,
+   "ssim": 0.8840305209159851,
+   "lpips": 0.3412942886352539,
+   "cc_psnr": 29.496410369873047,
+   "cc_ssim": 0.8868368268013,
+   "cc_lpips": 0.34198763966560364,
+   "ellipse_time": 0.003402914799435038,
+   "num_GS": 1759494
+  },
+  "val_step6999": {
+   "psnr": 26.820697784423828,
+   "ssim": 0.8684874773025513,
+   "lpips": 0.4549117684364319,
+   "cc_psnr": 28.493453979492188,
+   "cc_ssim": 0.8726867437362671,
+   "cc_lpips": 0.4552087187767029,
+   "ellipse_time": 0.0031779819810894175,
+   "num_GS": 1561082
+  }
+ },
+ "ply_mb": 415.2,
+ "spz_sh3_mb": 31.6,
+ "splats": 1759494,
+ "world_transform": [
+  [
+   0.5364334236861283,
+   -0.0817069625595112,
+   -0.03422803833419423,
+   0.4970839180253433
+  ],
+  [
+   -0.03324522971242856,
+   0.00903830906629931,
+   -0.5426061813658588,
+   -0.12512659801612744
+  ],
+  [
+   0.08211175945207233,
+   0.5374483097231962,
+   0.003921443762465335,
+   0.06802208893140982
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "scene_scale": 1.4000096480273347,
+ "renders": 71,
+ "last_progress": "loss=0.037| sh degree=3| : 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 30000/30000 [11:15<00:00, 44.40it/s]",
+ "total_s": 727.7
+}
+[modal-client] 2026-11-24T02:55:53+0000 Timed out waiting for final app logs.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-AQyVscUfktVB80FuPoOHGF

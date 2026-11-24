@@ -1,0 +1,59 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-wPBwNpMSS09g6IgxDlK4Y2
+Building image im-VopmdNDVe21Bxj90HbNktK
+
+=> Step 0: FROM base
+
+=> Step 1: RUN python -m pip install numpy==1.26.4 pillow==10.4.0 pycolmap==3.10.0
+Looking in indexes: http://pypi-mirror.modal.local:5555/simple
+Collecting numpy==1.26.4
+  Downloading http://pypi-mirror.modal.local:5555/simple/numpy/numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Collecting pillow==10.4.0
+  Downloading http://pypi-mirror.modal.local:5555/simple/pillow/pillow-10.4.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (9.2 kB)
+Collecting pycolmap==3.10.0
+  Downloading http://pypi-mirror.modal.local:5555/simple/pycolmap/pycolmap-3.10.0-cp311-cp311-manylinux_2_28_x86_64.whl.metadata (10 kB)
+Downloading http://pypi-mirror.modal.local:5555/simple/numpy/numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (18.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 18.3/18.3 MB 1.2 GB/s  0:00:00
+Downloading http://pypi-mirror.modal.local:5555/simple/pillow/pillow-10.4.0-cp311-cp311-manylinux_2_28_x86_64.whl (4.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 903.6 MB/s  0:00:00
+Downloading http://pypi-mirror.modal.local:5555/simple/pycolmap/pycolmap-3.10.0-cp311-cp311-manylinux_2_28_x86_64.whl (11.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 11.2/11.2 MB 91.4 MB/s  0:00:00
+Installing collected packages: pillow, numpy, pycolmap
+
+Successfully installed numpy-1.26.4 pillow-10.4.0 pycolmap-3.10.0
+
+[notice] A new release of pip is available: 25.2 -> 26.3
+[notice] To update, run: pip install --upgrade pip
+Saving image...
+Image saved, took 559.00ms
+
+Built image im-VopmdNDVe21Bxj90HbNktK in 4.43s
+
+
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/scripts/eyeful/verify_eyeful.py
+└── 🔨 Created function verify.
+{
+  "pycolmap_loaded": true,
+  "cameras": 22,
+  "images": 1562,
+  "points3D": 1290323,
+  "camera_models": [
+    "CameraModelId.PINHOLE"
+  ],
+  "image_size_mismatch": 0,
+  "test": 71,
+  "train": 1491,
+  "overlap": 0,
+  "test_all_cam17": true,
+  "split_covers_model": true,
+  "reproj_px": {
+    "n": 25537,
+    "median": 0.12527199140068998,
+    "p90": 0.38519892206873035
+  }
+}
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-wPBwNpMSS09g6IgxDlK4Y2

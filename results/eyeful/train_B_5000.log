@@ -1,0 +1,136 @@
+Note that running a local entrypoint in detached mode only keeps the last triggered Modal function alive after the parent process has been killed or disconnected.
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-7W32oSjtH916mYXHrBa4iv
+✓ Created objects.
+├── 🔨 Created mount /Users/abyyworld/LiteReality/scripts/eyeful/train_eyeful.py
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/deploy/modal/splat/patch_trainer.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/scripts/eyeful/patch_colmap_split.py
+└── 🔨 Created function train.
+spawned B_5000: fc-01M85QQVT6Z11SCAN3S61H4V93
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+[B_5000] NVIDIA H100 80GB HBM3; copied 2.49 GB in 1 s; mcmc --data-dir /tmp/eyeful/data --data-factor 1 --result-dir /tmp/eyeful/result --disable-viewer --disable-video --tb-every 0 --max-steps 5000 --save-ply --ply-steps 5000 --save-steps 5000 --no-normalize-world-space --batch-size 4 --eval-steps 5000 --sh-degree 3 --strategy.cap-max 800000 --use-fused-bilagrid --antialiased --visible-adam --strategy.refine-start-iter 357 --strategy.refine-every 71 --sh-degree-interval 714
+[B_5000] 61 s | loss=0.046| sh degree=0| :  14%|█▎        | 681/5000 [00:38<03:45, 19.18it/s]
+[B_5000] 124 s | loss=0.038| sh degree=2| :  36%|███▋      | 1824/5000 [01:41<02:33, 20.63it/s]
+[B_5000] 186 s | loss=0.034| sh degree=3| :  59%|█████▉    | 2968/5000 [02:43<01:50, 18.35it/s]
+[B_5000] 249 s | loss=0.028| sh degree=3| :  82%|████████▏ | 4119/5000 [03:46<00:52, 16.87it/s]
+[B_5000] 312 s | Running evaluation...
+{
+ "arm": "B",
+ "name": "B_5000",
+ "scene": "office1b",
+ "steps": 5000,
+ "gpu": "NVIDIA H100 80GB HBM3",
+ "command": [
+  "/opt/gsplat/examples/simple_trainer.py",
+  "mcmc",
+  "--data-dir",
+  "/tmp/eyeful/data",
+  "--data-factor",
+  "1",
+  "--result-dir",
+  "/tmp/eyeful/result",
+  "--disable-viewer",
+  "--disable-video",
+  "--tb-every",
+  "0",
+  "--max-steps",
+  "5000",
+  "--save-ply",
+  "--ply-steps",
+  "5000",
+  "--save-steps",
+  "5000",
+  "--no-normalize-world-space",
+  "--batch-size",
+  "4",
+  "--eval-steps",
+  "5000",
+  "--sh-degree",
+  "3",
+  "--strategy.cap-max",
+  "800000",
+  "--use-fused-bilagrid",
+  "--antialiased",
+  "--visible-adam",
+  "--strategy.refine-start-iter",
+  "357",
+  "--strategy.refine-every",
+  "71",
+  "--sh-degree-interval",
+  "714"
+ ],
+ "env": {
+  "LR_TRAIN_CROP": "1"
+ },
+ "copy_s": 1.1,
+ "train_s": 362.7,
+ "exit": 0,
+ "stats": {
+  "val_step4999": {
+   "psnr": 24.9394474029541,
+   "ssim": 0.868116021156311,
+   "lpips": 0.3944307267665863,
+   "cc_psnr": 28.254716873168945,
+   "cc_ssim": 0.8788052201271057,
+   "cc_lpips": 0.3856242597103119,
+   "ellipse_time": 0.003200057526709328,
+   "num_GS": 1290323
+  }
+ },
+ "ply_mb": 304.5,
+ "spz_sh3_mb": 23.2,
+ "splats": 1290323,
+ "spz_sh1_mb": 21.8,
+ "world_transform": [
+  [
+   1.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   1.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   1.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0,
+   1.0
+  ]
+ ],
+ "renders": 71,
+ "last_progress": "loss=0.030| sh degree=3| : 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 5000/5000 [05:40<00:00, 14.69it/s]",
+ "total_s": 377.9
+}
+[B_5000] done in 377.9 s: exit 0; {"val_step4999": {"psnr": 24.9394, "ssim": 0.8681, "lpips": 0.3944, "cc_psnr": 28.2547, "cc_ssim": 0.8788, "cc_lpips": 0.3856, "ellipse_time": 0.0032, "num_GS": 1290323}}
+[modal-client] 2026-11-24T03:03:25+0000 Timed out waiting for final app logs.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-7W32oSjtH916mYXHrBa4iv

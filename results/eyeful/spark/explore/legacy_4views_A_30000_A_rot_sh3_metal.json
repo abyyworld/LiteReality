@@ -1,0 +1,132 @@
+{
+ "run": "A_30000",
+ "spz": "/Users/abyyworld/LiteReality-scans/eyeful_eval/variants/A_rot_sh3.spz",
+ "spz_mb": 31.8,
+ "splats": 1759494,
+ "renderer": "playwright-chromium-spark 159.0.8154.6",
+ "gl": "metal",
+ "settle": false,
+ "prerotate": true,
+ "views": 4,
+ "view_indices": [
+  0,
+  20,
+  40,
+  60
+ ],
+ "size": [
+  1478,
+  2232
+ ],
+ "render_scale": 1,
+ "background": "black",
+ "render_s": 5.7,
+ "trainer_reported_all71": {
+  "psnr": 27.569747924804688,
+  "ssim": 0.8840305209159851,
+  "lpips": 0.3412942886352539
+ },
+ "summary": {
+  "coverage": 0.995,
+  "spark_psnr": 26.3431,
+  "spark_ssim": 0.8611,
+  "spark_lpips": 0.4094,
+  "trainer_psnr": 28.226,
+  "trainer_ssim": 0.8805,
+  "trainer_lpips": 0.3416,
+  "spark_vs_trainer_psnr": 29.4903,
+  "gap_psnr_db": -1.8829,
+  "gap_ssim": -0.0194,
+  "gap_lpips": 0.0678
+ },
+ "per_view": [
+  {
+   "i": 0,
+   "name": "17_DSC0001.jpg",
+   "coverage": 0.9952,
+   "spark_psnr": 27.501665115356445,
+   "spark_ssim": 0.8877186179161072,
+   "spark_lpips": 0.3670613467693329,
+   "trainer_psnr": 26.325721740722656,
+   "trainer_ssim": 0.8920764327049255,
+   "trainer_lpips": 0.3296758532524109,
+   "spark_vs_trainer_psnr": 28.02979278564453,
+   "mean_rgb_spark": [
+    0.3665,
+    0.3806,
+    0.3896
+   ],
+   "mean_rgb_trainer": [
+    0.3502,
+    0.3654,
+    0.3765
+   ]
+  },
+  {
+   "i": 20,
+   "name": "17_DSC0181.jpg",
+   "coverage": 0.9933,
+   "spark_psnr": 27.473590850830078,
+   "spark_ssim": 0.8510511517524719,
+   "spark_lpips": 0.42872801423072815,
+   "trainer_psnr": 28.99454116821289,
+   "trainer_ssim": 0.866731584072113,
+   "trainer_lpips": 0.378997802734375,
+   "spark_vs_trainer_psnr": 32.23663330078125,
+   "mean_rgb_spark": [
+    0.2668,
+    0.2817,
+    0.2875
+   ],
+   "mean_rgb_trainer": [
+    0.2704,
+    0.2838,
+    0.292
+   ]
+  },
+  {
+   "i": 40,
+   "name": "17_DSC0361.jpg",
+   "coverage": 0.9938,
+   "spark_psnr": 24.231887817382812,
+   "spark_ssim": 0.8075411319732666,
+   "spark_lpips": 0.4501832127571106,
+   "trainer_psnr": 29.58632469177246,
+   "trainer_ssim": 0.8547564744949341,
+   "trainer_lpips": 0.33058539032936096,
+   "spark_vs_trainer_psnr": 25.693864822387695,
+   "mean_rgb_spark": [
+    0.2413,
+    0.2573,
+    0.27
+   ],
+   "mean_rgb_trainer": [
+    0.2549,
+    0.2728,
+    0.2875
+   ]
+  },
+  {
+   "i": 60,
+   "name": "17_DSC0541.jpg",
+   "coverage": 0.9979,
+   "spark_psnr": 26.165149688720703,
+   "spark_ssim": 0.8981874585151672,
+   "spark_lpips": 0.3915247321128845,
+   "trainer_psnr": 27.997323989868164,
+   "trainer_ssim": 0.9084516167640686,
+   "trainer_lpips": 0.32725855708122253,
+   "spark_vs_trainer_psnr": 32.000823974609375,
+   "mean_rgb_spark": [
+    0.339,
+    0.3544,
+    0.3658
+   ],
+   "mean_rgb_trainer": [
+    0.3396,
+    0.3554,
+    0.3632
+   ]
+  }
+ ]
+}

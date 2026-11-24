@@ -1,0 +1,5 @@
+  A_30000 view 0: spark 27.28 dB, trainer 26.33 dB, spark vs trainer 28.95 dB, coverage 0.995
+  A_30000 view 20: spark 27.00 dB, trainer 28.99 dB, spark vs trainer 32.26 dB, coverage 0.993
+  A_30000 view 40: spark 24.32 dB, trainer 29.59 dB, spark vs trainer 25.72 dB, coverage 0.994
+  A_30000 view 60: spark 25.90 dB, trainer 28.00 dB, spark vs trainer 31.75 dB, coverage 0.998
+A_30000_splats_sh3_swiftshader_call_settle30s: 4 views, Spark PSNR 26.126 vs trainer 28.226 (gap -2.100 dB); SSIM 0.8618 vs 0.8805; LPIPS 0.4005 vs 0.3416; render 350 s
