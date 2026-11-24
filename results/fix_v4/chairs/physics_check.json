@@ -1,0 +1,156 @@
+{
+ "v2": {
+  "scene": "run/atrium_stray_q/v2/physics/scene_splat.xml",
+  "movable_bodies": [
+   "Chair0",
+   "Chair1",
+   "Chair2",
+   "Wall0_Door_0"
+  ],
+  "bundle_bodies": [
+   "Chair0",
+   "Chair1",
+   "Chair2",
+   "Wall0_Door_0"
+  ],
+  "bundle_bodies_all_in_scene": true,
+  "bodies": {
+   "Chair0": {
+    "pos": [
+     0.52,
+     1.363,
+     -0.824
+    ],
+    "yaw_deg": -141.9,
+    "splats": 8242,
+    "opaque_splat_median_xy": [
+     0.526,
+     1.374
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Chair1": {
+    "pos": [
+     -0.511,
+     0.876,
+     -0.824
+    ],
+    "yaw_deg": -141.9,
+    "splats": 28396,
+    "opaque_splat_median_xy": [
+     -0.409,
+     0.891
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Chair2": {
+    "pos": [
+     -1.145,
+     0.265,
+     -0.824
+    ],
+    "yaw_deg": -141.8,
+    "splats": 46293,
+    "opaque_splat_median_xy": [
+     -0.962,
+     0.206
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Wall0_Door_0": {
+    "pos": [
+     1.684,
+     0.58,
+     -1.258
+    ],
+    "yaw_deg": -141.9,
+    "splats": 100943,
+    "opaque_splat_median_xy": [
+     1.202,
+     0.195
+    ],
+    "drift_2s_m": 0.0
+   }
+  },
+  "grabbable": null
+ },
+ "v2_chairs": {
+  "scene": "run/atrium_stray_q/v2_chairs/physics/scene_splat.xml",
+  "movable_bodies": [
+   "Chair0",
+   "Chair1",
+   "Chair2",
+   "Wall0_Door_0"
+  ],
+  "bundle_bodies": [
+   "Chair0",
+   "Chair1",
+   "Chair2",
+   "Wall0_Door_0"
+  ],
+  "bundle_bodies_all_in_scene": true,
+  "bodies": {
+   "Chair0": {
+    "pos": [
+     0.612,
+     1.422,
+     -0.862
+    ],
+    "yaw_deg": -135.9,
+    "splats": 10745,
+    "opaque_splat_median_xy": [
+     0.551,
+     1.365
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Chair1": {
+    "pos": [
+     -0.809,
+     0.566,
+     -0.76
+    ],
+    "yaw_deg": -126.7,
+    "splats": 67604,
+    "opaque_splat_median_xy": [
+     -0.696,
+     0.414
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Chair2": {
+    "pos": [
+     -1.161,
+     0.126,
+     -0.853
+    ],
+    "yaw_deg": -159.8,
+    "splats": 37394,
+    "opaque_splat_median_xy": [
+     -1.003,
+     0.007
+    ],
+    "drift_2s_m": 0.001
+   },
+   "Wall0_Door_0": {
+    "pos": [
+     1.684,
+     0.58,
+     -1.258
+    ],
+    "yaw_deg": -141.9,
+    "splats": 49560,
+    "opaque_splat_median_xy": [
+     1.215,
+     0.199
+    ],
+    "drift_2s_m": 0.0
+   }
+  },
+  "grabbable": {
+   "Chair0": true,
+   "Chair1": true,
+   "Chair2": true
+  }
+ }
+}

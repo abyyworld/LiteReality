@@ -1,0 +1,12 @@
+{
+ "view_row": 2371,
+ "psnr_cc_after_other_view_then_repeats": [
+  19.698,
+  20.163,
+  20.163
+ ],
+ "mean_abs_diff_first_vs_third_render_grey_levels": 1.857,
+ "old_v2_scores_psnr_cc": [
+  20.2902
+ ]
+}

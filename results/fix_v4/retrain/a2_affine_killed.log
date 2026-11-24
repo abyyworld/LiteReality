@@ -1,0 +1,30 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-pjCPhPOkgqbxGRApxsOqBy
+✓ Created objects.
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/fix4me/snap/deploy/modal/
+│   splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/fix4me/snap/deploy/modal/
+│   splat/patch_trainer.py
+├── 🔨 Created function trainer_help.
+└── 🔨 Created function train.
+splatroom  stray_atrium_b3: /Users/abyyworld/LiteReality-scans/stray_atrium_b3 -> run/atrium_stray_q/v4_a2_affine  (physics: run/atrium_1059/quick/scene.xml)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+

@@ -1,0 +1,39 @@
+recording 901a305fdf: 2402 poses, video 1920x1440
+  scored 600 frames ...
+  scored 1200 frames ...
+  scored 1800 frames ...
+  scored 2400 frames ...
+  2402 frames scored in 20.9 s; kept 403 (target 1200; 39 near-duplicates, 0 blurry, 0 around tracking jumps); sharpness median 24.19 kept vs 24.63 all
+aligning to /Users/abyyworld/LiteReality-scans/atrium_1059 ...
+  heading   70.0 deg ->   70.78: 87% wall_inliers, 89% inliers, residual 1.0 cm
+  heading  250.0 deg -> -109.30: 68% wall_inliers, 67% inliers, residual 1.4 cm
+  heading  106.0 deg ->  103.51: 23% wall_inliers, 41% inliers, residual 1.6 cm
+  heading  160.0 deg ->  161.02: 38% wall_inliers, 45% inliers, residual 1.1 cm
+  heading  340.0 deg ->  -18.98: 39% wall_inliers, 46% inliers, residual 1.3 cm
+  heading   34.0 deg ->   38.35: 25% wall_inliers, 42% inliers, residual 1.6 cm
+  yaw 70.83 deg, translation [-0.938, 0.024, 0.359] m, residual 1.0 cm (point-to-plane median), 89% of the recording on the scan's surface
+  heading margin: best yaw 70.8 deg has wall_inliers 87%, the next heading (-109.2 deg) 67%: margin 0.20 (clear at >= 0.15, or when the next one leaves >= 2x as many wall points off the surface)
+import-stray  /Users/abyyworld/LiteReality-scans/stray_atrium_raw/901a305fdf -> /Users/abyyworld/LiteReality-scans/stray_atrium_b3
+  frames      403 kept of 2402 (39 near-duplicates, 0 blurry, 0 around tracking jumps, 0 without depth)
+  sharpness   kept median 24.19 (min 1.98) vs 24.63 over every frame
+  alignment   yaw 70.83 deg, t [-0.9375, 0.0244, 0.3593] m, residual 1.0 cm, 89% of it on the scan's surface
+  heading     wall_inliers 87% vs 67% at -109.25 deg (margin 0.2)
+  time        46.3 s; report: /Users/abyyworld/LiteReality-scans/stray_atrium_b3/import_report.json
+       46.75 real        58.85 user        20.42 sys
+           584089600  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              115588  page reclaims
+                 376  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   1  messages sent
+                   1  messages received
+                   1  signals received
+              964331  voluntary context switches
+              192582  involuntary context switches
+           177680999  instructions retired
+            66860190  cycles elapsed
+            12616160  peak memory footprint

@@ -1,0 +1,52 @@
+{
+ "preset": "q_sh3_nogrid",
+ "options": {
+  "preset": "q_sh3_nogrid",
+  "steps": 300,
+  "snapshots": [
+   300
+  ],
+  "cap_max": 1000000
+ },
+ "events": [
+  {
+   "kind": "started",
+   "seconds": 1.4320115630000032,
+   "images": 188,
+   "depths": 0,
+   "gpu": "NVIDIA H100 80GB HBM3"
+  },
+  {
+   "kind": "snapshot",
+   "step": 300,
+   "seconds": 26.433222647999997,
+   "splats": 1000000,
+   "spz_mb": 16.21,
+   "sh_degree": 3,
+   "n": 1000000,
+   "sh_abs_mean": 0.0003015013935510069
+  },
+  {
+   "kind": "done",
+   "seconds": 33.33157499100001,
+   "stats": {
+    "psnr": 21.907958984375,
+    "ssim": 0.8083407282829285,
+    "lpips": 0.35121259093284607,
+    "cc_psnr": 23.885448455810547,
+    "cc_ssim": 0.8151837587356567,
+    "cc_lpips": 0.3569057583808899,
+    "ellipse_time": 0.004866480827331543,
+    "num_GS": 1000000
+   },
+   "timing": {
+    "launched": 1.43,
+    "data_loaded": 9.26,
+    "model_ready": 12.66,
+    "training": 13.27
+   },
+   "log_tail": "e=3| depth loss=0.115214| :  95%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258c| 285/300 [00:06<00:00, 62.27it/s]\nloss=0.095| sh degree=3| depth loss=0.115214| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.134| sh degree=3| depth loss=0.119591| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]Step 292: Relocated 6 GSs.\nStep 292: Added 0 GSs. Now having 1000000 GSs.\n\nloss=0.101| sh degree=3| depth loss=0.555492| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.076| sh degree=3| depth loss=0.209345| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.135| sh degree=3| depth loss=0.381415| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.098| sh degree=3| depth loss=0.139396| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]Step 296: Relocated 24 GSs.\nStep 296: Added 0 GSs. Now having 1000000 GSs.\n\nloss=0.065| sh degree=3| depth loss=0.064102| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.060| sh degree=3| depth loss=0.090086| :  97%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u258b| 292/300 [00:06<00:00, 53.37it/s]\nloss=0.060| sh degree=3| depth loss=0.090086| : 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 299/300 [00:06<00:00, 57.07it/s]\nloss=0.105| sh degree=3| depth loss=0.480353| : 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2589| 299/300 [00:06<00:00, 57.07it/s]Step:  299 {'mem': 2.72637939453125, 'ellipse_time': 6.946724891662598, 'num_GS': 1000000}\nRunning evaluation...\nPSNR: 21.908, SSIM: 0.8083, LPIPS: 0.351 Time: 0.005s/image Number of GS: 1000000\n\nloss=0.105| sh degree=3| depth loss=0.480353| : 100%|\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588| 300/300 [00:19<00:00, 15.57it/s]\n"
+  }
+ ],
+ "wall_s": 36.3
+}

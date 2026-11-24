@@ -1,0 +1,217 @@
+=== 13:56:44 v2 run/atrium_stray_q/v2 --eval-set sharp --views 10
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 32: PSNR cc 20.10, hf_ratio 0.879
+  row 308: PSNR cc 21.87, hf_ratio 0.720
+  row 547: PSNR cc 25.73, hf_ratio 0.837
+  row 739: PSNR cc 22.79, hf_ratio 0.516
+  row 981: PSNR cc 18.07, hf_ratio 0.551
+  row 1321: PSNR cc 20.54, hf_ratio 0.511
+  row 1655: PSNR cc 25.91, hf_ratio 0.226
+  row 1866: PSNR cc 21.65, hf_ratio 0.572
+  row 2070: PSNR cc 23.59, hf_ratio 0.245
+  row 2371: PSNR cc 20.34, hf_ratio 0.179
+v2: PSNR 19.6328 (cc 22.0597), SSIM 0.739, LPIPS 0.2761, openings 21.8646, objects 20.4366, coverage 0.9766, hf_ratio 0.5237, lap_ratio 0.2901 over 10 views (10 unseen) at 480x360; render 1472 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== 14:22:02 a1p1250 run/atrium_stray_q/v4_a1_nogrid --eval-set sharp --views 10
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 32: PSNR cc 18.71, hf_ratio 1.568
+  row 308: PSNR cc 19.72, hf_ratio 0.892
+  row 547: PSNR cc 23.08, hf_ratio 0.723
+  row 739: PSNR cc 20.41, hf_ratio 0.356
+  row 981: PSNR cc 15.20, hf_ratio 0.934
+  row 1321: PSNR cc 20.51, hf_ratio 0.301
+  row 1655: PSNR cc 26.99, hf_ratio 0.358
+  row 1866: PSNR cc 19.27, hf_ratio 0.634
+  row 2070: PSNR cc 21.65, hf_ratio 0.582
+  row 2371: PSNR cc 18.18, hf_ratio 0.241
+a1p1250: PSNR 18.8388 (cc 20.3714), SSIM 0.6686, LPIPS 0.4211, openings 20.2446, objects 18.1322, coverage 0.9662, hf_ratio 0.6589, lap_ratio 0.2814 over 10 views (10 unseen) at 480x360; render 852 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== 14:36:24 v2 run/atrium_stray_q/v2 --eval-set random --views 10
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 68: PSNR cc 22.07, hf_ratio 0.921
+  row 324: PSNR cc 22.94, hf_ratio 0.632
+  row 573: PSNR cc 28.19, hf_ratio 0.889
+  row 933: PSNR cc 23.08, hf_ratio 0.475
+  row 1226: PSNR cc 19.22, hf_ratio 0.275
+  row 1437: PSNR cc 24.09, hf_ratio 0.447
+  row 1643: PSNR cc 26.75, hf_ratio 0.864
+  row 1881: PSNR cc 22.81, hf_ratio 0.511
+  row 2052: PSNR cc 21.87, hf_ratio 0.173
+  row 2343: PSNR cc 20.92, hf_ratio 0.242
+v2_random: PSNR 21.1576 (cc 23.1941), SSIM 0.8084, LPIPS 0.2284, openings 23.2623, objects 22.0292, coverage 0.9857, hf_ratio 0.5429, lap_ratio 0.3916 over 10 views (0 unseen) at 480x360; render 1169 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== 14:56:03 a1p1250 run/atrium_stray_q/v4_a1_nogrid --eval-set random --views 10
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 68: PSNR cc 20.28, hf_ratio 1.155
+  row 324: PSNR cc 19.68, hf_ratio 0.859
+  row 573: PSNR cc 23.96, hf_ratio 0.801
+  row 933: PSNR cc 19.43, hf_ratio 0.521
+  row 1226: PSNR cc 17.40, hf_ratio 0.418
+  row 1437: PSNR cc 21.23, hf_ratio 0.680
+  row 1643: PSNR cc 26.74, hf_ratio 0.365
+  row 1881: PSNR cc 20.30, hf_ratio 0.554
+  row 2052: PSNR cc 19.59, hf_ratio 0.504
+  row 2343: PSNR cc 18.47, hf_ratio 0.298
+a1p1250_random: PSNR 19.3807 (cc 20.7064), SSIM 0.7165, LPIPS 0.3943, openings 20.6048, objects 19.2377, coverage 0.9725, hf_ratio 0.6154, lap_ratio 0.3638 over 10 views (10 unseen) at 480x360; render 903 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== 15:11:14 v2 run/atrium_stray_q/v2 --eval-set sharp --full --views 4
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 32: PSNR cc 19.28, hf_ratio 0.116
+  row 739: PSNR cc 22.26, hf_ratio 0.238
+  row 1655: PSNR cc 25.53, hf_ratio 0.108
+  row 2371: PSNR cc 19.64, hf_ratio 0.103
+v2_sharp_full: PSNR 19.9538 (cc 21.6767), SSIM 0.7887, LPIPS 0.2963, openings 20.4921, objects 18.6297, coverage 0.9773, hf_ratio 0.1413, lap_ratio 0.1814 over 4 views (4 unseen) at 1920x1440; render 1178 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== 15:31:39 a1p1250 run/atrium_stray_q/v4_a1_nogrid --eval-set sharp --full --views 4
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 32: PSNR cc 18.05, hf_ratio 0.050
+  row 739: PSNR cc 20.16, hf_ratio 0.062
+  row 1655: PSNR cc 24.57, hf_ratio 0.039
+  row 2371: PSNR cc 17.83, hf_ratio 0.067
+a1p1250_sharp_full: PSNR 19.4074 (cc 20.1549), SSIM 0.775, LPIPS 0.4179, openings 20.1465, objects 17.0144, coverage 0.9704, hf_ratio 0.0542, lap_ratio 0.1465 over 4 views (4 unseen) at 1920x1440; render 281 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== 15:36:43 v2 run/atrium_stray_q/v2 --eval-set random --full --views 4
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 68: PSNR cc 21.71, hf_ratio 0.325
+  row 933: PSNR cc 21.74, hf_ratio 0.187
+  row 1643: PSNR cc 26.54, hf_ratio 0.146
+  row 2343: PSNR cc 20.64, hf_ratio 0.109
+v2_random_full: PSNR 21.7008 (cc 22.6577), SSIM 0.8245, LPIPS 0.2868, openings 23.6512, objects 19.6229, coverage 0.9841, hf_ratio 0.1921, lap_ratio 0.4013 over 4 views (0 unseen) at 1920x1440; render 346 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== 15:42:48 a1p1250 run/atrium_stray_q/v4_a1_nogrid --eval-set random --full --views 4
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+  d = dirs @ rot
+  d = dirs @ rot
+  d = dirs @ rot
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+  t = rel @ along
+  t = rel @ along
+  t = rel @ along
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+  row 68: PSNR cc 19.99, hf_ratio 0.207
+  row 933: PSNR cc 18.53, hf_ratio 0.121
+  row 1643: PSNR cc 23.86, hf_ratio 0.038
+  row 2343: PSNR cc 18.32, hf_ratio 0.062
+a1p1250_random_full: PSNR 19.6212 (cc 20.176), SSIM 0.793, LPIPS 0.4356, openings 21.2126, objects 18.0537, coverage 0.972, hf_ratio 0.1069, lap_ratio 0.2957 over 4 views (4 unseen) at 1920x1440; render 239 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== 15:47:01 ALL DONE

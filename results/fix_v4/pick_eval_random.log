@@ -1,0 +1,23 @@
+  scored 600 frames
+  scored 1200 frames
+  scored 1800 frames
+  scored 2400 frames
+30 random-time eval frames -> /Users/abyyworld/LiteReality-scans/stray_atrium_pool_random; blur px median 2.93, p90 8.04 (recording median 2.97)
+       23.27 real        41.58 user        12.12 sys
+           336658432  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               62963  page reclaims
+                1402  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   1  messages sent
+                   1  messages received
+                   1  signals received
+             1219145  voluntary context switches
+              175565  involuntary context switches
+           167355684  instructions retired
+            47244840  cycles elapsed
+            12550600  peak memory footprint

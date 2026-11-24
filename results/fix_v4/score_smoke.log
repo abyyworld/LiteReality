@@ -1,0 +1,17 @@
+== eval v2 run/atrium_stray_q/v2 --views 2
+  row 32: PSNR cc 20.10, hf_ratio 0.717
+  row 2371: PSNR cc 19.70, hf_ratio 0.151
+v2: PSNR 18.7565 (cc 19.8968), SSIM 0.6513, LPIPS 0.335, openings 20.2144, objects 18.6763, coverage 0.9662, hf_ratio 0.4341, lap_ratio 0.2622 over 2 views (2 unseen) at 480x360; render 203 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+      214.77 real       586.46 user       344.54 sys
+           899563520  maximum resident set size
+== eval v2 run/atrium_stray_q/v2 --eval-set random --views 2
+  row 68: PSNR cc 22.07, hf_ratio 0.921
+  row 2343: PSNR cc 20.26, hf_ratio 0.248
+v2_random: PSNR 20.4505 (cc 21.1664), SSIM 0.7265, LPIPS 0.2761, openings 23.5895, objects 19.7343, coverage 0.9763, hf_ratio 0.5844, lap_ratio 0.4234 over 2 views (0 unseen) at 480x360; render 259 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+      269.78 real       497.48 user       193.58 sys
+           916619264  maximum resident set size
+== eval v2 run/atrium_stray_q/v2 --eval-set random --full --views 1
+  row 68: PSNR cc 21.71, hf_ratio 0.325
+v2_random_full: PSNR 21.3258 (cc 21.7105), SSIM 0.796, LPIPS 0.2923, openings 24.6083, objects 21.9771, coverage 0.9717, hf_ratio 0.3254, lap_ratio 0.4868 over 1 views (0 unseen) at 1920x1440; render 62 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+       79.05 real       141.19 user        31.31 sys
+          2710044672  maximum resident set size

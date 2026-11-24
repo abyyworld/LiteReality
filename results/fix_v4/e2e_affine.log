@@ -1,0 +1,96 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-5yog79xPXuHK7w5h3gNxmk
+✓ Created objects.
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/deploy/modal/s
+│   plat/litereality_dense.py
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/deploy/modal/s
+│   plat/patch_trainer.py
+├── 🔨 Created function trainer_help.
+└── 🔨 Created function train.
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: divide by zero encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: overflow encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: invalid value encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: divide by zero encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: overflow encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: invalid value encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+splatroom  stray_atrium_q206: /Users/abyyworld/LiteReality-scans/stray_atrium_q206 -> results/fix_v4/e2e_affine  (physics: run/atrium_stray_q/v0/physics/scene.xml)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: divide by zero encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: overflow encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: invalid value encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: divide by zero encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: overflow encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: invalid value encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: divide by zero encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: overflow encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: invalid value encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: divide by zero encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: overflow encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: invalid value encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+  3 object(s) moved to where the splat show them: run/atrium_stray_q/v0/physics/scene_splat.xml
+  instant: 889,280 splats, 4 objects cut out, 8.69 MB, at 37.15 s
+  training set: 188 photos, 40.4 MB; training on Modal (gsplat-modal)
+  trainer up on NVIDIA H100 80GB HBM3 at 58.59 s
+  trained step 200: 1,000,000 splats, 4 objects cut out, 16.19 MB, at 114.28 s
+  held-out photos: PSNR 20.91 dB, SSIM 0.784, LPIPS 0.402
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-5yog79xPXuHK7w5h3gNxmk
+  done in 114.28 s; report: results/fix_v4/e2e_affine/report.json
+  walk it: uv run litereality roomcall run/atrium_stray_q/v0/physics/scene_splat.xml --splat results/fix_v4/e2e_affine
+exit 0

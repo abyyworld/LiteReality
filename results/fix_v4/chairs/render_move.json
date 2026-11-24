@@ -1,0 +1,42 @@
+{
+ "views": {
+  "chairs": [
+   [
+    0.47,
+    -0.15,
+    0.1
+   ],
+   [
+    -0.33,
+    0.87,
+    -0.85
+   ]
+  ],
+  "low": [
+   [
+    0.3,
+    -0.35,
+    -0.3
+   ],
+   [
+    -0.75,
+    0.55,
+    -1.0
+   ]
+  ]
+ },
+ "move_m": 0.5,
+ "toward": [
+  0.47,
+  -0.15
+ ],
+ "seconds": {
+  "v2: Chair1 moved 0.5 m": 302.3,
+  "v2: Chair2 moved 0.5 m": 233.3,
+  "v2: room left behind (no bodies)": 206.3,
+  "v2_chairs: as served": 208.1,
+  "v2_chairs: Chair1 moved 0.5 m": 221.9,
+  "v2_chairs: Chair2 moved 0.5 m": 223.1,
+  "v2_chairs: room left behind (no bodies)": 191.3
+ }
+}

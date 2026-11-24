@@ -1,0 +1,148 @@
+{
+ "variant": "v2",
+ "out_dir": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v2",
+ "scan": "/Users/abyyworld/LiteReality-scans/stray_atrium_q600",
+ "spz": "raw.spz.bin",
+ "spz_sh_degree": 1,
+ "renderer": "playwright-chromium-spark 159.0.8154.6 (SwiftShader, Spark 2.3.1)",
+ "eval_set": "random",
+ "eval_rows": "/Users/abyyworld/LiteReality/results/stray_quality/eval_frames_random.txt",
+ "pool": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool_random",
+ "size": [
+  480,
+  360
+ ],
+ "render_scale": 2,
+ "views": 2,
+ "alignment_vs_pool": {
+  "translation_mm": 0.66,
+  "rotation_deg": 0.0
+ },
+ "render_s": 259.2,
+ "summary": {
+  "psnr": 20.4505,
+  "psnr_cc": 21.1664,
+  "ssim": 0.7265,
+  "lpips": 0.2761,
+  "coverage": 0.9763,
+  "psnr_openings": 23.5895,
+  "psnr_objects": 19.7343,
+  "hf_ratio": 0.5844,
+  "lap_ratio": 0.4234,
+  "half_power_cyc_px1920": 0.0638
+ },
+ "unseen_views": 0,
+ "summary_unseen": {
+  "psnr": null,
+  "psnr_cc": null,
+  "ssim": null,
+  "lpips": null,
+  "coverage": null,
+  "psnr_openings": null,
+  "psnr_objects": null,
+  "hf_ratio": null,
+  "lap_ratio": null,
+  "half_power_cyc_px1920": null
+ },
+ "train": {
+  "frames": 637,
+  "dataset": {
+   "photos": 637,
+   "held_out": 80,
+   "points": 2228000,
+   "points_per_photo": 4000,
+   "dense_photos": 637,
+   "depth_maps": 557
+  },
+  "options": {
+   "steps": 10000,
+   "dense_depth": true,
+   "normal_lambda": 0.05
+  },
+  "train_width": 1440,
+  "trainer_s": 588.4,
+  "total_s": 1231.02,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "trainer_heldout": {
+   "psnr": 22.81696128845215,
+   "ssim": 0.8775545358657837,
+   "lpips": 0.2088334560394287,
+   "cc_psnr": 27.571796417236328,
+   "num_GS": 2228000
+  },
+  "splats": 2228000,
+  "raw_mb": 40.68,
+  "bundle_mb": 40.5,
+  "gpu_s": {
+   "trainer": 588.4,
+   "depth_and_masks": 15.0
+  },
+  "cost_est_usd": 0.65,
+  "corrections": {
+   "Chair0": {
+    "dx": -0.003,
+    "dy": -0.181,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 15336,
+    "from": "photo masks"
+   },
+   "Chair1": {
+    "dx": -0.177,
+    "dy": 0.005,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 37150,
+    "from": "photo masks",
+    "scaled": 0.5
+   },
+   "Chair2": {
+    "dx": 0.047,
+    "dy": 0.068,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 40529,
+    "from": "photo masks"
+   }
+  },
+  "corrected_scene": "run/atrium_stray_q/v2/physics/scene_splat.xml"
+ },
+ "per_view": [
+  {
+   "row": 68,
+   "image": "frame_00000.jpg",
+   "psnr": 21.6502,
+   "psnr_cc": 22.0715,
+   "ssim": 0.7887,
+   "lpips": 0.2248,
+   "coverage": 0.9718,
+   "hf_ratio": 0.921,
+   "lap_ratio": 0.67,
+   "half_power_cyc_px1920": 0.1029,
+   "train_frame_s": 0.0,
+   "unseen": false,
+   "frac_openings": 0.1113,
+   "psnr_openings": 24.9531,
+   "frac_objects": 0.1709,
+   "psnr_objects": 22.3011
+  },
+  {
+   "row": 2343,
+   "image": "frame_00029.jpg",
+   "psnr": 19.2508,
+   "psnr_cc": 20.2613,
+   "ssim": 0.6643,
+   "lpips": 0.3274,
+   "coverage": 0.9808,
+   "hf_ratio": 0.2477,
+   "lap_ratio": 0.1767,
+   "half_power_cyc_px1920": 0.0247,
+   "train_frame_s": 0.033,
+   "unseen": false,
+   "frac_openings": 0.4207,
+   "psnr_openings": 22.226,
+   "frac_objects": 0.2424,
+   "psnr_objects": 17.1674
+  }
+ ]
+}

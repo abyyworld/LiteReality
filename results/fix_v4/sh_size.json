@@ -1,0 +1,9 @@
+{
+ "what": "SPZ size by exported SH degree, same 1,000,000-splat SH3 room (run/atrium_trainers/lfs_mcmc30k_default/splat.ply, LichtFeld MCMC 30k, atrium q206), models/splat/spz.encode (SH1 at 5 bits, SH2-3 at 4 bits, gzip 6)",
+ "mb": {"sh0": 14.5, "sh1": 16.0, "sh2": 17.7, "sh3": 20.4},
+ "bytes_per_splat": {"sh0": 14.5, "sh1": 16.0, "sh2": 17.7, "sh3": 20.4},
+ "estimate_2_4M_splats_sh3_mb": 49,
+ "v2_served_raw_mb_sh1_2_228M": 38.8,
+ "spark_2_3_1": "maxSh defaults to 3 (SplatMesh/SparkRenderer: `maxSh ?? 3`), SH evaluated in object space (viewToObject)",
+ "preset_smoke_300_steps_1M_splats_sh3_mb": 16.2
+}

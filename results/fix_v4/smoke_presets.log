@@ -1,0 +1,42 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-3PdqC3MuHltmjntayuTx67
+✓ Created objects.
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/deploy/modal/s
+│   plat/litereality_dense.py
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/smoke/snap/deploy/modal/s
+│   plat/patch_trainer.py
+├── 🔨 Created function trainer_help.
+└── 🔨 Created function train.
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+q_sh3_affine {"kind": "started", "seconds": 3.295193647, "images": 188, "depths": 0, "gpu": "NVIDIA H100 80GB HBM3"}
+q_sh3_affine {"kind": "snapshot", "step": 300, "seconds": 46.93734879, "splats": 1000000, "spz_mb": 16.2, "sh_degree": 3, "n": 1000000, "sh_abs_mean": 0.00029770139371976256}
+q_sh3_affine {"kind": "done", "seconds": 54.098656416000004, "stats": {"psnr": 21.924205780029297, "ssim": 0.8083372116088867, "lpips": 0.3499901294708252, "cc_psnr": 23.954259872436523, "cc_ssim": 0.8160479068756104, "cc_lpips": 0.3557738661766052, "ellipse_time": 0.0028681854406992593, "num_GS": 1000000}, "timing": {"launched": 3.35, "data_loaded": 10.77, "model_ready": 14.18, "training": 14.79}}
+q_sh3_bilagrid_tv {"kind": "started", "seconds": 1.4382784650000033, "images": 188, "depths": 0, "gpu": "NVIDIA H100 80GB HBM3"}
+q_sh3_bilagrid_tv {"kind": "snapshot", "step": 300, "seconds": 27.635315703000003, "splats": 1000000, "spz_mb": 16.21, "sh_degree": 3, "n": 1000000, "sh_abs_mean": 0.0002963388978969306}
+q_sh3_bilagrid_tv {"kind": "done", "seconds": 34.607112283000006, "stats": {"psnr": 21.91402816772461, "ssim": 0.8087048530578613, "lpips": 0.3493030071258545, "cc_psnr": 23.91322898864746, "cc_ssim": 0.81602942943573, "cc_lpips": 0.35552144050598145, "ellipse_time": 0.0024771392345428467, "num_GS": 1000000}, "timing": {"launched": 1.44, "data_loaded": 9.47, "model_ready": 12.88, "training": 13.48}}
+q_sh3_nogrid {"kind": "started", "seconds": 1.4320115630000032, "images": 188, "depths": 0, "gpu": "NVIDIA H100 80GB HBM3"}
+q_sh3_nogrid {"kind": "snapshot", "step": 300, "seconds": 26.433222647999997, "splats": 1000000, "spz_mb": 16.21, "sh_degree": 3, "n": 1000000, "sh_abs_mean": 0.0003015013935510069}
+q_sh3_nogrid {"kind": "done", "seconds": 33.33157499100001, "stats": {"psnr": 21.907958984375, "ssim": 0.8083407282829285, "lpips": 0.35121259093284607, "cc_psnr": 23.885448455810547, "cc_ssim": 0.8151837587356567, "cc_lpips": 0.3569057583808899, "ellipse_time": 0.004866480827331543, "num_GS": 1000000}, "timing": {"launched": 1.43, "data_loaded": 9.26, "model_ready": 12.66, "training": 13.27}}
+Stopping app - local entrypoint completed.
+Runner terminated.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-3PdqC3MuHltmjntayuTx67

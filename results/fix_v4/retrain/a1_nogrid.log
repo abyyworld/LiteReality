@@ -1,0 +1,245 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-aRegRZT1Wsvejb3W9R7fMq
+✓ Created objects.
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/deploy/modal
+│   /splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/deploy/modal
+│   /splat/patch_trainer.py
+├── 🔨 Created function trainer_help.
+└── 🔨 Created function train.
+splatroom  stray_atrium_b3: /Users/abyyworld/LiteReality-scans/stray_atrium_b3 -> run/atrium_stray_q/v4_a1_nogrid  (physics: run/atrium_stray_q/v4_a1_nogrid/physics/scene.xml)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: divide by zero encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: overflow encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:272: RuntimeWarning: invalid value encountered in matmul
+  return _Obs(points=(cam[keep] @ R.T + t).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: divide by zero encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: overflow encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/rgbd.py:273: RuntimeWarning: invalid value encountered in matmul
+  normals=(n_cam[keep] @ R.T).astype(np.float32),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:529: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R                               # into the geom's frame
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: divide by zero encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: overflow encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:161: RuntimeWarning: invalid value encountered in matmul
+  local = (p[near] - c) @ R
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: divide by zero encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: overflow encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:594: RuntimeWarning: invalid value encountered in matmul
+  local = Splats(((part.positions - x) @ R).astype(np.float32), part.scales.copy(),
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: divide by zero encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: overflow encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:304: RuntimeWarning: invalid value encountered in matmul
+  rel = (pos[:, :2] - centre) @ R2                      # into the footprint's heading
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: divide by zero encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: overflow encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/split.py:319: RuntimeWarning: invalid value encountered in matmul
+  grid = np.stack([gu.ravel(), gv.ravel()], 1) @ R2.T + centre
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: divide by zero encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: overflow encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/models/splat/dataset.py:186: RuntimeWarning: invalid value encountered in matmul
+  world = cam @ frame.c2w[:3, :3].T + frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:180: RuntimeWarning: divide by zero encountered in matmul
+  world = cam @ view.frame.c2w[:3, :3].T + view.frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:180: RuntimeWarning: overflow encountered in matmul
+  world = cam @ view.frame.c2w[:3, :3].T + view.frame.c2w[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:180: RuntimeWarning: invalid value encountered in matmul
+  world = cam @ view.frame.c2w[:3, :3].T + view.frame.c2w[:3, 3]
+  instant: 1,403,214 splats, 4 objects cut out, 14.87 MB, at 110.37 s
+  photo masks: 93 from 86 photos in 35.5 s
+  training set: 403 photos, 201.3 MB; training on Modal (gsplat-modal)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:68: RuntimeWarning: divide by zero encountered in matmul
+  cam = pts @ w2c[:3, :3].T + w2c[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:68: RuntimeWarning: overflow encountered in matmul
+  cam = pts @ w2c[:3, :3].T + w2c[:3, 3]
+/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/pipeline/splatroom/masks.py:68: RuntimeWarning: invalid value encountered in matmul
+  cam = pts @ w2c[:3, :3].T + w2c[:3, 3]
+  trainer up on NVIDIA H100 80GB HBM3 at 205.02 s
+  3 object(s) moved to where the photos show them: /Users/abyyworld/LiteReality/run/atrium_stray_q/v4_a1_nogrid/physics/scene_splat.xml
+  instant: 1,403,214 splats, 4 objects cut out by photo masks, 14.9 MB, at 277.29 s
+  trained step 400: 1,199,968 splats, 4 objects cut out by photo masks, 18.78 MB, at 289.44 s
+  trained step 800: 1,259,966 splats, 4 objects cut out by photo masks, 19.92 MB, at 306.45 s
+  trained step 1250: 1,458,567 splats, 4 objects cut out by photo masks, 23.4 MB, at 332.59 s
+[modal-client] 2026-11-24T11:25:08+0000 Received a cancellation signal while processing input ('in-01M86M9D4TFJYQHDSXNAJD58RT:1795518936220-0',)
+[modal-client] 2026-11-24T11:25:08+0000 Successfully canceled input ('in-01M86M9D4TFJYQHDSXNAJD58RT:1795518936220-0',)
+[modal-client] 2026-11-24T12:03:33+0000 Loop attempt for _run_app.<locals>.heartbeat failed
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/async_utils.py", line 571, in loop_coro
+    await asyncio.wait_for(async_f(), timeout=timeout)
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/runner.py", line 66, in _heartbeat
+    await client.stub.AppHeartbeat(request, retry=Retry(attempt_timeout=HEARTBEAT_TIMEOUT))
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 129, in __call__
+    return await _retry_transient_errors(
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 604, in _retry_transient_errors
+    process_exception_before_retry(
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 460, in process_exception_before_retry
+    raise exc
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 531, in _retry_transient_errors
+    return await fn_callable(req, metadata=attempt_metadata, timeout=timeout)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 159, in direct
+    return await self.client._call_unary(self.wrapped_method, req, timeout=timeout, metadata=metadata)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 379, in _call_unary
+    return await self._call_safely(coro, grpclib_method.name)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 336, in _call_safely
+    return await request_task
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 912, in __call__
+    await stream.send_message(message, end=True)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 242, in send_message
+    await self.send_request()
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 175, in send_request
+    stream = protocol.processor.connection\
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/protocol.py", line 208, in create_stream
+    return Stream(self, self._connection, self._transport,
+AttributeError: 'Connection' object has no attribute '_transport'
+[modal-client] 2026-11-24T12:03:48+0000 Loop attempt for _run_app.<locals>.heartbeat failed
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/async_utils.py", line 571, in loop_coro
+    await asyncio.wait_for(async_f(), timeout=timeout)
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/asyncio/tasks.py", line 445, in wait_for
+    return fut.result()
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/runner.py", line 66, in _heartbeat
+    await client.stub.AppHeartbeat(request, retry=Retry(attempt_timeout=HEARTBEAT_TIMEOUT))
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 129, in __call__
+    return await _retry_transient_errors(
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 604, in _retry_transient_errors
+    process_exception_before_retry(
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 460, in process_exception_before_retry
+    raise exc
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 531, in _retry_transient_errors
+    return await fn_callable(req, metadata=attempt_metadata, timeout=timeout)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 159, in direct
+    return await self.client._call_unary(self.wrapped_method, req, timeout=timeout, metadata=metadata)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 379, in _call_unary
+    return await self._call_safely(coro, grpclib_method.name)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 336, in _call_safely
+    return await request_task
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 912, in __call__
+    await stream.send_message(message, end=True)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 242, in send_message
+    await self.send_request()
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 175, in send_request
+    stream = protocol.processor.connection\
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/protocol.py", line 208, in create_stream
+    return Stream(self, self._connection, self._transport,
+AttributeError: 'Connection' object has no attribute '_transport'
+  training failed: RemoteError: Function call was cancelled by user or a failure.
+Traceback (most recent call last):
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/bin/litereality", line 12, in <module>
+    sys.exit(main())
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/cli.py", line 1710, in main
+    return args.handler(args)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/cli.py", line 848, in _splatroom
+    with contextlib.ExitStack() as stack:
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/contextlib.py", line 576, in __exit__
+    raise exc_details[1]
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/src/litereality_agent/room_ops/roomcall/hosted.py", line 703, in _modal_credentials
+    yield {**os.environ}
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/contextlib.py", line 561, in __exit__
+    if cb(*exc_details):
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/synchronicity/synchronizer.py", line 819, in proxy_method
+    return wrapped_method(instance, *args, **kwargs)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/synchronicity/combined_types.py", line 33, in __call__
+    raise uc_exc.exc
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/contextlib.py", line 206, in __aexit__
+    await anext(self.gen)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/app.py", line 483, in run
+    async with _run_app(
+  File "/Users/abyyworld/.local/share/uv/python/cpython-3.10-macos-aarch64-none/lib/python3.10/contextlib.py", line 206, in __aexit__
+    await anext(self.gen)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/runner.py", line 519, in _run_app
+    await _status_based_disconnect(load_context.client, running_app.app_id, e)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 604, in _retry_transient_errors
+    process_exception_before_retry(
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 460, in process_exception_before_retry
+    raise exc
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_utils/grpc_utils.py", line 531, in _retry_transient_errors
+    return await fn_callable(req, metadata=attempt_metadata, timeout=timeout)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/_grpc_client.py", line 159, in direct
+    return await self.client._call_unary(self.wrapped_method, req, timeout=timeout, metadata=metadata)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 379, in _call_unary
+    return await self._call_safely(coro, grpclib_method.name)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/modal/client.py", line 336, in _call_safely
+    return await request_task
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 912, in __call__
+    await stream.send_message(message, end=True)
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 242, in send_message
+    await self.send_request()
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/client.py", line 175, in send_request
+    stream = protocol.processor.connection\
+  File "/private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereality/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/retrain/snap/.venv/lib/python3.10/site-packages/grpclib/protocol.py", line 208, in create_stream
+    return Stream(self, self._connection, self._transport,
+AttributeError: 'Connection' object has no attribute '_transport'
+     3109.58 real       206.51 user        19.69 sys
+          5348884480  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+             3743004  page reclaims
+                2202  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                4458  messages sent
+                1927  messages received
+                   1  signals received
+               97290  voluntary context switches
+              315207  involuntary context switches
+           266666684  instructions retired
+           102826619  cycles elapsed
+            13091320  peak memory footprint

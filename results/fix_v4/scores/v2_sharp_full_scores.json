@@ -1,0 +1,179 @@
+{
+ "variant": "v2",
+ "out_dir": "/Users/abyyworld/LiteReality/run/atrium_stray_q/v2",
+ "scan": "/Users/abyyworld/LiteReality-scans/stray_atrium_q600",
+ "spz": "raw.spz.bin",
+ "spz_sh_degree": 1,
+ "renderer": "playwright-chromium-spark 159.0.8154.6 (SwiftShader, Spark 2.3.1)",
+ "eval_set": "sharp",
+ "eval_rows": "/Users/abyyworld/LiteReality/results/stray_quality/eval_frames.txt",
+ "pool": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool",
+ "settle": false,
+ "size": [
+  1920,
+  1440
+ ],
+ "render_scale": 1,
+ "views": 4,
+ "alignment_vs_pool": {
+  "translation_mm": 0.66,
+  "rotation_deg": 0.0
+ },
+ "render_s": 1177.7,
+ "summary": {
+  "psnr": 19.9538,
+  "psnr_cc": 21.6767,
+  "ssim": 0.7887,
+  "lpips": 0.2963,
+  "coverage": 0.9773,
+  "psnr_openings": 20.4921,
+  "psnr_objects": 18.6297,
+  "hf_ratio": 0.1413,
+  "lap_ratio": 0.1814,
+  "half_power_cyc_px1920": 0.0729,
+  "psnr_cc_480": 22.1221
+ },
+ "unseen_views": 4,
+ "summary_unseen": null,
+ "train": {
+  "frames": 637,
+  "dataset": {
+   "photos": 637,
+   "held_out": 80,
+   "points": 2228000,
+   "points_per_photo": 4000,
+   "dense_photos": 637,
+   "depth_maps": 557
+  },
+  "options": {
+   "steps": 10000,
+   "dense_depth": true,
+   "normal_lambda": 0.05
+  },
+  "train_width": 1440,
+  "trainer_s": 588.4,
+  "total_s": 1231.02,
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "trainer_heldout": {
+   "psnr": 22.81696128845215,
+   "ssim": 0.8775545358657837,
+   "lpips": 0.2088334560394287,
+   "cc_psnr": 27.571796417236328,
+   "num_GS": 2228000
+  },
+  "splats": 2228000,
+  "raw_mb": 40.68,
+  "bundle_mb": 40.5,
+  "gpu_s": {
+   "trainer": 588.4,
+   "depth_and_masks": 15.0
+  },
+  "cost_est_usd": 0.65,
+  "corrections": {
+   "Chair0": {
+    "dx": -0.003,
+    "dy": -0.181,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 15336,
+    "from": "photo masks"
+   },
+   "Chair1": {
+    "dx": -0.177,
+    "dy": 0.005,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 37150,
+    "from": "photo masks",
+    "scaled": 0.5
+   },
+   "Chair2": {
+    "dx": 0.047,
+    "dy": 0.068,
+    "dyaw_deg": 0.0,
+    "before": null,
+    "after": 40529,
+    "from": "photo masks"
+   }
+  },
+  "corrected_scene": "run/atrium_stray_q/v2/physics/scene_splat.xml"
+ },
+ "per_view": [
+  {
+   "row": 32,
+   "image": "frame_00002.jpg",
+   "psnr": 17.9475,
+   "psnr_cc": 19.275,
+   "ssim": 0.6304,
+   "lpips": 0.4127,
+   "coverage": 0.9533,
+   "hf_ratio": 0.1164,
+   "lap_ratio": 0.1124,
+   "half_power_cyc_px1920": 0.1094,
+   "train_frame_s": 0.2,
+   "unseen": true,
+   "psnr_cc_480": 20.051,
+   "frac_openings": 0.1439,
+   "psnr_openings": 18.2811,
+   "frac_objects": 0.11,
+   "psnr_objects": 20.2336
+  },
+  {
+   "row": 739,
+   "image": "frame_00194.jpg",
+   "psnr": 18.6253,
+   "psnr_cc": 22.2578,
+   "ssim": 0.9034,
+   "lpips": 0.205,
+   "coverage": 0.987,
+   "hf_ratio": 0.2379,
+   "lap_ratio": 0.2799,
+   "half_power_cyc_px1920": 0.0469,
+   "train_frame_s": 0.2,
+   "unseen": true,
+   "psnr_cc_480": 22.4679,
+   "frac_openings": 0.3558,
+   "psnr_openings": 18.3586,
+   "frac_objects": 0.0,
+   "psnr_objects": null
+  },
+  {
+   "row": 1655,
+   "image": "frame_00412.jpg",
+   "psnr": 24.3517,
+   "psnr_cc": 25.5336,
+   "ssim": 0.9262,
+   "lpips": 0.1584,
+   "coverage": 0.9903,
+   "hf_ratio": 0.1077,
+   "lap_ratio": 0.2465,
+   "half_power_cyc_px1920": 0.1094,
+   "train_frame_s": 0.2,
+   "unseen": true,
+   "psnr_cc_480": 25.6945,
+   "frac_openings": 0.0622,
+   "psnr_openings": 23.0746,
+   "frac_objects": 0.0,
+   "psnr_objects": null
+  },
+  {
+   "row": 2371,
+   "image": "frame_00617.jpg",
+   "psnr": 18.8906,
+   "psnr_cc": 19.6404,
+   "ssim": 0.6947,
+   "lpips": 0.4092,
+   "coverage": 0.9786,
+   "hf_ratio": 0.1032,
+   "lap_ratio": 0.0868,
+   "half_power_cyc_px1920": 0.026,
+   "train_frame_s": 0.2,
+   "unseen": true,
+   "psnr_cc_480": 20.275,
+   "frac_openings": 0.4268,
+   "psnr_openings": 22.254,
+   "frac_objects": 0.2767,
+   "psnr_objects": 17.0258
+  }
+ ]
+}

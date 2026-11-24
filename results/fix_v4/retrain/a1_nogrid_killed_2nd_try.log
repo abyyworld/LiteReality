@@ -1,0 +1,50 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-Ks0lle3ROGDIA4LUwERgAH
+✓ Created objects.
+├── 🔨 Created mount PythonPackage:litereality_agent
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/fix4me/snap/deploy/modal/
+│   splat/litereality_dense.py
+├── 🔨 Created mount 
+│   /private/tmp/claude-501/-Users-abyyworld-Desktop-llms-working-here-litereali
+│   ty/3dba2112-c4f5-423b-8511-99fb562955c0/scratchpad/fix4me/snap/deploy/modal/
+│   splat/patch_trainer.py
+├── 🔨 Created function trainer_help.
+└── 🔨 Created function train.
+splatroom  stray_atrium_b3: /Users/abyyworld/LiteReality-scans/stray_atrium_b3 -> run/atrium_stray_q/v4_a1_nogrid  (physics: run/atrium_1059/quick/scene.xml)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
+dense depth: 403/403 frames refined on Modal in 55.4 s (55 MB up, 276 ms a frame on the GPU), 0 cached
+  instances: Chair2 -> object at [-0.902, 0.247] (0.281 m, yaw -141.8 -> -77.2 deg, scale [1.115, 1.504, 1.131])
+  1 object(s) put where the splat shows them, 0 phantom(s) removed: run/atrium_1059/quick/scene_splat.xml
+  instant: 1,001,331 splats, 4 objects cut out, 9.82 MB, at 118.31 s
+  training set: 403 photos, 201.3 MB; training on Modal (gsplat-modal)
+
+==========
+== CUDA ==
+==========
+
+CUDA Version 12.4.1
+
+Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+By pulling and using the container, you accept the terms and conditions of this license:
+https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+
+A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+
