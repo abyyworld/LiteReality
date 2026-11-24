@@ -1,0 +1,337 @@
+=== v2 sharp 480 17:57:29
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v2: PSNR 20.1782 (cc 22.5278), SSIM 0.7676, LPIPS 0.2607, openings 21.4165, objects 20.9652, coverage 0.9777, hf_ratio 0.5453, lap_ratio 0.2881 over 29 views (29 unseen) at 480x360; render 38 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== v4 sharp 480 17:58:20
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v4: PSNR 20.1778 (cc 21.7027), SSIM 0.7103, LPIPS 0.3769, openings 21.1189, objects 19.728, coverage 0.9845, hf_ratio 0.8578, lap_ratio 0.5095 over 29 views (29 unseen) at 480x360; render 38 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== v2 random 480 17:59:07
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v2_random: PSNR 20.8334 (cc 23.1181), SSIM 0.8108, LPIPS 0.2273, openings 22.902, objects 20.8052, coverage 0.9785, hf_ratio 0.7062, lap_ratio 0.5893 over 30 views (2 unseen) at 480x360; render 38 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== v4 random 480 17:59:53
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v4_random: PSNR 20.2894 (cc 21.9206), SSIM 0.7382, LPIPS 0.3575, openings 21.5913, objects 19.8206, coverage 0.9879, hf_ratio 1.5033, lap_ratio 1.0732 over 30 views (30 unseen) at 480x360; render 38 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== v2 sharp --full 18:00:39
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v2_sharp_full: PSNR 19.9098 (cc 22.1318), SSIM 0.8031, LPIPS 0.3059, openings 21.0253, objects 20.6381, coverage 0.9777, hf_ratio 0.1843, lap_ratio 0.2827 over 29 views (29 unseen) at 1920x1440; render 61 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== v4 sharp --full 18:03:24
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v4_sharp_full: PSNR 19.8715 (cc 21.3097), SSIM 0.78, LPIPS 0.3763, openings 20.6993, objects 19.4092, coverage 0.9844, hf_ratio 0.3669, lap_ratio 0.5511 over 29 views (29 unseen) at 1920x1440; render 71 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== v2 random --full 18:06:11
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v2_random_full: PSNR 20.6805 (cc 22.9012), SSIM 0.8579, LPIPS 0.2588, openings 22.6646, objects 20.5541, coverage 0.9785, hf_ratio 0.6019, lap_ratio 0.9484 over 30 views (2 unseen) at 1920x1440; render 66 s; alignment vs pool {'translation_mm': 0.66, 'rotation_deg': 0.0}
+=== v4 random --full 18:09:47
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:208: UserWarning: The parameter 'pretrained' is deprecated since 0.13 and may be removed in the future, please use 'weights' instead.
+  warnings.warn(
+/Users/abyyworld/.cache/uv/archive-v0/zpVz2pmLf4d6vjRn/lib/python3.10/site-packages/torchvision/models/_utils.py:223: UserWarning: Arguments other than a weight enum or `None` for 'weights' are deprecated since 0.13 and may be removed in the future. The current behavior is equivalent to passing `weights=AlexNet_Weights.IMAGENET1K_V1`. You can also use `weights=AlexNet_Weights.DEFAULT` to get the most up-to-date weights.
+  warnings.warn(msg)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: divide by zero encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: overflow encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:259: RuntimeWarning: invalid value encountered in matmul
+  return view.pose[:3, 3].copy(), cam @ view.pose[:3, :3].T
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: divide by zero encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: overflow encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:286: RuntimeWarning: invalid value encountered in matmul
+  d = dirs @ rot
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: divide by zero encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: overflow encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:341: RuntimeWarning: invalid value encountered in matmul
+  local = (points - box.centre) @ _yaw_matrix(box.yaw)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: divide by zero encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: overflow encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:359: RuntimeWarning: invalid value encountered in matmul
+  t = rel @ along
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: divide by zero encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: overflow encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/src/litereality_agent/pipeline/evaluate/fidelity.py:360: RuntimeWarning: invalid value encountered in matmul
+  near |= ((np.abs(rel @ normal) < WALL_TOL) & (t > -WALL_TOL)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/stray_quality/score.py:175: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0.0, 1.0).reshape(render.shape)
+v4_random_full: PSNR 20.103 (cc 21.6832), SSIM 0.823, LPIPS 0.3495, openings 21.3426, objects 19.5501, coverage 0.9878, hf_ratio 1.5733, lap_ratio 1.644 over 30 views (30 unseen) at 1920x1440; render 66 s; alignment vs pool {'translation_mm': 1.51, 'rotation_deg': 0.0243}
+=== ALL DONE 18:12:23
