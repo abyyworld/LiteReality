@@ -1,0 +1,63 @@
+{
+ "train_234": {
+  "1920": {
+   "global_cc": 19.97,
+   "tile_cc": 25.08
+  },
+  "480": {
+   "global_cc": 20.35,
+   "tile_cc": 26.1
+  }
+ },
+ "train_2002": {
+  "1920": {
+   "global_cc": 20.27,
+   "tile_cc": 24.63
+  },
+  "480": {
+   "global_cc": 20.46,
+   "tile_cc": 25.06
+  }
+ },
+ "train_1228": {
+  "1920": {
+   "global_cc": 18.64,
+   "tile_cc": 21.17
+  },
+  "480": {
+   "global_cc": 19.26,
+   "tile_cc": 22.35
+  }
+ },
+ "eval_224": {
+  "1920": {
+   "global_cc": 20.08,
+   "tile_cc": 25.35
+  },
+  "480": {
+   "global_cc": 20.59,
+   "tile_cc": 26.8
+  }
+ },
+ "eval_2010": {
+  "1920": {
+   "global_cc": 19.01,
+   "tile_cc": 22.29
+  },
+  "480": {
+   "global_cc": 19.56,
+   "tile_cc": 23.51
+  }
+ },
+ "eval_1219": {
+  "1920": {
+   "global_cc": 17.57,
+   "tile_cc": 20.53
+  },
+  "480": {
+   "global_cc": 18.25,
+   "tile_cc": 22.02
+  }
+ },
+ "ref_photo_sigma2_tile_cc_1920": 32.11
+}

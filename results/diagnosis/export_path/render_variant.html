@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>diagnosis — splat render variants</title>
+<!-- A copy of pipeline/evaluate/render_splat.html with knobs (query string) so one setting at a
+     time can be changed: tm=neutral (app.js tone mapping), aa=1 (MSAA as app.js on dpr<2),
+     msd=<maxStdDev>, sr=<JSON of extra SparkRenderer options>. -->
+<script type="importmap">{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.3.1/dist/spark.module.min.js"
+}}</script>
+<style>html, body { margin: 0; background: transparent; } canvas { display: block; }</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import * as SPARK from '@sparkjsdev/spark';
+const { SparkRenderer, SplatMesh } = SPARK;
+const q = new URLSearchParams(location.search);
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: q.get('aa') === '1', alpha: true,
+                                           preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setClearColor(0x000000, 0);
+if (q.get('tm') === 'neutral') {
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping;
+}
+const srOpts = { renderer, maxStdDev: Number(q.get('msd') || Math.sqrt(5)), ...(q.get('sr') ? JSON.parse(q.get('sr')) : {}) };
+const sr = new SparkRenderer(srOpts);
+const scene = new THREE.Scene();
+scene.add(sr);
+const world = new THREE.Group();
+world.rotation.x = -Math.PI / 2;
+scene.add(world);
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+camera.matrixAutoUpdate = false;
+scene.add(camera);
+let loaded = null;
+const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+async function load(url) {
+  if (loaded && loaded.url === url) return;
+  const enc = q.get('enc') ? JSON.parse(q.get('enc')) : null;
+  const mesh = enc ? new SplatMesh({ packedSplats: new SPARK.PackedSplats({ url, splatEncoding: enc }) }) : new SplatMesh({ url });
+  await mesh.initialized;
+  world.add(mesh);
+  loaded = { url, mesh };
+}
+function place(view) {
+  camera.matrix.fromArray(view.matrixWorld);
+  camera.matrixWorld.copy(camera.matrix);
+  camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  camera.projectionMatrix.fromArray(view.projection);
+  camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+}
+const probe = document.createElement('canvas');
+probe.width = 64; probe.height = 48;
+const probeCtx = probe.getContext('2d', { willReadFrequently: true });
+function drawn() {
+  probeCtx.clearRect(0, 0, probe.width, probe.height);
+  probeCtx.drawImage(canvas, 0, 0, probe.width, probe.height);
+  const px = probeCtx.getImageData(0, 0, probe.width, probe.height).data;
+  for (let k = 3; k < px.length; k += 4) if (px[k]) return true;
+  return false;
+}
+window.sparkInfo = async (url) => {
+  await load(url);
+  const out = { exports: Object.keys(SPARK).sort(), sr: {}, mesh: {}, packed: {} };
+  for (const [k, v] of Object.entries(sr)) {
+    if (['number', 'boolean', 'string'].includes(typeof v)) out.sr[k] = v;
+  }
+  const m = loaded.mesh;
+  for (const [k, v] of Object.entries(m)) {
+    if (['number', 'boolean', 'string'].includes(typeof v)) out.mesh[k] = v;
+  }
+  const ps = m.packedSplats || m.splats;
+  if (ps) {
+    out.packed.ctor = ps.constructor?.name;
+    for (const [k, v] of Object.entries(ps)) {
+      if (['number', 'boolean', 'string'].includes(typeof v)) out.packed[k] = v;
+      else if (v && v.BYTES_PER_ELEMENT) out.packed[k] = `${v.constructor.name}[${v.length}]`;
+      else if (v && typeof v === 'object') out.packed[k] = `{${Object.keys(v).slice(0, 12).join(',')}}`;
+    }
+  }
+  out.three = { toneMapping: renderer.toneMapping, outputColorSpace: renderer.outputColorSpace,
+                antialias: renderer.getContext().getContextAttributes().antialias,
+                samples: renderer.getContext().getParameter(renderer.getContext().SAMPLES) };
+  return out;
+};
+window.renderViews = async (job) => {
+  await load(job.glb);
+  renderer.setSize(job.width, job.height, false);
+  const out = [];
+  for (const view of job.views) {
+    place(view);
+    for (let i = 0; i < (job.passes || 6); i++) { renderer.render(scene, camera); await frame(); }
+    renderer.render(scene, camera);
+    if (!drawn()) {
+      const until = performance.now() + 60000;
+      while (performance.now() < until) {
+        await frame();
+        renderer.render(scene, camera);
+        if (drawn()) { await frame(); renderer.render(scene, camera); break; }
+      }
+    }
+    out.push(canvas.toDataURL('image/png'));
+  }
+  return out;
+};
+window.packInfo = async (url, stride) => {
+  await load(url);
+  const m = loaded.mesh, ps = m.packedSplats;
+  const out = { encoding: {}, lodTree: String(ps.extra?.lodTree), meshObjKeys: [], n: ps.numSplats, samples: [] };
+  for (const [k, v] of Object.entries(ps.splatEncoding || {})) out.encoding[k] = v;
+  for (const [k, v] of Object.entries(m)) if (v && typeof v === 'object') out.meshObjKeys.push(k + ':' + (v.constructor?.name || ''));
+  for (let i = 0; i < ps.numSplats; i += stride) {
+    let u;
+    try { u = SPARK.unpackSplat(ps.packedArray, i, ps.splatEncoding); } catch (e) { out.err = String(e); break; }
+    out.samples.push([i, u.center.x, u.center.y, u.center.z, u.scales.x, u.scales.y, u.scales.z,
+                      u.color.r, u.color.g, u.color.b, u.opacity]);
+  }
+  return out;
+};
+window.renderReady = true;
+</script>
+</body></html>

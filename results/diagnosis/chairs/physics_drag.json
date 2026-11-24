@@ -1,0 +1,17 @@
+{
+ "drag Chair2 0.6 m toward Chair1": {
+  "Chair0": 0.0,
+  "Chair1": 0.03,
+  "Chair2": 0.378
+ },
+ "drag Chair1 0.6 m toward Chair2": {
+  "Chair0": 0.0,
+  "Chair1": 0.373,
+  "Chair2": 0.074
+ },
+ "drag Chair1 0.6 m toward Chair0": {
+  "Chair0": 0.0,
+  "Chair1": 0.389,
+  "Chair2": 0.0
+ }
+}

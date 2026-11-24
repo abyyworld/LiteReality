@@ -1,0 +1,22 @@
+{
+ "run": "run/atrium_trainers/lfs_mrnf30k_nocal",
+ "frame": "frame_00013",
+ "crop_xy": [
+  720,
+  540
+ ],
+ "sh0": {
+  "psnr_vs_photo": 19.94,
+  "psnr_cc_vs_photo": 24.65
+ },
+ "sh1": {
+  "psnr_vs_photo": 19.88,
+  "psnr_cc_vs_photo": 25.95
+ },
+ "sh3": {
+  "psnr_vs_photo": 20.23,
+  "psnr_cc_vs_photo": 31.87
+ },
+ "sh1_vs_sh3_psnr": 27.9,
+ "sh0_vs_sh3_psnr": 25.93
+}

@@ -1,0 +1,22 @@
+[
+ {
+  "name": "eval_224",
+  "photo": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool/frame_00047.jpg",
+  "coverage": 0.9285
+ },
+ {
+  "name": "train_234",
+  "photo": "/Users/abyyworld/LiteReality-scans/stray_atrium_q600/frame_00052.jpg",
+  "coverage": 0.9335
+ },
+ {
+  "name": "eval_1219",
+  "photo": "/Users/abyyworld/LiteReality-scans/stray_atrium_pool/frame_00296.jpg",
+  "coverage": 0.9933
+ },
+ {
+  "name": "train_1228",
+  "photo": "/Users/abyyworld/LiteReality-scans/stray_atrium_q600/frame_00296.jpg",
+  "coverage": 0.9936
+ }
+]

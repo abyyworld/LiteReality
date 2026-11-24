@@ -1,0 +1,60 @@
+{
+ "floor_z": -1.2472759435038716,
+ "Chair0": {
+  "origin": [
+   0.524,
+   1.544,
+   -0.824
+  ],
+  "yaw_deg": -141.9,
+  "geom_half": [
+   0.252,
+   0.268,
+   0.025
+  ],
+  "geom_pos": [
+   0.0,
+   -0.025,
+   0.002
+  ]
+ },
+ "Chair1": {
+  "origin": [
+   -0.334,
+   0.871,
+   -0.824
+  ],
+  "yaw_deg": -141.9,
+  "geom_half": [
+   0.252,
+   0.268,
+   0.025
+  ],
+  "geom_pos": [
+   0.0,
+   -0.025,
+   0.002
+  ]
+ },
+ "Chair2": {
+  "origin": [
+   -1.192,
+   0.197,
+   -0.824
+  ],
+  "yaw_deg": -141.8,
+  "geom_half": [
+   0.252,
+   0.268,
+   0.025
+  ],
+  "geom_pos": [
+   0.0,
+   -0.025,
+   0.002
+  ]
+ },
+ "splat blue lidar pts within 0.25 m (xy, band)": 720,
+ "splat teal lidar pts within 0.25 m (xy, band)": 49334,
+ "splat dark lidar pts within 0.25 m (xy, band)": 38045
+}

@@ -1,0 +1,86 @@
+{
+ "encoding": {
+  "rgbMin": 0,
+  "rgbMax": 1,
+  "lnScaleMin": -12,
+  "lnScaleMax": 9,
+  "sh1Max": 1,
+  "sh2Max": 1,
+  "sh3Max": 1,
+  "lodOpacity": false
+ },
+ "lodTree": "undefined",
+ "meshObjKeys": [
+  "parent:Group",
+  "children:Array",
+  "up:Vector3",
+  "position:Vector3",
+  "rotation:Euler",
+  "quaternion:Quaternion",
+  "scale:Vector3",
+  "matrix:Matrix4",
+  "matrixWorld:Matrix4",
+  "layers:Layers",
+  "animations:Array",
+  "userData:Object",
+  "recolor:Color",
+  "showLodPageDyno:Ka",
+  "packedSplats:t",
+  "context:Object",
+  "initialized:Promise",
+  "splats:t"
+ ],
+ "n": 2228000,
+ "sampled": 20073,
+ "centre_err_m": {
+  "50": 0.000345,
+  "90": 0.000546,
+  "99": 0.000772,
+  "100": 0.001119
+ },
+ "centre_err_m_by_radius": {
+  "0-1 m": {
+   "50": 0.000244,
+   "90": 0.000244,
+   "99": 0.000345,
+   "100": 0.000345
+  },
+  "1-2 m": {
+   "50": 0.000244,
+   "90": 0.000546,
+   "99": 0.000691,
+   "100": 0.000846
+  },
+  "2-4 m": {
+   "50": 0.000423,
+   "90": 0.000732,
+   "99": 0.001007,
+   "100": 0.001119
+  },
+  "4-99 m": {
+   "50": 0.000386,
+   "90": 0.000695,
+   "99": 0.000764,
+   "100": 0.000772
+  }
+ },
+ "scale_abs_log_err": {
+  "50": 0.020669,
+  "90": 0.037402,
+  "99": 0.041339,
+  "100": 0.041339
+ },
+ "colour_err_grey_levels": {
+  "50": 0.244295,
+  "90": 0.453769,
+  "99": 0.498833,
+  "100": 0.498833
+ },
+ "colour_clipped_by_spark_frac": 0.07771633537587805,
+ "opacity_err_levels": {
+  "50": 0.0,
+  "90": 2e-06,
+  "99": 7e-06,
+  "100": 8e-06
+ }
+}

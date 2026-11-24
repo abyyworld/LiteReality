@@ -1,0 +1,14 @@
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:110: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:110: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:110: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:126: RuntimeWarning: divide by zero encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:126: RuntimeWarning: overflow encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:126: RuntimeWarning: invalid value encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+base {"coverage": 0.9781, "psnr_960": 20.4411, "psnr_480": 20.5267, "psnr_cc_affine_480": 23.1834, "psnr_cc_gsplat_480": 24.0099, "psnr_cc_gsplat_960": 23.809, "ssim_480": 0.7869, "sharpness_ratio_960": 0.3234, "sharpness_ratio_480": 0.3717}
+msd3 {"coverage": 0.9809, "psnr_960": 20.5968, "psnr_480": 20.6806, "psnr_cc_affine_480": 23.4143, "psnr_cc_gsplat_480": 24.2344, "psnr_cc_gsplat_960": 24.0388, "ssim_480": 0.7966, "sharpness_ratio_960": 0.2281, "sharpness_ratio_480": 0.2764}

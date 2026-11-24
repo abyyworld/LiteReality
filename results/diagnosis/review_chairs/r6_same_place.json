@@ -1,0 +1,36 @@
+{
+ "dark chair backrest (floor+0.80..1.05, 0.25 m disc)": {
+  "atrium_1059 LiDAR": {
+   "n": 5997,
+   "centroid_xy": [
+    -0.649,
+    0.32
+   ]
+  },
+  "Stray splat": {
+   "n": 3484,
+   "centroid_xy": [
+    -0.659,
+    0.366
+   ]
+  },
+  "centroid shift m": 0.047
+ },
+ "teal chair seat (floor+0.40..0.60, 0.30 m disc)": {
+  "atrium_1059 LiDAR": {
+   "n": 53823,
+   "centroid_xy": [
+    -1.114,
+    0.089
+   ]
+  },
+  "Stray splat": {
+   "n": 3637,
+   "centroid_xy": [
+    -1.038,
+    0.106
+   ]
+  },
+  "centroid shift m": 0.078
+ }
+}

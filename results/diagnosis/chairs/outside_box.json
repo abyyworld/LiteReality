@@ -1,0 +1,50 @@
+{
+ "blue chair (near Chair0)": {
+  "n": 11080,
+  "inside box+2cm": 0.958,
+  "2-10 cm outside": 0.037,
+  "10-30 cm outside": 0.004,
+  ">30 cm outside": 0.0,
+  "nearest box": {
+   "Chair0": 1.0,
+   "Chair1": 0.0,
+   "Chair2": 0.0
+  },
+  "faint (op<0.2)": 0.741,
+  "big (sigma>5cm)": 0.013,
+  "below floor+0.10": 0.0,
+  "chair top above floor (p99), m": 0.825
+ },
+ "teal chair (near Chair2)": {
+  "n": 37642,
+  "inside box+2cm": 0.396,
+  "2-10 cm outside": 0.474,
+  "10-30 cm outside": 0.13,
+  ">30 cm outside": 0.0,
+  "nearest box": {
+   "Chair0": 0.0,
+   "Chair1": 0.0,
+   "Chair2": 1.0
+  },
+  "faint (op<0.2)": 0.769,
+  "big (sigma>5cm)": 0.002,
+  "below floor+0.10": 0.055,
+  "chair top above floor (p99), m": 0.858
+ },
+ "dark chair (no body; 0.45 m from Chair1 box)": {
+  "n": 70011,
+  "inside box+2cm": 0.193,
+  "2-10 cm outside": 0.358,
+  "10-30 cm outside": 0.449,
+  ">30 cm outside": 0.0,
+  "nearest box": {
+   "Chair0": 0.0,
+   "Chair1": 0.478,
+   "Chair2": 0.522
+  },
+  "faint (op<0.2)": 0.78,
+  "big (sigma>5cm)": 0.002,
+  "below floor+0.10": 0.073,
+  "chair top above floor (p99), m": 1.021
+ }
+}

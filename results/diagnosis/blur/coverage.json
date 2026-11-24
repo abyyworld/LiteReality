@@ -1,0 +1,94 @@
+{
+ "f_train_1440_px": 1005.5,
+ "visibility_rule": "in frustum, LiDAR depth valid, point <= depth + 10 cm",
+ "surfaces": {
+  "ceiling": {
+   "points": 3359,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.0,
+   "views_median": 49.0,
+   "closest_view_m_median": 1.39,
+   "finest_mm_per_px_at_1440_median": 1.38,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 3.06,
+   "frac_views_blur_ge_4px_median": 0.231
+  },
+  "desk top": {
+   "points": 1252,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.0,
+   "views_median": 95.0,
+   "closest_view_m_median": 1.14,
+   "finest_mm_per_px_at_1440_median": 1.13,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 3.94,
+   "frac_views_blur_ge_4px_median": 0.394
+  },
+  "door": {
+   "points": 860,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.0,
+   "views_median": 94.5,
+   "closest_view_m_median": 1.15,
+   "finest_mm_per_px_at_1440_median": 1.14,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 3.09,
+   "frac_views_blur_ge_4px_median": 0.226
+  },
+  "floor (open)": {
+   "points": 2107,
+   "frac_unseen": 0.038,
+   "frac_lt3_views": 0.056,
+   "views_median": 32.0,
+   "closest_view_m_median": 1.76,
+   "finest_mm_per_px_at_1440_median": 1.75,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 3.75,
+   "frac_views_blur_ge_4px_median": 0.333
+  },
+  "floor under desk": {
+   "points": 1252,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.002,
+   "views_median": 35.0,
+   "closest_view_m_median": 1.2,
+   "finest_mm_per_px_at_1440_median": 1.19,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 4.1,
+   "frac_views_blur_ge_4px_median": 0.397
+  },
+  "wall (other)": {
+   "points": 8547,
+   "frac_unseen": 0.054,
+   "frac_lt3_views": 0.094,
+   "views_median": 38.0,
+   "closest_view_m_median": 1.64,
+   "finest_mm_per_px_at_1440_median": 1.63,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 3.68,
+   "frac_views_blur_ge_4px_median": 0.3
+  },
+  "window (Wall2)": {
+   "points": 2244,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.0,
+   "views_median": 67.0,
+   "closest_view_m_median": 1.78,
+   "finest_mm_per_px_at_1440_median": 1.77,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 4.06,
+   "frac_views_blur_ge_4px_median": 0.359
+  },
+  "window (Wall3)": {
+   "points": 1470,
+   "frac_unseen": 0.0,
+   "frac_lt3_views": 0.0,
+   "views_median": 58.0,
+   "closest_view_m_median": 1.33,
+   "finest_mm_per_px_at_1440_median": 1.33,
+   "sharpest_view_blur_px1920_median": 1.0,
+   "mean_view_blur_px1920_median": 4.98,
+   "frac_views_blur_ge_4px_median": 0.367
+  }
+ }
+}

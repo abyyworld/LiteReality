@@ -1,0 +1,74 @@
+{
+ "file": "run/atrium_stray_q/v2/raw.spz.bin",
+ "n": 2228000,
+ "version": 3,
+ "sh_degree": 1,
+ "fractional_bits": 12,
+ "flag_antialiased": true,
+ "dc_byte_saturated_frac": 0.004172052663076002,
+ "scale_byte_saturated_frac": 0.02606163973668462,
+ "sh_byte_saturated_frac": 0.0,
+ "sh_abs_mean": 0.020967120304703712,
+ "sh_zero_frac": 0.7218145820865749,
+ "scale_max_sigma_m_percentiles": {
+  "5": 0.0007101743831299245,
+  "25": 0.0029899459332227707,
+  "50": 0.007635094225406647,
+  "75": 0.014264234341681004,
+  "95": 0.032144948840141296,
+  "99": 0.056416139006614685
+ },
+ "scale_min_sigma_m_median": 0.0006671471055597067,
+ "opacity_percentiles": {
+  "5": 0.003921568859368563,
+  "25": 0.01568627543747425,
+  "50": 0.05882352963089943,
+  "75": 0.16862745583057404,
+  "95": 0.7333333492279053
+ },
+ "quant_steps": {
+  "position_m": 0.000244140625,
+  "colour_grey_levels_per_step": 1.8806319451591877,
+  "scale_rel_per_step": 0.06449445891785932,
+  "opacity_per_step": 0.00392156862745098,
+  "sh1_step": 0.0625,
+  "sh23_step": 0.125
+ },
+ "dist_to_nearest_capture_m_percentiles": {
+  "5": 0.4305271506309509,
+  "25": 0.668279230594635,
+  "50": 0.8986585140228271,
+  "75": 1.2167102098464966,
+  "95": 1.6008130311965942
+ },
+ "max_sigma_px_at_capture_train_1440_percentiles": {
+  "25": 3.6462886333465576,
+  "50": 8.66358757019043,
+  "75": 16.172271728515625,
+  "95": 36.38674545288086
+ },
+ "max_sigma_px_at_capture_browser_1080p_fov70_percentiles": {
+  "25": 2.8074553382819074,
+  "50": 6.670517867453222,
+  "75": 12.451819830559778,
+  "95": 28.015951887409805
+ }
+}
+       13.48 real        11.39 user         1.53 sys
+          2368503808  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              415416  page reclaims
+                 792  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   1  messages sent
+                   1  messages received
+                   1  signals received
+                 405  voluntary context switches
+               12791  involuntary context switches
+           257295168  instructions retired
+           115869378  cycles elapsed
+            12616136  peak memory footprint

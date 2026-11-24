@@ -1,0 +1,13 @@
+✓ Initialized. View run at 
+https://modal.com/apps/kenny09077/main/ap-WDyKvbiAzDjrOMshfV13mC
+✓ Created objects.
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/results/diagnosis/export_path/gsplat_render_mod
+│   al.py
+├── 🔨 Created mount 
+│   /Users/abyyworld/LiteReality/src/litereality_agent/models/splat/spz.py
+└── 🔨 Created function render.
+saved 9 views
+Stopping app - local entrypoint completed.
+✓ App completed. View run at 
+https://modal.com/apps/kenny09077/main/ap-WDyKvbiAzDjrOMshfV13mC

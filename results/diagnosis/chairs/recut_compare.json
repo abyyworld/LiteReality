@@ -1,0 +1,168 @@
+{
+ "served (masks)": {
+  "true_chairs": {
+   "blue chair (near Chair0)": {
+    "room": 0.075,
+    "Chair0": 0.624,
+    "Chair1": 0.302,
+    "Chair2": 0.0,
+    "Wall0_Door_0": 0.0
+   },
+   "teal chair (near Chair2)": {
+    "room": 0.829,
+    "Chair0": 0.0,
+    "Chair1": 0.002,
+    "Chair2": 0.169,
+    "Wall0_Door_0": 0.0
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "room": 0.932,
+    "Chair0": 0.0,
+    "Chair1": 0.012,
+    "Chair2": 0.056,
+    "Wall0_Door_0": 0.0
+   }
+  }
+ },
+ "boxes only, scanned poses (no snap, no masks)": {
+  "corrections": {},
+  "counts": {
+   "Chair0": 10736,
+   "Chair1": 17103,
+   "Chair2": 42336,
+   "Wall0_Door_0": 49417
+  },
+  "true_chairs": {
+   "blue chair (near Chair0)": {
+    "room": 0.243,
+    "Chair0": 0.757,
+    "Chair1": 0.0,
+    "Chair2": 0.0
+   },
+   "teal chair (near Chair2)": {
+    "room": 0.423,
+    "Chair0": 0.0,
+    "Chair1": 0.0,
+    "Chair2": 0.577
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "room": 0.963,
+    "Chair0": 0.0,
+    "Chair1": 0.005,
+    "Chair2": 0.031
+   }
+  },
+  "body_junk_share": {
+   "Chair0": 0.218,
+   "Chair1": 0.978,
+   "Chair2": 0.435
+  }
+ },
+ "boxes only, served corrected poses": {
+  "corrections": {
+   "Chair0": {
+    "dx": -0.003,
+    "dy": -0.181,
+    "dyaw_deg": 0.0
+   },
+   "Chair1": {
+    "dx": -0.177,
+    "dy": 0.005,
+    "dyaw_deg": 0.0
+   },
+   "Chair2": {
+    "dx": 0.047,
+    "dy": 0.068,
+    "dyaw_deg": 0.0
+   }
+  },
+  "counts": {
+   "Chair0": 12535,
+   "Chair1": 22353,
+   "Chair2": 39318,
+   "Wall0_Door_0": 49417
+  },
+  "true_chairs": {
+   "blue chair (near Chair0)": {
+    "room": 0.042,
+    "Chair0": 0.958,
+    "Chair1": 0.0,
+    "Chair2": 0.0
+   },
+   "teal chair (near Chair2)": {
+    "room": 0.604,
+    "Chair0": 0.0,
+    "Chair1": 0.0,
+    "Chair2": 0.396
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "room": 0.807,
+    "Chair0": 0.0,
+    "Chair1": 0.098,
+    "Chair2": 0.095
+   }
+  },
+  "body_junk_share": {
+   "Chair0": 0.153,
+   "Chair1": 0.694,
+   "Chair2": 0.451
+  }
+ },
+ "boxes only, snap (no masks)": {
+  "corrections": {
+   "Chair0": {
+    "dx": 0.085,
+    "dy": -0.159,
+    "dyaw_deg": -10.0,
+    "before": 8139,
+    "after": 11674
+   },
+   "Chair1": {
+    "dx": -0.296,
+    "dy": -0.294,
+    "dyaw_deg": -10.0,
+    "before": 4572,
+    "after": 37277
+   },
+   "Chair2": {
+    "dx": 0.095,
+    "dy": 0.034,
+    "dyaw_deg": -2.5,
+    "before": 17840,
+    "after": 52499,
+    "scaled": 0.25
+   }
+  },
+  "counts": {
+   "Chair0": 12947,
+   "Chair1": 55542,
+   "Chair2": 50971,
+   "Wall0_Door_0": 49417
+  },
+  "true_chairs": {
+   "blue chair (near Chair0)": {
+    "room": 0.036,
+    "Chair0": 0.964,
+    "Chair1": 0.0,
+    "Chair2": 0.0
+   },
+   "teal chair (near Chair2)": {
+    "room": 0.365,
+    "Chair0": 0.0,
+    "Chair1": 0.0,
+    "Chair2": 0.635
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "room": 0.245,
+    "Chair0": 0.0,
+    "Chair1": 0.629,
+    "Chair2": 0.126
+   }
+  },
+  "body_junk_share": {
+   "Chair0": 0.175,
+   "Chair1": 0.207,
+   "Chair2": 0.358
+  }
+ }
+}

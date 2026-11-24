@@ -1,0 +1,81 @@
+{
+ "roomplan_chairs": {
+  "Chair0": {
+   "center": [
+    0.5235,
+    1.5442,
+    -0.8246
+   ],
+   "size": [
+    0.505,
+    0.585,
+    0.8861
+   ],
+   "yaw": -141.87
+  },
+  "Chair1": {
+   "center": [
+    -0.3345,
+    0.8706,
+    -0.8246
+   ],
+   "size": [
+    0.505,
+    0.585,
+    0.8861
+   ],
+   "yaw": -141.87
+  },
+  "Chair2": {
+   "center": [
+    -1.1924,
+    0.1971,
+    -0.8246
+   ],
+   "size": [
+    0.505,
+    0.585,
+    0.8861
+   ],
+   "yaw": -141.84
+  }
+ },
+ "spacing_0to1": [
+  -0.858,
+  -0.6736
+ ],
+ "spacing_1to2": [
+  -0.8579,
+  -0.6735
+ ],
+ "Chair0": {
+  "floor pts": 6969,
+  "object pts floor+0.08..1.05": 2721,
+  "dist to nearest Stray chair centre m": 0.214
+ },
+ "Chair1": {
+  "floor pts": 11128,
+  "object pts floor+0.08..1.05": 21970,
+  "dist to nearest Stray chair centre m": 0.588
+ },
+ "Chair2": {
+  "floor pts": 9170,
+  "object pts floor+0.08..1.05": 68368,
+  "dist to nearest Stray chair centre m": 0.251
+ },
+ "Stray blue": {
+  "floor pts": 6344,
+  "object pts floor+0.08..1.05": 328,
+  "dist to nearest Stray chair centre m": 0.0
+ },
+ "Stray teal": {
+  "floor pts": 15045,
+  "object pts floor+0.08..1.05": 60435,
+  "dist to nearest Stray chair centre m": 0.0
+ },
+ "Stray dark": {
+  "floor pts": 29020,
+  "object pts floor+0.08..1.05": 60250,
+  "dist to nearest Stray chair centre m": 0.0
+ }
+}

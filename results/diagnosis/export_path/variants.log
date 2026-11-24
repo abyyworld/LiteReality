@@ -1,0 +1,21 @@
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:109: RuntimeWarning: divide by zero encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:109: RuntimeWarning: overflow encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:109: RuntimeWarning: invalid value encountered in matmul
+  return np.clip(A @ M, 0, 1).reshape(render.shape)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:125: RuntimeWarning: divide by zero encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:125: RuntimeWarning: overflow encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+/Users/abyyworld/LiteReality/results/diagnosis/export_path/variants.py:125: RuntimeWarning: invalid value encountered in matmul
+  im = np.clip(a @ np.stack(warp, 1), 0, 1)
+app {"coverage": 0.9822, "psnr_960": 20.748, "psnr_480": 20.854, "psnr_cc_affine_480": 23.8839, "psnr_cc_gsplat_480": 24.7333, "psnr_cc_gsplat_960": 24.5178, "ssim_480": 0.7858, "sharpness_ratio_960": 0.3136, "sharpness_ratio_480": 0.3034}
+tm_only {"coverage": 0.9822, "psnr_960": 20.7518, "psnr_480": 20.8575, "psnr_cc_affine_480": 23.8878, "psnr_cc_gsplat_480": 24.7361, "psnr_cc_gsplat_960": 24.5214, "ssim_480": 0.7859, "sharpness_ratio_960": 0.3106, "sharpness_ratio_480": 0.2996}
+sh0 {"coverage": 0.9822, "psnr_960": 20.6991, "psnr_480": 20.8025, "psnr_cc_affine_480": 23.8235, "psnr_cc_gsplat_480": 24.6651, "psnr_cc_gsplat_960": 24.4477, "ssim_480": 0.7843, "sharpness_ratio_960": 0.299, "sharpness_ratio_480": 0.2851}
+flag_off {"coverage": 0.9822, "psnr_960": 20.7518, "psnr_480": 20.8575, "psnr_cc_affine_480": 23.8878, "psnr_cc_gsplat_480": 24.7361, "psnr_cc_gsplat_960": 24.5214, "ssim_480": 0.7859, "sharpness_ratio_960": 0.3106, "sharpness_ratio_480": 0.2996}
+classic {"coverage": 0.9832, "psnr_960": 20.7896, "psnr_480": 20.8973, "psnr_cc_affine_480": 23.9376, "psnr_cc_gsplat_480": 24.7826, "psnr_cc_gsplat_960": 24.5687, "ssim_480": 0.7853, "sharpness_ratio_960": 0.3725, "sharpness_ratio_480": 0.3378}
+blur0 {"coverage": 0.9822, "psnr_960": 20.7231, "psnr_480": 20.8381, "psnr_cc_affine_480": 23.8576, "psnr_cc_gsplat_480": 24.7102, "psnr_cc_gsplat_960": 24.4816, "ssim_480": 0.7842, "sharpness_ratio_960": 0.4608, "sharpness_ratio_480": 0.3679}
+msd8 {"coverage": 0.9845, "psnr_960": 20.9393, "psnr_480": 21.0436, "psnr_cc_affine_480": 24.0887, "psnr_cc_gsplat_480": 24.8994, "psnr_cc_gsplat_960": 24.6813, "ssim_480": 0.7961, "sharpness_ratio_960": 0.2035, "sharpness_ratio_480": 0.2304}
+msd3 {"coverage": 0.9846, "psnr_960": 20.9595, "psnr_480": 21.0637, "psnr_cc_affine_480": 24.1081, "psnr_cc_gsplat_480": 24.9131, "psnr_cc_gsplat_960": 24.6942, "ssim_480": 0.797, "sharpness_ratio_960": 0.1965, "sharpness_ratio_480": 0.2236}
+rgbwide {"coverage": 0.9822, "psnr_960": 20.7518, "psnr_480": 20.8575, "psnr_cc_affine_480": 23.8878, "psnr_cc_gsplat_480": 24.7361, "psnr_cc_gsplat_960": 24.5214, "ssim_480": 0.7859, "sharpness_ratio_960": 0.3106, "sharpness_ratio_480": 0.2996}

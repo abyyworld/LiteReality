@@ -1,0 +1,132 @@
+{
+ "true_chairs": {
+  "blue chair (near Chair0)": {
+   "splats": 11080,
+   "centre": [
+    0.5759999752044678,
+    1.3370000123977661,
+    -0.7049999833106995
+   ],
+   "by_count": {
+    "room": 0.075,
+    "Chair0": 0.624,
+    "Chair1": 0.302,
+    "Chair2": 0.0,
+    "Wall0_Door_0": 0.0
+   },
+   "by_opacity": {
+    "room": 0.1,
+    "Chair0": 0.638,
+    "Chair1": 0.263,
+    "Chair2": 0.0,
+    "Wall0_Door_0": 0.0
+   }
+  },
+  "teal chair (near Chair2)": {
+   "splats": 37642,
+   "centre": [
+    -1.0180000066757202,
+    0.01600000075995922,
+    -0.6759999990463257
+   ],
+   "by_count": {
+    "room": 0.829,
+    "Chair0": 0.0,
+    "Chair1": 0.002,
+    "Chair2": 0.169,
+    "Wall0_Door_0": 0.0
+   },
+   "by_opacity": {
+    "room": 0.83,
+    "Chair0": 0.0,
+    "Chair1": 0.0,
+    "Chair2": 0.17,
+    "Wall0_Door_0": 0.0
+   }
+  },
+  "dark chair (no body; 0.45 m from Chair1 box)": {
+   "splats": 70011,
+   "centre": [
+    -0.7070000171661377,
+    0.41600000858306885,
+    -0.6700000166893005
+   ],
+   "by_count": {
+    "room": 0.932,
+    "Chair0": 0.0,
+    "Chair1": 0.012,
+    "Chair2": 0.056,
+    "Wall0_Door_0": 0.0
+   },
+   "by_opacity": {
+    "room": 0.946,
+    "Chair0": 0.0,
+    "Chair1": 0.008,
+    "Chair2": 0.046,
+    "Wall0_Door_0": 0.0
+   }
+  }
+ },
+ "bodies": {
+  "Chair0": {
+   "splats": 8242,
+   "blue chair (near Chair0)": {
+    "count": 0.838,
+    "opacity": 0.871
+   },
+   "teal chair (near Chair2)": {
+    "count": 0.0,
+    "opacity": 0.0
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "count": 0.0,
+    "opacity": 0.0
+   },
+   "none of the real chairs (floor, table, wall, floaters)": {
+    "count": 0.162,
+    "opacity": 0.129
+   },
+   "big gaussians (>5 cm sigma)": 135
+  },
+  "Chair1": {
+   "splats": 28396,
+   "blue chair (near Chair0)": {
+    "count": 0.118,
+    "opacity": 0.164
+   },
+   "teal chair (near Chair2)": {
+    "count": 0.002,
+    "opacity": 0.001
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "count": 0.029,
+    "opacity": 0.027
+   },
+   "none of the real chairs (floor, table, wall, floaters)": {
+    "count": 0.851,
+    "opacity": 0.808
+   },
+   "big gaussians (>5 cm sigma)": 158
+  },
+  "Chair2": {
+   "splats": 46293,
+   "blue chair (near Chair0)": {
+    "count": 0.0,
+    "opacity": 0.0
+   },
+   "teal chair (near Chair2)": {
+    "count": 0.138,
+    "opacity": 0.197
+   },
+   "dark chair (no body; 0.45 m from Chair1 box)": {
+    "count": 0.085,
+    "opacity": 0.094
+   },
+   "none of the real chairs (floor, table, wall, floaters)": {
+    "count": 0.778,
+    "opacity": 0.708
+   },
+   "big gaussians (>5 cm sigma)": 241
+  }
+ }
+}

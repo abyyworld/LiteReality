@@ -1,0 +1,20 @@
+{
+ "Chair0": {
+  "views": 24,
+  "blue chair": 24,
+  "teal chair": 0,
+  "dark chair": 0
+ },
+ "Chair1": {
+  "views": 24,
+  "blue chair": 7,
+  "teal chair": 6,
+  "dark chair": 24
+ },
+ "Chair2": {
+  "views": 24,
+  "blue chair": 0,
+  "teal chair": 24,
+  "dark chair": 18
+ }
+}

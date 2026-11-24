@@ -1,0 +1,48 @@
+{
+ "(a) body splats (op>0.3) by nearest real chair, 0.30 m disc": {
+  "Chair0": {
+   "n_opaque": 1555,
+   "blue": 1342,
+   "teal": 0,
+   "dark": 0,
+   "box origin to blue chair m": 0.06
+  },
+  "Chair1": {
+   "n_opaque": 2813,
+   "blue": 581,
+   "teal": 6,
+   "dark": 87,
+   "box origin to blue chair m": 1.18
+  },
+  "Chair2": {
+   "n_opaque": 4545,
+   "blue": 0,
+   "teal": 1046,
+   "dark": 360,
+   "box origin to blue chair m": 2.03
+  }
+ },
+ "(b) splats inside corrected box+2cm (z > floor+0.04)": {
+  "Chair0": {
+   "in room": 251,
+   "in room opaque": 21,
+   "in body Chair0": 3483,
+   "in body Chair1": 1270,
+   "in body Chair2": 0
+  },
+  "Chair1": {
+   "in room": 6963,
+   "in room opaque": 1152,
+   "in body Chair0": 0,
+   "in body Chair1": 180,
+   "in body Chair2": 0
+  },
+  "Chair2": {
+   "in room": 7167,
+   "in room opaque": 1357,
+   "in body Chair0": 0,
+   "in body Chair1": 22,
+   "in body Chair2": 3235
+  }
+ }
+}

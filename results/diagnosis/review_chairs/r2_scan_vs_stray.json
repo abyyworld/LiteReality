@@ -1,0 +1,54 @@
+{
+ "atrium_1059 LiDAR (scan)": {
+  "legs/base floor+0.05..0.30": {
+   "blue": 0,
+   "teal": 133,
+   "dark": 597,
+   "Chair0 scanned": 2,
+   "Chair1 scanned": 314,
+   "Chair2 scanned": 818
+  },
+  "seat floor+0.35..0.65 (below desk top)": {
+   "blue": 0,
+   "teal": 37456,
+   "dark": 7448,
+   "Chair0 scanned": 0,
+   "Chair1 scanned": 197,
+   "Chair2 scanned": 36544
+  },
+  "backrest top floor+0.78..1.05 (above desk top)": {
+   "blue": 7,
+   "teal": 108,
+   "dark": 8281,
+   "Chair0 scanned": 3,
+   "Chair1 scanned": 0,
+   "Chair2 scanned": 0
+  }
+ },
+ "Stray splat opaque (op>0.3)": {
+  "legs/base floor+0.05..0.30": {
+   "blue": 12,
+   "teal": 44,
+   "dark": 835,
+   "Chair0 scanned": 13,
+   "Chair1 scanned": 73,
+   "Chair2 scanned": 0
+  },
+  "seat floor+0.35..0.65 (below desk top)": {
+   "blue": 1218,
+   "teal": 2593,
+   "dark": 3362,
+   "Chair0 scanned": 819,
+   "Chair1 scanned": 5,
+   "Chair2 scanned": 864
+  },
+  "backrest top floor+0.78..1.05 (above desk top)": {
+   "blue": 72,
+   "teal": 1165,
+   "dark": 3541,
+   "Chair0 scanned": 0,
+   "Chair1 scanned": 34,
+   "Chair2 scanned": 0
+  }
+ }
+}
