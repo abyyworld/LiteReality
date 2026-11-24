@@ -15,7 +15,7 @@ import pytest
 
 from litereality_agent.models.splat.spz import Splats
 from litereality_agent.pipeline.splatroom import instances
-from litereality_agent.pipeline.splatroom.split import _penetration, split
+from litereality_agent.pipeline.splatroom.split import _penetration, plan_overlap, split
 
 CHAIR = """
     <body name="{name}" pos="{x} {y} 0.45" quat="{qw} 0 0 {qz}">
@@ -194,6 +194,70 @@ def test_the_fitted_physics_matches_the_bundle(row, tmp_path):
         assert np.abs(world.mean(0)[:2] - pts[name].mean(0)[:2]).max() < 0.05
 
 
+def _ghost_chair(x: float, y: float, yaw_deg: float) -> tuple[np.ndarray, np.ndarray]:
+    """A real chair as a trained splat has it: an opaque seat and back (its cluster's core) and
+    legs and a seat rim too faint and thin to make a voxel count (the atrium's blue chair)."""
+    w = 0.25
+    core = [_slab((-w, -w, 0.43), (w, w, 0.47)), _slab((-w, w - 0.03, 0.47), (w, w, 0.95))]
+    faint = [_slab((-w - 0.02, -w - 0.02, 0.40), (w + 0.02, w + 0.02, 0.42), step=0.02)]
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            c = (sx * (w - 0.02), sy * (w - 0.02))
+            faint.append(_slab((c[0] - 0.01, c[1] - 0.01, 0.05), (c[0] + 0.01, c[1] + 0.01, 0.40),
+                               step=0.02))
+    a = math.radians(yaw_deg)
+    R = np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]])
+    return (np.concatenate(core) @ R.T + (x, y, 0.0),
+            np.concatenate(faint) @ R.T + (x, y, 0.0))
+
+
+def test_a_chairs_faint_legs_and_rim_go_with_it_and_leave_no_ghost(tmp_path):
+    """The doubled chair: its cluster is only the opaque seat and back, so a cut by cluster alone
+    left the legs and the seat's rim in the room, a chair-shaped ghost at the spot the chair was
+    carried from, while the move test (scored on the cluster's own core) said 100% in body."""
+    scene = _scene(tmp_path, [("Chair0", -0.8, 0, 0), ("Chair1", 0.8, 0, 0)])
+    core0, legs0 = _ghost_chair(-0.85, 0.05, 20.0)
+    core1, legs1 = _ghost_chair(0.8, -0.05, -10.0)
+    splats = _splats([core0, core1, _floor()], [legs0, legs1])
+    fixed, _ = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                   log=lambda _m: None)
+    model, data = _model(fixed)
+    found = instances.find(splats.positions, splats.opacities, model, data)
+    low = legs0[:, 2] < 0.35                       # the legs below the seat's grown voxels
+    assert low.sum() > 200 and not found.labels(legs0[low].astype(np.float64)).any()
+    parts = split(splats, model, corrections={}, instances=True, fill=False)
+    for name, core, legs in (("Chair0", core0, legs0), ("Chair1", core1, legs1)):
+        assert _owners_of(core, parts, model)[name] > 0.97
+        share = _owners_of(legs, parts, model)
+        assert share[name] > 0.97, (name, share)
+    # nothing of either chair is left standing in the room
+    room = parts.room.positions
+    assert not (room[:, 2] > instances.CUT_FLOOR).any()
+    left = parts.move_test["left_behind"]
+    assert left["Chair0"]["left"] < 0.01 and left["Chair1"]["left"] < 0.01
+    assert parts.move_test["pass"]
+
+
+def test_the_left_behind_check_fails_a_cut_that_leaves_the_legs(tmp_path):
+    """The gate that would have caught the ghost: the room keeping the legs and rim at the rest
+    pose fails `left_behind` even though every opaque core splat went with its body."""
+    from litereality_agent.pipeline.splatroom.split import LEFT_MAX, left_behind
+
+    scene = _scene(tmp_path, [("Chair0", -0.8, 0, 0)])
+    core, legs = _ghost_chair(-0.85, 0.05, 20.0)
+    splats = _splats([core, legs, _floor()])
+    fixed, _ = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                   log=lambda _m: None)
+    model, data = _model(fixed)
+    b = model.body("Chair0").id
+    owner = np.concatenate([np.full(len(core), b), np.full(len(legs) + len(_floor()), -1)])
+    rows = left_behind(splats.positions, splats.opacities, owner, model, data, floor=0.0)
+    assert rows["Chair0"]["left"] > LEFT_MAX and not rows["Chair0"]["pass"]
+    owner[:len(core) + len(legs)] = b
+    assert left_behind(splats.positions, splats.opacities, owner, model, data,
+                       floor=0.0)["Chair0"]["pass"]
+
+
 # ---------------------------------------------------------------------------------- phantoms
 
 
@@ -249,6 +313,8 @@ def test_two_touching_chairs_bridged_by_haze_are_two_objects(tmp_path):
     model, data = _model(fixed)
     for name in ("Chair0", "Chair1"):              # fitted to touching chairs, yet apart
         assert _penetration(model, data, model.body(name).id) <= instances.SETTLE_SLACK + 1e-3
+        # ... in plan too: lifting one straight up must not catch the other
+        assert plan_overlap(model, data, model.body(name).id) <= -instances.SETTLE_GAP + 1e-3
     parts = split(splats, model, corrections={}, instances=True, fill=False)
     assert _owners_of(a, parts, model)["Chair0"] > 0.95
     assert _owners_of(b, parts, model)["Chair1"] > 0.95

@@ -717,14 +717,17 @@ def fit_scene(positions: np.ndarray, opacities: np.ndarray, scene_xml: Path,
 SETTLE_STEP = 0.94      # a fitted body overlapping another is narrowed by this much at a time ...
 SETTLE_MIN = 0.7        # ... down to this much of its fitted footprint
 SETTLE_SLACK = 0.005    # metres of overlap left alone
+SETTLE_GAP = 0.01       # metres two fitted movable bodies are kept apart in plan
 
 
 def _settle(scene: Path, names: list[str]) -> dict[str, float]:
     """Fitted bodies that overlap one another or anything static (two chairs that touch, each
-    fitted to its whole footprint, would start interpenetrating and fly apart): each is narrowed
-    in plan, a step at a time, until it clears (`split._penetration`) or reaches `SETTLE_MIN`.
+    fitted to its whole footprint, would start interpenetrating and fly apart), or another
+    movable body seen from above (`split.plan_overlap`: a chair whose seat reaches under its
+    neighbour's lifts that neighbour with it): each is narrowed in plan, a step at a time, until
+    it clears (`split._penetration`, and `SETTLE_GAP` in plan) or reaches `SETTLE_MIN`.
     Returns name -> the factor its footprint was narrowed by (only those narrowed)."""
-    from litereality_agent.pipeline.splatroom.split import _penetration
+    from litereality_agent.pipeline.splatroom.split import _penetration, plan_overlap
 
     if not names:
         return {}
@@ -736,8 +739,9 @@ def _settle(scene: Path, names: list[str]) -> dict[str, float]:
     for _ in range(12):
         mujoco.mj_forward(model, data)
         bad = [n for n, b in ids.items()
-               if _penetration(model, data, b) > SETTLE_SLACK and factor[n] * SETTLE_STEP
-               >= SETTLE_MIN - 1e-9]
+               if (_penetration(model, data, b) > SETTLE_SLACK
+                   or plan_overlap(model, data, b) > -SETTLE_GAP)
+               and factor[n] * SETTLE_STEP >= SETTLE_MIN - 1e-9]
         if not bad:
             break
         for n in bad:

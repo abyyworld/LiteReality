@@ -22,7 +22,11 @@ from test_splat import (  # noqa: E402
 )
 
 from litereality_agent.models.splat import rgbd  # noqa: E402
-from litereality_agent.pipeline.splatroom.split import corrected_scene, split  # noqa: E402
+from litereality_agent.pipeline.splatroom.split import (  # noqa: E402
+    corrected_scene,
+    left_behind,
+    split,
+)
 
 
 def test_an_empty_set_of_corrections_is_kept_and_never_snaps_again():
@@ -159,3 +163,64 @@ def test_a_move_into_another_movable_body_is_scaled_back():
                              "B": {"dx": -0.15, "dy": 0.0, "dyaw_deg": 0.0}})
     gap = 0.6 + both.get("B", {}).get("dx", 0) - both.get("A", {}).get("dx", 0)
     assert gap >= 0.4 - 0.005                                         # the two moves together too
+
+
+DOOR = """<mujoco>
+  <worldbody>
+    <geom name="floor" type="box" pos="0 0 -0.05" size="4 4 0.05"/>
+    <geom name="wall_l" type="box" pos="-1 0.022 1.1" size="1 0.05 1.1"/>
+    <geom name="wall_r" type="box" pos="1.9 0.022 1.1" size="1 0.05 1.1"/>
+    <geom name="wall_top" type="box" pos="0.45 0.022 2.1" size="0.45 0.05 0.1"/>
+    <body name="Door0" pos="0 0 0">
+      <joint name="Door0_hinge" type="hinge" axis="0 0 1" range="0 1.7"/>
+      <geom name="Door0_leaf" type="box" pos="0.45 0.022 1.0" size="0.45 0.02 1.0"/>
+    </body>
+  </worldbody>
+</mujoco>"""
+
+
+def test_a_doors_face_goes_with_the_leaf_not_left_in_the_frame():
+    """A trained splat spreads a door's face 10 cm off its 4 cm leaf (the atrium: the room-facing
+    face 4-10 cm toward the cameras). Cut to the leaf's box, the room kept a whole closed door,
+    window and handle, that stayed in the frame while the leaf swung."""
+    model = mujoco.MjModel.from_xml_string(DOOR)
+    face = np.concatenate([_grid((0.03, y, 0.05), (0.87, y, 1.95), step=0.03)
+                           for y in (-0.06, -0.04, -0.02, 0.0, 0.02)])
+    wall = np.concatenate([_grid((-1.5, 0.022, 0.05), (-0.01, 0.022, 2.0), step=0.05),
+                           _grid((0.91, 0.022, 0.05), (2.5, 0.022, 2.0), step=0.05)])
+    floor = _grid((-1.5, -1.5, 0.0), (2.5, 1.5, 0.0), step=0.1)
+    s = _splats_at(np.concatenate([face, wall, floor]))
+    parts = split(s, model, snap_bodies=False, fill=False)
+    assert parts.counts["Door0"] >= 0.98 * len(face)
+    assert len(parts.room) >= len(wall) + len(floor) - 2           # the wall stays the room's
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    b = model.body("Door0").id
+    owner = np.concatenate([np.full(len(face), b), np.full(len(wall) + len(floor), -1)])
+    assert left_behind(s.positions, s.opacities, owner, model, data)["Door0"]["pass"]
+    # the cut the atrium had (only the leaf's own +-2 cm and its margin) fails the check
+    kept = np.abs(face[:, 1] - 0.022) > 0.04
+    owner[:len(face)][kept] = -1
+    assert not left_behind(s.positions, s.opacities, owner, model, data)["Door0"]["pass"]
+
+
+def test_the_wall_never_seen_behind_a_body_is_patched():
+    """The cameras never saw the wall behind a chair: carried off, it left a chair-shaped window
+    onto the empty scene background (the atrium's "white shell" at Chair0's spot)."""
+    model = mujoco.MjModel.from_xml_string(WALLED)
+    box = _grid((0.8, 1.54, 0.02), (1.2, 1.94, 0.5))
+    wall = _grid((0.0, 1.95, 0.0), (2.0, 1.95, 1.0), step=0.02)
+    hidden = (wall[:, 0] > 0.78) & (wall[:, 0] < 1.22) & (wall[:, 2] < 0.62)
+    floor = _grid((-1, 0, 0), (3, 1.9, 0), step=0.05)
+    s = _splats_at(np.concatenate([box, wall[~hidden], floor]))
+    parts = split(s, model, snap_bodies=False)
+    assert parts.counts.get("wall_fill", 0) > 0
+    room = parts.room.positions
+    on_wall = np.abs(room[:, 1] - 1.95) < 0.03
+    for x in (0.85, 1.0, 1.15):
+        for z in (0.1, 0.3, 0.5):
+            near = on_wall & (np.abs(room[:, 0] - x) < 0.03) & (np.abs(room[:, 2] - z) < 0.03)
+            assert near.any(), (x, z)
+    # every patch lies on the wall's face, none stands in the room
+    fill = room[len(room) - parts.counts["wall_fill"]:]
+    assert np.all(np.abs(fill[:, 1] - 1.95) < 0.03)

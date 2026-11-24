@@ -73,7 +73,7 @@ from litereality_agent.models.splat import dataset as splat_dataset
 from litereality_agent.models.splat import promptda, rgbd, spz
 from litereality_agent.models.splat import views as splat_views
 from litereality_agent.pipeline.splatroom import instances as object_instances
-from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, split
+from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, left_behind, split
 
 DEFAULT_DIR = "splat"
 BUNDLE = "splat.json"
@@ -194,8 +194,11 @@ def write_bundle(out_dir: Path, parts: Split, *, stage: str, step: int | None = 
 def move_test_summary(test: dict) -> dict:
     """`instances.move_test` cut down for ``splat.json``: per object, its body and shares."""
     keys = ("category", "centre", "splats", "body", "in_body", "in_room", "leak", "pass")
-    return {"pass": bool(test.get("pass")), "cut": test.get("cut"),
-            "objects": [{k: r[k] for k in keys} for r in test.get("objects", [])]}
+    out = {"pass": bool(test.get("pass")), "cut": test.get("cut"),
+           "objects": [{k: r[k] for k in keys} for r in test.get("objects", [])]}
+    if test.get("left_behind"):
+        out["left_behind"] = {name: r["left"] for name, r in test["left_behind"].items()}
+    return out
 
 
 def add_view(out_dir: Path, scan_dir: Path) -> dict | None:
@@ -761,7 +764,8 @@ def bundle_move_test(out_dir: Path, scene_xml: Path | None = None) -> dict:
     import numpy as np
 
     room = spz.decode((out_dir / bundle["room"]).read_bytes())
-    fill = int((bundle.get("counts") or {}).get("floor_fill", 0))
+    counts = bundle.get("counts") or {}
+    fill = int(counts.get("floor_fill", 0)) + int(counts.get("wall_fill", 0))
     room = room.subset(np.arange(len(room) - fill))       # the patch under objects is not the scan
     parts, owner = [room], [np.full(len(room), -1)]
     for name, file in (bundle.get("bodies") or {}).items():
@@ -780,6 +784,8 @@ def bundle_move_test(out_dir: Path, scene_xml: Path | None = None) -> dict:
     found = object_instances.find(pos, world.opacities, model, data, cats=cats)
     names = {b: body_name(model, b) for b in movable_body_ids(model)}
     test = object_instances.move_test(found, pos, world.opacities, owner, names)
+    test["left_behind"] = left_behind(pos, world.opacities, owner, model, data, floor=found.floor)
+    test["pass"] = bool(test["pass"]) and all(r["pass"] for r in test["left_behind"].values())
     test["scene"] = str(scene_xml)
     test["instances"] = [i.summary() for i in found.objects()]
     return test

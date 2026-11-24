@@ -1,0 +1,145 @@
+{
+ "objects": [
+  {
+   "object": 574,
+   "category": "chair",
+   "centre": [
+    0.596,
+    1.359
+   ],
+   "splats": 1871,
+   "body": "Chair0",
+   "in_body": 0.6718,
+   "in_room": 0.0636,
+   "leak": 0.2646,
+   "shares": {
+    "room": 0.0636,
+    "Chair0": 0.6718,
+    "Chair1": 0.2646
+   },
+   "pass": false
+  },
+  {
+   "object": 835,
+   "category": "chair",
+   "centre": [
+    -1.144,
+    0.134
+   ],
+   "splats": 6521,
+   "body": "Chair2",
+   "in_body": 0.1468,
+   "in_room": 0.8532,
+   "leak": 0.0,
+   "shares": {
+    "room": 0.8532,
+    "Chair2": 0.1468
+   },
+   "pass": false
+  },
+  {
+   "object": 836,
+   "category": "chair",
+   "centre": [
+    -0.809,
+    0.568
+   ],
+   "splats": 10870,
+   "body": "Chair2",
+   "in_body": 0.0312,
+   "in_room": 0.966,
+   "leak": 0.0029,
+   "shares": {
+    "room": 0.966,
+    "Chair1": 0.0029,
+    "Chair2": 0.0312
+   },
+   "pass": false
+  }
+ ],
+ "pass": false,
+ "best_share": {
+  "Chair0": 0.6718,
+  "Chair1": 0.2646,
+  "Chair2": 0.1468
+ },
+ "move_min": 0.9,
+ "move_leak": 0.05,
+ "left_behind": {
+  "Chair0": {
+   "room": 222.2,
+   "body": 1389.1,
+   "left": 0.1379,
+   "pass": false
+  },
+  "Chair1": {
+   "room": 2726.9,
+   "body": 244.7,
+   "left": 0.9176,
+   "pass": false
+  },
+  "Chair2": {
+   "room": 6280.2,
+   "body": 1596.4,
+   "left": 0.7973,
+   "pass": false
+  },
+  "Wall0_Door_0": {
+   "room": 1209.2,
+   "body": 13983.7,
+   "left": 0.0796,
+   "pass": true
+  }
+ },
+ "scene": "run/atrium_stray_q/v2/physics/scene_splat.xml",
+ "instances": [
+  {
+   "id": 574,
+   "centre": [
+    0.596,
+    1.359
+   ],
+   "half": [
+    0.323,
+    0.184
+   ],
+   "bottom": 0.327,
+   "top": 0.809,
+   "splats": 1871,
+   "category": "chair",
+   "score": 0.508
+  },
+  {
+   "id": 835,
+   "centre": [
+    -1.144,
+    0.134
+   ],
+   "half": [
+    0.313,
+    0.27
+   ],
+   "bottom": 0.424,
+   "top": 0.828,
+   "splats": 6521,
+   "category": "chair",
+   "score": 0.2
+  },
+  {
+   "id": 836,
+   "centre": [
+    -0.809,
+    0.568
+   ],
+   "half": [
+    0.327,
+    0.267
+   ],
+   "bottom": 0.072,
+   "top": 1.013,
+   "splats": 10628,
+   "category": "chair",
+   "score": 0.302
+  }
+ ]
+}

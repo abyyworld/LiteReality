@@ -20,7 +20,17 @@ there too.
 
 Nothing was ever photographed under an object, so cutting it out leaves a hole in the floor that
 shows the moment someone moves it. `fill_floor` patches each free body's footprint with flat
-floor splats coloured from the ring of floor around it (hidden under the object until it moves).
+floor splats coloured from the ring of floor around it (hidden under the object until it moves),
+and `fill_walls` the strip of wall behind it the cameras never saw (else a chair carried off
+leaves a chair-shaped window onto the empty background).
+
+A body takes everything in its boxes: a plate's (door leaf, seat) thin side is grown to
+`PLATE_HALF` (`_plate`), since a trained splat spreads a thin surface several centimetres off
+it, and a body matched to an object found in the splat (`instances`) is cut by its boxes too, its
+cluster deciding only the splats the cluster holds. The cluster alone is the object's opaque
+core; the legs and the seat's rim and underside left to the room were the chair that stayed put
+when the body was carried off. `left_behind` measures what the room keeps at each body's rest
+pose and gates the move test on it.
 """
 
 from __future__ import annotations
@@ -48,6 +58,10 @@ FILL_STEP = 0.015      # metres between the floor splats that patch a footprint
 FILL_GROW = 0.06       # metres the patched footprint reaches past the object's box
 FILL_RING = 0.35       # metres of floor around it the patch takes its colours from
 STATIC_KEEP = 0.03     # metres around static furniture whose splats never go to a body
+PLATE_HALF = 0.08      # metres: a plate's (door leaf, seat, back) cut reaches this far off its plane
+PLATE_RATIO = 0.25     # a geom is a plate when its thinnest side is under this of its next
+LEFT_MARGIN = 0.05     # metres past a body's cut box the left-behind check still looks
+LEFT_MAX = 0.08        # share of the splat (by opacity) at a body's rest pose the room may keep
 STATIC_MARGIN = 0.05       # splats this close to static furniture never pull a box
 
 
@@ -142,6 +156,65 @@ def _union_box(model: mujoco.MjModel, data: mujoco.MjData, body: int):
     corners = np.asarray(corners)
     lo, hi = corners.min(0), corners.max(0)
     return body, Rb, xb + Rb @ ((lo + hi) / 2), (hi - lo) / 2
+
+
+def _plate(half: np.ndarray, reach: float = PLATE_HALF) -> np.ndarray:
+    """A geom box's half extents with a plate's thin side grown to `reach`. A trained splat puts
+    a thin surface's splats several centimetres either side of it (the atrium's door: 4 cm leaf,
+    its splats from 10 cm in front to 6 cm behind its box's mid-plane), so a cut that keeps to the
+    geom leaves the room a full copy of the door's face that stays when the leaf swings."""
+    half = np.asarray(half, dtype=np.float64).copy()
+    order = np.argsort(half)
+    if half[order[0]] < PLATE_RATIO * half[order[1]]:
+        half[order[0]] = max(half[order[0]], reach)
+    return half
+
+
+def _cut_boxes(model: mujoco.MjModel, data: mujoco.MjData, bodies) -> list:
+    """The boxes a body's splats are cut by: each geom's (`_geom_boxes`) and one around them all
+    (`_union_box`), plates grown to `PLATE_HALF` (`_plate`). The union box takes what a real
+    object holds between and around the template's parts: a chair's legs stand where its seat's
+    corners are, not where the template puts them."""
+    out = [(b, R, c, _plate(h)) for b, R, c, h in _geom_boxes(model, data, list(bodies))]
+    out += [(b, R, c, _plate(h)) for b, R, c, h in
+            (_union_box(model, data, b) for b in bodies if _body_geoms(model, b))]
+    return out
+
+
+def left_behind(positions: np.ndarray, opacities: np.ndarray, owner: np.ndarray,
+                model: mujoco.MjModel, data: mujoco.MjData, *, floor: float | None = None,
+                margin: float = LEFT_MARGIN) -> dict:
+    """What of each movable body the room keeps at the body's rest pose (the ghost a grab
+    leaves): per body, the opacity of the room's splats and of the body's own in its cut boxes
+    (`_cut_boxes`) grown by `margin`, above the floor (`floor` + `instances.CUT_FLOOR`, else
+    the box's bottom + `FLOOR`) and `STATIC_KEEP` clear of every static box (a door's frame is
+    the wall's). ``left`` is the room's share; a
+    body passes at <= `LEFT_MAX`. `positions` are world, `owner` -1 for the room, else the
+    body id. Independent of how the cut was made (clusters, boxes, masks): it looks at the
+    splats, not at the instances the cut was told about."""
+    from litereality_agent.pipeline.splatroom.instances import CUT_FLOOR
+
+    pos = np.asarray(positions, dtype=np.float64)
+    ops = np.asarray(opacities, dtype=np.float64)
+    movable = sorted(movable_body_ids(model))
+    static_boxes = _static_boxes(model, data, movable)
+    rows = {}
+    for b in movable:
+        boxes = _cut_boxes(model, data, [b])
+        if not boxes:
+            continue
+        low = min(c[2] - np.abs(R[2]) @ h for _b, R, c, h in boxes)
+        cut = (floor + CUT_FLOOR) if floor is not None else (low + FLOOR)
+        region = _inside_any(pos, boxes, margin) & (pos[:, 2] > cut)
+        if static_boxes and region.any():
+            region[np.flatnonzero(region)[_inside_any(pos[region], static_boxes,
+                                                      STATIC_KEEP)]] = False
+        room = float(ops[region & (owner < 0)].sum())
+        mine = float(ops[region & (owner == b)].sum())
+        left = room / (room + mine) if room + mine > 0 else 0.0
+        rows[body_name(model, b)] = {"room": round(room, 1), "body": round(mine, 1),
+                                     "left": round(left, 4), "pass": bool(left <= LEFT_MAX)}
+    return rows
 
 
 def _free_joint(model: mujoco.MjModel, body: int) -> int | None:
@@ -338,6 +411,102 @@ def fill_floor(room: Splats, footprints, *, step: float = FILL_STEP, grow: float
     return (Splats.concat([room, *patches]) if added else room), added
 
 
+WALL_REACH = 1.0       # metres from a free body to a wall whose face behind it is patched
+WALL_GROW = 0.35       # metres the wall patch reaches along the wall past the body's span
+WALL_TOP = 0.15        # metres the wall patch reaches above the body's top
+WALL_SEEN = 0.08       # metres in front of a wall's face that a splat still shows that part of it
+WALL_STEP = 0.02       # metres between the splats that patch a wall
+WALL_RING = 0.40       # metres of seen wall around the patch it takes its colours from
+
+
+def _corners(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> np.ndarray:
+    """World corners of all a body's geoms' boxes (`_body_geoms`)."""
+    out = []
+    for g in _body_geoms(model, body):
+        aabb = np.asarray(model.geom_aabb[g], dtype=np.float64)
+        Rg = np.asarray(data.geom_xmat[g]).reshape(3, 3)
+        cg = np.asarray(data.geom_xpos[g]) + Rg @ aabb[:3]
+        for sgn in np.array(np.meshgrid([-1, 1], [-1, 1], [-1, 1])).T.reshape(-1, 3):
+            out.append(cg + Rg @ (aabb[3:] * sgn))
+    return np.asarray(out)
+
+
+def fill_walls(room: Splats, model: mujoco.MjModel, data: mujoco.MjData, bodies, floor: float, *,
+               step: float = WALL_STEP, reach: float = WALL_REACH, grow: float = WALL_GROW,
+               ring: float = WALL_RING) -> tuple[Splats, int]:
+    """`room` plus flat wall splats wherever the wall behind a free body was never seen. The
+    cameras never saw the strip of wall (and under a desk, the gap) a chair stood in front of, so
+    a trained room has nothing there and a chair carried off leaves a chair-shaped window onto the
+    empty scene background: the "white shell" of the doubled chair. Per body in `bodies` and per
+    upright wall of the room shell (`_shell_geoms`) whose room-facing side is within `reach` of
+    it: the face behind the body's span (+ `grow`), from `floor` to the body's top + `WALL_TOP`,
+    gets a splat every `step` wherever no splat lies within `WALL_SEEN` of the face, at the
+    depth the seen wall around it has and coloured by the nearest seen wall splats (within
+    `ring`). Returns (room, added)."""
+    from scipy.spatial import cKDTree
+
+    from litereality_agent.models.splat.spz import matrix_to_quat
+
+    if not len(room) or not bodies:
+        return room, 0
+    pos = room.positions.astype(np.float64)
+    patches = []
+    for b in bodies:
+        corners = _corners(model, data, b)
+        if not len(corners):
+            continue
+        centre, top = corners.mean(0), float(corners[:, 2].max()) + WALL_TOP
+        for g in _shell_geoms(model, data):
+            half = np.asarray(model.geom_aabb[g][3:], dtype=np.float64)
+            R = np.asarray(data.geom_xmat[g], dtype=np.float64).reshape(3, 3)
+            c = np.asarray(data.geom_xpos[g]) + R @ np.asarray(model.geom_aabb[g][:3])
+            t = int(np.argmin(half))
+            v = max((a for a in range(3) if a != t), key=lambda a: abs(R[2, a]))
+            u = 3 - t - v
+            side = 1.0 if (centre - c) @ R[:, t] >= 0 else -1.0
+            lc = (corners - c) @ R
+            if np.min(side * lc[:, t]) - half[t] > reach:
+                continue
+            lo_u = max(lc[:, u].min() - grow, -half[u])
+            hi_u = min(lc[:, u].max() + grow, half[u])
+            if hi_u - lo_u < step:
+                continue
+            local = (pos - c) @ R
+            depth = side * local[:, t] - half[t]
+            z = pos[:, 2]
+            band = ((depth > -0.05) & (depth < WALL_SEEN) & (local[:, u] > lo_u - ring)
+                    & (local[:, u] < hi_u + ring) & (z > floor) & (z < top + ring))
+            if band.sum() < 30:
+                continue
+            face = float(np.median(depth[band]))
+            uz = np.column_stack([local[band, u], z[band]])
+            gu, gz = np.meshgrid(np.arange(lo_u, hi_u + 1e-9, step),
+                                 np.arange(floor + step / 2, top + 1e-9, step))
+            grid = np.column_stack([gu.ravel(), gz.ravel()])
+            near, _ = cKDTree(uz).query(grid, k=1, distance_upper_bound=1.5 * step)
+            grid = grid[~np.isfinite(near)]
+            if not len(grid):
+                continue
+            k = min(8, len(uz))
+            dist, idx = cKDTree(uz).query(grid, k=k)
+            dist, idx = dist.reshape(len(grid), k), idx.reshape(len(grid), k)
+            w = 1.0 / np.maximum(dist, 0.01) ** 2
+            colour = (room.colors[band][idx] * w[..., None]).sum(1) / w.sum(1, keepdims=True)
+            n = len(grid)
+            lp = np.zeros((n, 3))
+            lp[:, u] = grid[:, 0]
+            lp[:, t] = side * (half[t] + face)
+            lp[:, v] = (grid[:, 1] - c[2] - R[2, u] * lp[:, u] - R[2, t] * lp[:, t]) / R[2, v]
+            frame = np.column_stack([R[:, u], R[:, v], np.cross(R[:, u], R[:, v])])
+            patches.append(Splats(
+                (lp @ R.T + c).astype(np.float32),
+                np.tile([step * 0.8, step * 0.8, step * 0.1], (n, 1)).astype(np.float32),
+                np.tile(matrix_to_quat(frame), (n, 1)).astype(np.float32),
+                colour.astype(np.float32), np.full(n, 0.95, np.float32)))
+    added = sum(len(p) for p in patches)
+    return (Splats.concat([room, *patches]) if added else room), added
+
+
 VOTE_MIN_SPLATS = 300
 VOTE_MIN_SHIFT, VOTE_MAX_SHIFT = 0.03, 0.5
 
@@ -378,6 +547,49 @@ def _penetration(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> float
             continue
         deepest = max(deepest, -float(c.dist))
     return deepest
+
+
+def _plan_polygon(model: mujoco.MjModel, data: mujoco.MjData, geom: int) -> np.ndarray:
+    """A geom's box (``geom_aabb`` in its own frame) seen from above: the convex hull of its
+    corners' xy, counter-clockwise."""
+    from scipy.spatial import ConvexHull
+
+    aabb = np.asarray(model.geom_aabb[geom], dtype=np.float64)
+    R = np.asarray(data.geom_xmat[geom]).reshape(3, 3)
+    c = np.asarray(data.geom_xpos[geom]) + R @ aabb[:3]
+    pts = np.array([c + R @ (aabb[3:] * sgn) for sgn in
+                    np.array(np.meshgrid([-1, 1], [-1, 1], [-1, 1])).T.reshape(-1, 3)])[:, :2]
+    return pts[ConvexHull(pts).vertices]
+
+
+def _plan_overlap(a: np.ndarray, b: np.ndarray) -> float:
+    """How far two convex plan polygons overlap (separating axes), metres; negative is the gap
+    between them along the axis that separates them best."""
+    best = np.inf
+    for poly in (a, b):
+        edges = np.roll(poly, -1, axis=0) - poly
+        normals = np.column_stack([edges[:, 1], -edges[:, 0]])
+        normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+        for n in normals:
+            pa, pb = a @ n, b @ n
+            best = min(best, min(pa.max(), pb.max()) - max(pa.min(), pb.min()))
+    return float(best)
+
+
+def plan_overlap(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> float:
+    """The most `body`'s geoms (`_body_geoms`) overlap those of any other movable body seen from
+    above, metres (negative: the smallest gap). Two fitted chairs whose seats overlap in plan at
+    different heights do not touch at rest, but lifting the lower one straight up drives it into
+    the other: grabbing one chair carries its neighbour."""
+    others = [b for b in movable_body_ids(model)
+              if b != body and int(model.body_rootid[b]) != int(model.body_rootid[body])]
+    mine = [_plan_polygon(model, data, g) for g in _body_geoms(model, body)]
+    worst = -np.inf
+    for o in others:
+        for g in _body_geoms(model, o):
+            theirs = _plan_polygon(model, data, g)
+            worst = max(worst, max(_plan_overlap(m, theirs) for m in mine))
+    return float(worst)
 
 
 def _physical(model: mujoco.MjModel, corrections: dict[str, dict]) -> dict[str, dict]:
@@ -503,10 +715,13 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
     paired: dict[int, int] = {}
     if instances and found is not None:
         paired = objects.match(found, model, data, cats).pairs        # body -> instance
-    by_box = [b for b in movable if b not in paired]
-    boxes = _geom_boxes(model, data, by_box)
-    boxes += [_union_box(model, data, b) for b in by_box if _body_geoms(model, b)]
-    if (not boxes and not paired) or not len(splats):
+    # Every body is cut by its boxes; a paired body's cluster (below) then has the last word on
+    # the splats it holds. The cluster alone is only the object's opaque core (a chair's seat and
+    # back): its thin legs and the rim and underside of its seat hold too few opaque splats a
+    # voxel to join it, and left to the room they are a chair-shaped ghost that stays put when
+    # the body is carried off.
+    boxes = _cut_boxes(model, data, movable)
+    if not boxes or not len(splats):
         return Split(room=splats, corrections=corrections)
     static_boxes = _static_boxes(model, data, movable)
 
@@ -514,6 +729,8 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
     for b, R, c, half in boxes:
         low = c[2] - np.abs(R[2]) @ half
         bottom[b] = min(bottom.get(b, np.inf), low)
+    for b in paired:
+        bottom[b] = found.floor + objects.CUT_FLOOR - floor      # never the floor under it
 
     pos = splats.positions.astype(np.float64)
     owner = np.full(len(pos), -1, dtype=np.int64)
@@ -534,11 +751,15 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
             closer = dist[ok] < best[idx]
             best[idx[closer]] = dist[ok][closer]
             best_body[idx[closer]] = b
-        # Nothing inside static furniture moves with a body (the table top over a tucked chair).
+        # Nothing inside static furniture moves with a body (the table top over a tucked chair),
+        # nor anything within `STATIC_KEEP` of it, unless it is inside the body's own box (a
+        # door's edge, which stands that close to the wall it closes).
         taken = best_body >= 0
         if taken.any() and static_boxes:
-            locked = _inside_any(p[taken], static_boxes, STATIC_KEEP)
-            best_body[np.flatnonzero(taken)[locked]] = -1
+            idx = np.flatnonzero(taken)
+            locked = np.where(best[idx] > 0, _inside_any(p[idx], static_boxes, STATIC_KEEP),
+                              _inside_any(p[idx], static_boxes, 0.0))
+            best_body[idx[locked]] = -1
         owner[lo:lo + CHUNK] = best_body
 
     if paired:
@@ -547,7 +768,6 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         to_body = np.full(max(found.instances, default=0) + 1, -1, dtype=np.int64)
         for b, i in paired.items():
             to_body[i] = b
-            bottom[b] = found.floor
         claim = to_body[found.labels(pos)]
         claim[pos[:, 2] <= found.floor + objects.CUT_FLOOR] = -1
         if static_boxes and (claim >= 0).any():
@@ -577,6 +797,10 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         names = {b: body_name(model, b) for b in movable}
         result.move_test = objects.move_test(found, pos, splats.opacities, owner, names)
         result.move_test["cut"] = "instances" if paired else "boxes"
+        result.move_test["left_behind"] = left_behind(pos, splats.opacities, owner, model, data,
+                                                      floor=found.floor)
+        result.move_test["pass"] = bool(result.move_test["pass"]) and all(
+            r["pass"] for r in result.move_test["left_behind"].values())
         gated = {b for c, cat in cats.items() for b in cat.bodies
                  if any(r["category"] == c for r in result.move_test["objects"])}
         best = result.move_test["best_share"]
@@ -606,4 +830,10 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         result.room, added = fill_floor(result.room, prints)
         if added:
             result.counts["floor_fill"] = added
+        free = [b for b in movable if body_name(model, b) in result.bodies
+                and _free_joint(model, b) is not None and int(model.body_parentid[b]) == 0]
+        low = found.floor if found is not None else min((p[3] for p in prints), default=0.0)
+        result.room, added = fill_walls(result.room, model, data, free, low)
+        if added:
+            result.counts["wall_fill"] = added
     return result

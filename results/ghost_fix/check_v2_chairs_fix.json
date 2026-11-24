@@ -1,0 +1,141 @@
+{
+ "objects": [
+  {
+   "object": 180,
+   "category": "chair",
+   "centre": [
+    -1.144,
+    0.134
+   ],
+   "splats": 6521,
+   "body": "Chair2",
+   "in_body": 1.0,
+   "in_room": 0.0,
+   "leak": 0.0,
+   "shares": {
+    "Chair2": 1.0
+   },
+   "pass": true
+  },
+  {
+   "object": 556,
+   "category": "chair",
+   "centre": [
+    0.594,
+    1.356
+   ],
+   "splats": 1869,
+   "body": "Chair0",
+   "in_body": 1.0,
+   "in_room": 0.0,
+   "leak": 0.0,
+   "shares": {
+    "Chair0": 1.0
+   },
+   "pass": true
+  },
+  {
+   "object": 806,
+   "category": "chair",
+   "centre": [
+    -0.807,
+    0.574
+   ],
+   "splats": 10766,
+   "body": "Chair1",
+   "in_body": 0.998,
+   "in_room": 0.002,
+   "leak": 0.0,
+   "shares": {
+    "room": 0.002,
+    "Chair1": 0.998
+   },
+   "pass": true
+  }
+ ],
+ "pass": true,
+ "best_share": {
+  "Chair2": 1.0,
+  "Chair0": 1.0,
+  "Chair1": 0.998
+ },
+ "move_min": 0.9,
+ "move_leak": 0.05,
+ "left_behind": {
+  "Chair0": {
+   "room": 53.4,
+   "body": 2153.2,
+   "left": 0.0242,
+   "pass": true
+  },
+  "Chair1": {
+   "room": 83.4,
+   "body": 10591.4,
+   "left": 0.0078,
+   "pass": true
+  },
+  "Chair2": {
+   "room": 96.6,
+   "body": 6260.0,
+   "left": 0.0152,
+   "pass": true
+  },
+  "Wall0_Door_0": {
+   "room": 804.3,
+   "body": 14387.9,
+   "left": 0.0529,
+   "pass": true
+  }
+ },
+ "scene": "run/atrium_stray_q/v2_chairs_fix/physics/scene_splat.xml",
+ "instances": [
+  {
+   "id": 180,
+   "centre": [
+    -1.144,
+    0.134
+   ],
+   "half": [
+    0.313,
+    0.27
+   ],
+   "bottom": 0.424,
+   "top": 0.828,
+   "splats": 6521,
+   "category": "chair",
+   "score": 0.584
+  },
+  {
+   "id": 556,
+   "centre": [
+    0.594,
+    1.356
+   ],
+   "half": [
+    0.323,
+    0.186
+   ],
+   "bottom": 0.327,
+   "top": 0.809,
+   "splats": 1869,
+   "category": "chair",
+   "score": 0.371
+  },
+  {
+   "id": 806,
+   "centre": [
+    -0.807,
+    0.574
+   ],
+   "half": [
+    0.328,
+    0.269
+   ],
+   "bottom": 0.077,
+   "top": 1.013,
+   "splats": 10539,
+   "category": "chair",
+   "score": 0.83
+  }
+ ]
+}
