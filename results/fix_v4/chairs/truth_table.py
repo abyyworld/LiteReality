@@ -38,7 +38,8 @@ def served(out_dir: Path):
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     room = spz.decode((out_dir / bundle["room"]).read_bytes())
-    fill = int(bundle["counts"].get("floor_fill", 0))
+    # the patches at the room splat's end (floor, wall, door fill) are not the scan
+    fill = sum(int(bundle["counts"].get(k, 0)) for k in ("floor_fill", "wall_fill", "door_fill"))
     P, OP, L, names = [room.positions[:len(room) - fill]], [room.opacities[:len(room) - fill]], \
         [np.full(len(room) - fill, -1)], {-1: "room"}
     for name, file in bundle["bodies"].items():

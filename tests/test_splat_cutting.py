@@ -224,3 +224,51 @@ def test_the_wall_never_seen_behind_a_body_is_patched():
     # every patch lies on the wall's face, none stands in the room
     fill = room[len(room) - parts.counts["wall_fill"]:]
     assert np.all(np.abs(fill[:, 1] - 1.95) < 0.03)
+
+
+def test_an_opened_door_shows_a_dim_space_not_the_empty_background():
+    """F5: the cameras never saw past the closed door, so the trained room has nothing in the
+    doorway and a door swung open showed the bare scene background. A dim space in the wall's and
+    floor's colours now stands behind the leaf, hidden while it is shut."""
+    model = mujoco.MjModel.from_xml_string(DOOR)
+    face = np.concatenate([_grid((0.03, y, 0.05), (0.87, y, 1.95), step=0.03)
+                           for y in (-0.06, -0.02, 0.02)])
+    wall = np.concatenate([_grid((-1.5, 0.022, 0.05), (-0.01, 0.022, 2.0), step=0.05),
+                           _grid((0.91, 0.022, 0.05), (2.5, 0.022, 2.0), step=0.05)])
+    floor = _grid((-1.5, -1.5, 0.0), (2.5, -0.05, 0.0), step=0.05)     # the room: y < 0
+    s = _splats_at(np.concatenate([face, wall, floor]))
+    s.colors[len(face):len(face) + len(wall)] = 0.8                     # pale walls
+    parts = split(s, model, snap_bodies=False)
+    added = parts.counts.get("door_fill", 0)
+    assert added > 500
+    fill = parts.room.subset(np.arange(len(parts.room) - added, len(parts.room)))
+    assert fill.positions[:, 1].min() > 0.04                          # all behind the leaf
+    assert np.all(fill.colors < 0.8) and np.all(fill.colors > 0.2)   # dim, not black
+    # every line of sight from the room through the opening ends on the space behind it
+    from scipy.spatial import cKDTree
+
+    tree = cKDTree(fill.positions)
+    eye = np.array([0.45, -1.5, 1.2])
+    for x in (0.1, 0.45, 0.8):
+        for z in (0.2, 1.0, 1.9):
+            ray = np.array([x, 0.03, z]) - eye
+            ts = np.linspace(1.0, 4.0, 600)
+            pts = eye + ts[:, None] * ray
+            assert (tree.query(pts)[0] < 0.04).any(), (x, z)
+
+
+def test_a_wall_patch_never_hides_what_was_seen_behind_the_wall_face():
+    """A wall RoomPlan put a little in front of the real one: the trained wall stands behind
+    the box's face, and the patch must not cover it."""
+    model = mujoco.MjModel.from_xml_string(WALLED)
+    box = _grid((0.8, 1.54, 0.02), (1.2, 1.94, 0.5))
+    wall = _grid((0.0, 1.95, 0.0), (2.0, 1.95, 1.0), step=0.02)
+    hidden = (wall[:, 0] > 0.78) & (wall[:, 0] < 1.22) & (wall[:, 2] < 0.62)
+    recess = wall[hidden & (wall[:, 0] < 1.0)] + [0.0, 0.15, 0.0]   # seen, 15 cm behind the face
+    floor = _grid((-1, 0, 0), (3, 1.9, 0), step=0.05)
+    s = _splats_at(np.concatenate([box, wall[~hidden], recess, floor]))
+    parts = split(s, model, snap_bodies=False)
+    room = parts.room.positions
+    fill = room[len(room) - parts.counts["wall_fill"]:]
+    assert (fill[:, 0] > 1.02).any()                 # the unseen half is patched
+    assert not ((fill[:, 0] < 0.98) & (fill[:, 2] < 0.6)).any()   # the seen half is not

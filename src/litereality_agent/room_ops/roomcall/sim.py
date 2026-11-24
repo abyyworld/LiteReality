@@ -14,7 +14,11 @@ Three things shape the design:
   `mj_applyFT`. That one rule drags a chair, swings a door about its hinge and slides a drawer
   along its rail, because MuJoCo maps the Cartesian force through the body's Jacobian onto
   whatever joints it actually has. A free body also gets its weight cancelled, so it floats while
-  held instead of sagging below the hand, and mild angular damping so it does not spin forever.
+  held instead of sagging below the hand, mild angular damping so it does not spin forever, and a
+  hand's grip on its tilt (`GRAB_TILT_KP`): it stays as upright as it was when grabbed, the way a
+  person carries a chair, instead of hanging off the grabbed point like a pendulum and pivoting
+  to wherever the first bump (a table edge on the way up) left it. Its heading stays free, so a
+  chair pulled by one side still turns to trail the hand.
 * **Nobody can launch anything to infinity.** The force is clamped to a multiple of the body's
   weight and the target to the scene's bounds, so the worst a peer can do is throw something hard
   at a wall.
@@ -67,6 +71,14 @@ MAX_ACCEL_G = 25.0
 # turning when the hand stops. It acts through the body's inertia tensor about the grabbed point,
 # so it is the same rate for a ball held at its top and a pencil held at its tip.
 GRAB_ANGULAR_DAMPING = 10.0
+# How hard a hand holds a free body's tilt (1/s^2 per radian, through the same inertia about the
+# grabbed point): the body's up axis at the grab is pulled back to world up, critically damped
+# about the horizontal axes (`GRAB_TILT_KD`). Four times the grab spring: a chair yanked up at the
+# force limit against the desk edge over it stays within ~6 deg of level instead of prying itself
+# 56 deg over (1x). A table or wall in the way still wins (contacts are constraints), and the
+# torque is clamped like the force (`MAX_ACCEL_G` x the body's reach).
+GRAB_TILT_KP = 4.0 * GRAB_KP
+GRAB_TILT_KD = 2.0 * math.sqrt(GRAB_TILT_KP)
 # Anything faster than this (m/s or rad/s) in a room is a simulation that has blown up.
 MAX_SPEED = 1000.0
 # How far outside the scene's drawn extent a grab target may be (metres).
@@ -102,6 +114,7 @@ class _Grab:
     body: int
     local: np.ndarray       # anchor in the body's frame
     target: np.ndarray      # world-frame target for the anchor
+    up: np.ndarray | None = None    # world up at the grab, in the driving body's frame
 
 
 def _vec3(value: Sequence[float]) -> np.ndarray | None:
@@ -201,7 +214,7 @@ class RoomSim:
             if norm > reach:
                 local *= reach / norm
             anchor = d.xpos[b] + rot @ local
-            self._grabs[str(owner)] = _Grab(b, local, anchor.copy())
+            self._grabs[str(owner)] = _Grab(b, local, anchor.copy(), self._up_in(b))
             return True
 
     def move(self, owner: str, target_world: Sequence[float]) -> None:
@@ -449,7 +462,11 @@ class RoomSim:
             if norm > reach:
                 local *= reach / norm
             target = np.clip(grab.target, self._bounds[0], self._bounds[1])
-            self._grabs[owner] = _Grab(b, local, target)
+            up = None
+            if grab.up is not None:      # the same tilt held: the old grip's up, in the new frame
+                world_up = od.xmat[old._driver[grab.body]].reshape(3, 3) @ grab.up
+                up = nd.xmat[self._driver[b]].reshape(3, 3).T @ world_up
+            self._grabs[owner] = _Grab(b, local, target, up)
             kept.append(owner)
         return sorted(kept), sorted(dropped)
 
@@ -484,6 +501,9 @@ class RoomSim:
         d.qfrc_applied[:] = 0.0
         if not self._grabs:
             return
+        hands: dict[int, int] = {}
+        for grab in self._grabs.values():
+            hands[self._driver[grab.body]] = hands.get(self._driver[grab.body], 0) + 1
         for grab in self._grabs.values():
             b = grab.body
             driver = self._driver[b]
@@ -506,12 +526,41 @@ class RoomSim:
                 force *= limit / size
             mujoco.mj_applyFT(m, d, force, self._zero3, anchor, b, d.qfrc_applied)
             if driver in self._free_drivers:
-                # Cancel its weight at the centre of mass (no torque), and damp its spin.
+                # Cancel its weight at the centre of mass (no torque), damp its spin and hold its
+                # tilt. Several hands on one body share the weight and the grip.
+                share = 1.0 / hands[driver]
                 com = d.subtree_com[driver].copy()
-                lift = -mass * self._gravity
+                lift = -mass * self._gravity * share
                 omega = self._jacr @ d.qvel
-                torque = -GRAB_ANGULAR_DAMPING * (self._spin_inertia(driver, anchor - com) @ omega)
-                mujoco.mj_applyFT(m, d, lift, torque, com, driver, d.qfrc_applied)
+                inertia = self._spin_inertia(driver, anchor - com)
+                torque = -GRAB_ANGULAR_DAMPING * (inertia @ omega)
+                if grab.up is not None:
+                    level = omega - omega[2] * np.array([0.0, 0.0, 1.0])     # tipping, not turning
+                    torque += inertia @ (GRAB_TILT_KP * self._tilt(driver, grab.up)
+                                         - (GRAB_TILT_KD - GRAB_ANGULAR_DAMPING) * level)
+                    limit = self._max_accel * mass * self._reach[driver]
+                    size = float(np.linalg.norm(torque))
+                    if size > limit:
+                        torque *= limit / size
+                mujoco.mj_applyFT(m, d, lift, torque * share, com, driver, d.qfrc_applied)
+
+    def _up_in(self, b: int) -> np.ndarray | None:
+        """World up in the frame of the free body a grab of `b` moves (None for a hinge, slide or
+        mocap: their joints decide their orientation)."""
+        driver = self._driver[b]
+        if driver not in self._free_drivers:
+            return None
+        return self.data.xmat[driver].reshape(3, 3).T @ np.array([0.0, 0.0, 1.0])
+
+    def _tilt(self, driver: int, up: np.ndarray) -> np.ndarray:
+        """The rotation (axis times angle, world frame) that turns the body's grabbed-up axis
+        `up` back to world up: about a horizontal axis only, so the heading is left free."""
+        now = self.data.xmat[driver].reshape(3, 3) @ up
+        axis = np.cross(now, [0.0, 0.0, 1.0])
+        sin = float(np.linalg.norm(axis))
+        if sin < 1e-9:
+            return np.zeros(3)
+        return axis / sin * math.atan2(sin, float(now[2]))
 
     def _driving_body(self, b: int) -> int:
         """The body whose joint a grab of `b` really moves: `b` itself if it has a joint (or is

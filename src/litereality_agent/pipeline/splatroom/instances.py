@@ -19,6 +19,9 @@ splat and the bodies are put on them:
               footprint, the template's geoms scaled per axis to the instance's footprint and
               height. An object no body matched gets a clone of the nearest body of its category;
               a body no object matched, with nothing opaque in its box, is a phantom and goes.
+              Each fitted body keeps its object's extent as a site (`_mark_extents`, what the cut
+              takes); two that overlap seen from above are slid a few centimetres apart
+              (`_settle`), their collision boxes kept the size of the objects.
     cut       a matched body takes the splats in its instance's voxels grown by `GROW` voxels,
               faint ones too (`Found.labels`): cluster membership, not box + margin, so the haze
               around a chair (three quarters of its splats are faint) goes where the chair goes
@@ -698,8 +701,17 @@ def fit_scene(positions: np.ndarray, opacities: np.ndarray, scene_xml: Path,
         tree.write(out, encoding="unicode")
         mujoco.MjModel.from_xml_path(str(out))
     fitted = {**report["bodies"], **report["clones"]}
-    shrunk = _settle(out, [n for n, r in fitted.items() if r["scale"] != [1.0, 1.0, 1.0]])
-    if shrunk:
+    # The object's real extent, written before anything is moved or narrowed to keep the bodies
+    # apart: the cut takes the splats in it (`split._shape_boxes`), not in the collision geoms.
+    _mark_extents(out, world, list(fitted))
+    tree.write(out, encoding="unicode")
+    shrunk, shifted = _settle(out, [n for n, r in fitted.items()
+                                    if r["scale"] != [1.0, 1.0, 1.0]])
+    if shrunk or shifted:
+        for name, (dx, dy) in shifted.items():
+            elem = next(e for e in world.findall("body") if e.get("name") == name)
+            _shift_body(elem, dx, dy)
+            fitted[name]["shifted_to_clear_m"] = [round(dx, 3), round(dy, 3)]
         for name, f in shrunk.items():
             elem = next(e for e in world.findall("body") if e.get("name") == name)
             _scale_body(elem, np.array([f, f, 1.0]))
@@ -714,33 +726,174 @@ def fit_scene(positions: np.ndarray, opacities: np.ndarray, scene_xml: Path,
     return out, report
 
 
-SETTLE_STEP = 0.94      # a fitted body overlapping another is narrowed by this much at a time ...
+EXTENT = "_extent"      # a body's site of this name suffix is the real object's extent
+EXTENT_GROUP = 5        # ... in a site group nothing draws
+
+
+def _mark_extents(scene: Path, world: ET.Element, names: list[str]) -> None:
+    """Give each fitted body in `names` a box site (``<name>_extent``, invisible, no mass, no
+    contact) around all its geoms as fitted, in its own frame: the object as the splat has it.
+    The collision geoms may then be moved or narrowed to keep the bodies apart (`_settle`); the
+    cut still takes the object (`split._shape_boxes`)."""
+    if not names:
+        return
+    model = mujoco.MjModel.from_xml_path(str(scene))
+    data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
+    elems = {e.get("name"): e for e in world.findall("body")}
+    for name in names:
+        b = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, name)
+        elem = elems.get(name)
+        if b < 0 or elem is None:
+            continue
+        for old in [e for e in elem.findall("site") if e.get("name") == name + EXTENT]:
+            elem.remove(old)
+        centre, half = body_frame_box(model, data, b)
+        ET.SubElement(elem, "site", {"name": name + EXTENT, "type": "box", "pos": _fmt(centre),
+                                     "size": _fmt(half), "group": str(EXTENT_GROUP),
+                                     "rgba": "0 0 0 0"})
+
+
+def _shift_body(elem: ET.Element, dx: float, dy: float) -> None:
+    """Move a top-level body by (dx, dy) in the room, its extent sites staying where the object
+    is (shifted back in the body's own frame)."""
+    pos = _floats(elem.get("pos"), "0 0 0")
+    pos[:2] += (dx, dy)
+    elem.set("pos", _fmt(pos))
+    q = _floats(elem.get("quat"), "1 0 0 0")
+    R = np.zeros(9)
+    mujoco.mju_quat2Mat(R, q / np.linalg.norm(q))
+    back = R.reshape(3, 3).T @ np.array([-dx, -dy, 0.0])
+    for site in elem.findall("site"):
+        if (site.get("name") or "").endswith(EXTENT):
+            site.set("pos", _fmt(_floats(site.get("pos"), "0 0 0") + back))
+
+
+SETTLE_STEP = 0.94      # a fitted body sunk into something static is narrowed by this much ...
 SETTLE_MIN = 0.7        # ... down to this much of its fitted footprint
 SETTLE_SLACK = 0.005    # metres of overlap left alone
 SETTLE_GAP = 0.01       # metres two fitted movable bodies are kept apart in plan
+SETTLE_SHIFT = 0.10     # metres a fitted body may be slid to clear its neighbour in plan
 
 
-def _settle(scene: Path, names: list[str]) -> dict[str, float]:
-    """Fitted bodies that overlap one another or anything static (two chairs that touch, each
-    fitted to its whole footprint, would start interpenetrating and fly apart), or another
-    movable body seen from above (`split.plan_overlap`: a chair whose seat reaches under its
-    neighbour's lifts that neighbour with it): each is narrowed in plan, a step at a time, until
-    it clears (`split._penetration`, and `SETTLE_GAP` in plan) or reaches `SETTLE_MIN`.
-    Returns name -> the factor its footprint was narrowed by (only those narrowed)."""
-    from litereality_agent.pipeline.splatroom.split import _penetration, plan_overlap
+def _plan_hull(model: mujoco.MjModel, data: mujoco.MjData, body: int) -> np.ndarray:
+    """All a body's collision geoms (`split._geom_boxes`) seen from above: their corners'
+    convex hull."""
+    from scipy.spatial import ConvexHull
+
+    from litereality_agent.pipeline.splatroom.split import _geom_boxes
+
+    signs = np.array(np.meshgrid([-1, 1], [-1, 1], [-1, 1])).T.reshape(-1, 3)
+    pts = np.array([c + R @ (h * sgn) for _b, R, c, h in _geom_boxes(model, data, [body])
+                    for sgn in signs])[:, :2]
+    return pts[ConvexHull(pts).vertices]
+
+
+def _separation(a: np.ndarray, b: np.ndarray) -> tuple[float, np.ndarray]:
+    """How far two convex plan polygons overlap along the axis that separates them best, and
+    that axis, pointing from `a` to `b` (negative overlap: the gap)."""
+    best, axis = np.inf, np.array([1.0, 0.0])
+    for poly in (a, b):
+        edges = np.roll(poly, -1, axis=0) - poly
+        normals = np.column_stack([edges[:, 1], -edges[:, 0]])
+        normals /= np.maximum(np.linalg.norm(normals, axis=1, keepdims=True), 1e-12)
+        for n in normals:
+            pa, pb = a @ n, b @ n
+            o = min(pa.max(), pb.max()) - max(pa.min(), pb.min())
+            if o < best:
+                best, axis = o, (n if pb.mean() >= pa.mean() else -n)
+    return float(best), axis
+
+
+def _free_qpos(model: mujoco.MjModel, body: int) -> int | None:
+    from litereality_agent.pipeline.splatroom.split import _free_joint
+
+    j = _free_joint(model, body)
+    return None if j is None else int(model.jnt_qposadr[j])
+
+
+def _settle(scene: Path, names: list[str]) -> tuple[dict[str, float], dict[str, tuple]]:
+    """Keep the fitted bodies in `names` apart without making them smaller than what they hold.
+
+    Two fitted movable bodies that overlap seen from above (a chair whose seat reaches under its
+    neighbour's: lifting one straight up catches the other) are SLID apart along the axis that
+    separates them best, each by half of what it takes (`SETTLE_GAP` apart), up to `SETTLE_SHIFT`
+    each, and never into anything static deeper than it already was: the collision boxes stay
+    the size of the chairs, so a chair carried by a user hits a table or a wall where the chair
+    does, not 27 % inside it. Only what cannot be slid, and a body sunk into something static
+    (`split._penetration`), is narrowed in plan, a step at a time, down to `SETTLE_MIN`.
+    Returns (name -> the factor its footprint was narrowed by, name -> (dx, dy) it was slid),
+    only those changed."""
+    from litereality_agent.pipeline.splatroom.split import _penetration, movable_body_ids
 
     if not names:
-        return {}
+        return {}, {}
     model = mujoco.MjModel.from_xml_path(str(scene))
     data = mujoco.MjData(model)
+    mujoco.mj_forward(model, data)
     ids = {n: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, n) for n in names}
     ids = {n: b for n, b in ids.items() if b >= 0}
+    fitted = set(ids.values())
+    others = [b for b in movable_body_ids(model)
+              if int(model.body_parentid[b]) == 0 and _free_qpos(model, b) is not None]
+    shift = {b: np.zeros(2) for b in fitted}
+
+    def static_depth(b: int) -> float:
+        """Deepest contact of `b` with anything but the other movable bodies."""
+        root = int(model.body_rootid[b])
+        deepest = 0.0
+        for i in range(data.ncon):
+            c = data.contact[i]
+            b1, b2 = int(model.geom_bodyid[c.geom1]), int(model.geom_bodyid[c.geom2])
+            if b not in (b1, b2):
+                continue
+            other = b2 if b1 == b else b1
+            if other in others or (other != 0 and int(model.body_rootid[other]) == root):
+                continue
+            deepest = max(deepest, -float(c.dist))
+        return deepest
+
+    def slide(b: int, v: np.ndarray) -> bool:
+        """Slide `b` by `v` if that keeps it within `SETTLE_SHIFT` and out of static things."""
+        adr = _free_qpos(model, b)
+        if adr is None or b not in fitted or np.linalg.norm(shift[b] + v) > SETTLE_SHIFT:
+            return False
+        before = static_depth(b)
+        data.qpos[adr:adr + 2] += v
+        mujoco.mj_forward(model, data)
+        if static_depth(b) > max(before, SETTLE_SLACK):
+            data.qpos[adr:adr + 2] -= v
+            mujoco.mj_forward(model, data)
+            return False
+        shift[b] += v
+        return True
+
+    stuck: set[int] = set()
+    for _ in range(8):
+        moved = False
+        for i, a in enumerate(others):
+            for b in others[i + 1:]:
+                if a not in fitted and b not in fitted:
+                    continue
+                over, axis = _separation(_plan_hull(model, data, a), _plan_hull(model, data, b))
+                need = over + SETTLE_GAP
+                if over <= -SETTLE_GAP:
+                    continue
+                half = need / 2 if a in fitted and b in fitted else need
+                if (slide(a, -axis * half) | slide(b, axis * half)) \
+                        or slide(b, axis * need) or slide(a, -axis * need):
+                    moved = True
+                else:
+                    stuck.update(x for x in (a, b) if x in fitted)
+        if not moved:
+            break
+
     factor = dict.fromkeys(ids, 1.0)
     for _ in range(12):
         mujoco.mj_forward(model, data)
         bad = [n for n, b in ids.items()
                if (_penetration(model, data, b) > SETTLE_SLACK
-                   or plan_overlap(model, data, b) > -SETTLE_GAP)
+                   or (b in stuck and _worst_plan(model, data, b, others) > -SETTLE_GAP))
                and factor[n] * SETTLE_STEP >= SETTLE_MIN - 1e-9]
         if not bad:
             break
@@ -754,7 +907,16 @@ def _settle(scene: Path, names: list[str]) -> dict[str, float]:
                     model.geom_size[g][:2] *= SETTLE_STEP
                 else:
                     model.geom_size[g][0] *= SETTLE_STEP
-    return {n: f for n, f in factor.items() if f < 1.0}
+    shifted = {n: (float(shift[b][0]), float(shift[b][1])) for n, b in ids.items()
+               if np.linalg.norm(shift[b]) > 1e-4}
+    return {n: f for n, f in factor.items() if f < 1.0}, shifted
+
+
+def _worst_plan(model: mujoco.MjModel, data: mujoco.MjData, body: int, others) -> float:
+    """The most `body` overlaps any of `others` seen from above (`_separation`), metres."""
+    mine = _plan_hull(model, data, body)
+    return max((_separation(mine, _plan_hull(model, data, o))[0] for o in others if o != body),
+               default=-np.inf)
 
 
 # ---------------------------------------------------------------------------------- the gate

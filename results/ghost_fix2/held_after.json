@@ -1,0 +1,413 @@
+{
+ "Chair0/com": {
+  "point": "com",
+  "grab": [
+   0.688,
+   1.345,
+   -0.79
+  ],
+  "max_tilt_deg": 0.0,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.576,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair0/back_top": {
+  "point": "back_top",
+  "grab": [
+   0.802,
+   1.227,
+   -0.489
+  ],
+  "max_tilt_deg": 0.3,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.576,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair0/seat_corner": {
+  "point": "seat_corner",
+  "grab": [
+   0.563,
+   1.754,
+   -0.839
+  ],
+  "max_tilt_deg": 0.2,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.577,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair0/yank_origin": {
+  "max_tilt_deg": 5.6,
+  "deepest_contact_m": 0.0165,
+  "rise_m": 0.293
+ },
+ "Chair1/com": {
+  "point": "com",
+  "grab": [
+   -0.685,
+   0.536,
+   -0.67
+  ],
+  "max_tilt_deg": 0.0,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.942,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair1/back_top": {
+  "point": "back_top",
+  "grab": [
+   -0.541,
+   0.429,
+   -0.285
+  ],
+  "max_tilt_deg": 0.2,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.941,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair1/seat_corner": {
+  "point": "seat_corner",
+  "grab": [
+   -0.875,
+   0.974,
+   -0.731
+  ],
+  "max_tilt_deg": 0.2,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.939,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair2": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair1/yank_origin": {
+  "max_tilt_deg": 0.4,
+  "deepest_contact_m": 0.0035,
+  "rise_m": 0.175
+ },
+ "Chair2/com": {
+  "point": "com",
+  "grab": [
+   -1.153,
+   -0.018,
+   -0.779
+  ],
+  "max_tilt_deg": 0.0,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.773,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair2/back_top": {
+  "point": "back_top",
+  "grab": [
+   -1.096,
+   -0.173,
+   -0.47
+  ],
+  "max_tilt_deg": 0.3,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.775,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair2/seat_corner": {
+  "point": "seat_corner",
+  "grab": [
+   -1.066,
+   0.423,
+   -0.828
+  ],
+  "max_tilt_deg": 0.2,
+  "deepest_contact_m": 0.0,
+  "pulled_out": true,
+  "rise_m": 0.9,
+  "others_after_lift": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "carried_m": 0.767,
+  "tilt_held_end_deg": 0.0,
+  "touching_at_end": [],
+  "others_after_carry": {
+   "Chair0": [
+    0.0,
+    0.0
+   ],
+   "Chair1": [
+    0.0,
+    0.0
+   ],
+   "Wall0_Door_0": [
+    0.0,
+    0.0
+   ]
+  },
+  "resets": 0
+ },
+ "Chair2/yank_origin": {
+  "max_tilt_deg": 1.3,
+  "deepest_contact_m": 0.0064,
+  "rise_m": 0.273
+ }
+}

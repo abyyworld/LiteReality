@@ -337,3 +337,155 @@ def test_categories_come_from_the_quick_rooms_report(tmp_path):
     cats = instances.categories(model, data, scene)
     assert list(cats) == ["chair"] and len(cats["chair"].bodies) == 2
     assert instances.category_of("Chair12") == "chair"
+
+
+# ---------------------------------------------------------------------------------- ghost fix 2
+
+
+def _splayed_chair(x: float, y: float, yaw_deg: float, *, reach: float = 0.15):
+    """A real chair the way a trained splat has it: an opaque seat and back (the cluster's core)
+    and four faint legs that splay `reach` past the seat's edge to the floor (thin metal legs, an
+    office chair's star base), too faint to join the cluster. Returns (core, legs), world."""
+    w = 0.25
+    core = [_slab((-w, -w, 0.43), (w, w, 0.47)), _slab((-w, w - 0.03, 0.47), (w, w, 0.95))]
+    legs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            top = np.array([sx * (w - 0.02), sy * (w - 0.02), 0.42])
+            foot = np.array([sx * (w + reach), sy * (w + reach), 0.035])
+            t = np.linspace(0.0, 1.0, 60)[:, None]
+            line = top + t * (foot - top)
+            legs.append(np.concatenate([line + (dx, dy, 0) for dx in (-0.006, 0.006)
+                                        for dy in (-0.006, 0.006)]))
+    a = math.radians(yaw_deg)
+    R = np.array([[math.cos(a), -math.sin(a), 0], [math.sin(a), math.cos(a), 0], [0, 0, 1]])
+    return (np.concatenate(core) @ R.T + (x, y, 0.0),
+            np.concatenate(legs) @ R.T + (x, y, 0.0))
+
+
+def _carpet(lo=-2.0, hi=2.0) -> np.ndarray:
+    """Carpet pile: faint splats 3.5-7 cm over the floor everywhere."""
+    return _slab((lo, lo, 0.035), (hi, hi, 0.07), step=0.035)
+
+
+def _with_opacity(groups: list[tuple[np.ndarray, float]]) -> Splats:
+    pos = np.concatenate([g for g, _o in groups]).astype(np.float32)
+    ops = np.concatenate([np.full(len(g), o, np.float32) for g, o in groups])
+    n = len(pos)
+    return Splats(pos, np.full((n, 3), 0.008, np.float32),
+                  np.tile([0, 0, 0, 1.0], (n, 1)).astype(np.float32),
+                  np.full((n, 3), 0.5, np.float32), ops)
+
+
+def test_legs_that_splay_past_the_fitted_box_go_with_the_chair_and_the_carpet_stays(tmp_path):
+    """F1: the fitted box is the chair's opaque core; its legs stood 5-20 cm outside it, so the
+    cut (by that box) left them standing at the rest spot when the chair was carried off. The
+    leg zone takes what is connected to the chair, not the carpet around it, and the left-behind
+    check looks there too."""
+    scene = _scene(tmp_path, [("Chair0", 0.0, 0.0, 0.0)])
+    core, legs = _splayed_chair(0.05, -0.05, 15.0)
+    carpet = _carpet()
+    splats = _with_opacity([(core, 0.9), (legs, 0.2), (carpet, 0.2), (_floor(), 0.9)])
+    fixed, _ = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                   log=lambda _m: None)
+    model, data = _model(fixed)
+    parts = split(splats, model, corrections={}, instances=True, fill=False)
+    assert _owners_of(core, parts, model)["Chair0"] > 0.97
+    share = _owners_of(legs, parts, model)["Chair0"]
+    assert share > 0.9, share
+    # the carpet away from the chair's footprint and its feet stays the room's
+    from scipy.spatial import cKDTree
+
+    far = cKDTree(legs[:, :2]).query(carpet[:, :2])[0] > 0.08
+    far &= np.abs(carpet[:, 0] - 0.05) + np.abs(carpet[:, 1] + 0.05) > 0.45
+    assert _owners_of(carpet[far], parts, model).get("Chair0", 0.0) < 0.01
+    assert parts.move_test["left_behind"]["Chair0"]["pass"]
+
+    # the cut that left the legs fails the check, though by opacity they are little
+    from litereality_agent.pipeline.splatroom.split import left_behind
+
+    b = model.body("Chair0").id
+    owner = np.full(len(splats), -1)
+    owner[:len(core)] = b
+    row = left_behind(splats.positions, splats.opacities, owner, model, data, floor=0.0)["Chair0"]
+    assert row["left"] <= 0.08 and not row["legs_pass"] and not row["pass"], row
+
+
+def test_two_chairs_whose_legs_reach_into_each_others_zone_each_keep_their_own(tmp_path):
+    scene = _scene(tmp_path, [("Chair0", -0.4, 0.0, 0.0), ("Chair1", 0.4, 0.0, 0.0)])
+    core0, legs0 = _splayed_chair(-0.4, 0.0, 0.0, reach=0.12)
+    core1, legs1 = _splayed_chair(0.4, 0.0, 0.0, reach=0.12)
+    splats = _with_opacity([(core0, 0.9), (core1, 0.9), (legs0, 0.2), (legs1, 0.2),
+                            (_floor(), 0.9)])
+    fixed, _ = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                   log=lambda _m: None)
+    model, _data = _model(fixed)
+    parts = split(splats, model, corrections={}, instances=True, fill=False)
+    for name, other, legs in (("Chair0", "Chair1", legs0), ("Chair1", "Chair0", legs1)):
+        share = _owners_of(legs, parts, model)
+        assert share[name] > 0.9 and share.get(other, 0.0) < 0.05, (name, share)
+
+
+DESK = """
+    <body name="Table0" pos="0 0.45 0">
+      <geom name="Table0_top" type="box" pos="0 0 0.72" size="0.8 0.4 0.02"/>
+      <geom name="Table0_leg0" type="box" pos="-0.75 0.35 0.35" size="0.025 0.025 0.35"/>
+      <geom name="Table0_leg1" type="box" pos="0.75 0.35 0.35" size="0.025 0.025 0.35"/>
+    </body>"""
+
+
+def test_the_desk_edge_over_a_tucked_chair_stays_with_the_desk(tmp_path):
+    """F2: the trained desk edge spreads a few centimetres past the desk's box, into the box of the
+    chair tucked under it. A splat inside a body's box was locked to the room only if strictly
+    inside a static box, so the chair carried a strip of the desk's front edge."""
+    scene = _scene(tmp_path, [("Chair0", 0.0, -0.1, 180.0)])
+    scene.write_text(scene.read_text().replace("</worldbody>", DESK + "\n  </worldbody>"))
+    core = _chair_points(0.0, -0.1, 180.0, back_height=0.9)
+    # the desk's front edge as trained: its top, front face and lip, up to 2.5 cm off its box
+    edge = np.concatenate([_slab((-0.8, 0.05, 0.742), (0.8, 0.2, 0.76), step=0.012),
+                           _slab((-0.8, 0.026, 0.69), (0.8, 0.05, 0.75), step=0.012)])
+    desk = _slab((-0.8, 0.2, 0.742), (0.8, 0.85, 0.745), step=0.03)
+    splats = _with_opacity([(core, 0.9), (edge, 0.9), (desk, 0.9), (_floor(), 0.9)])
+    fixed, report = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                        log=lambda _m: None)
+    assert "Chair0" in report["bodies"]
+    model, _data = _model(fixed)
+    from litereality_agent.pipeline.splatroom.split import _cut_boxes, _inside_any
+
+    b = model.body("Chair0").id
+    in_box = _inside_any(edge.astype(np.float64), _cut_boxes(model, _data, [b]), 0.0)
+    assert in_box.sum() > 200                       # the chair's box does reach the desk edge
+    parts = split(splats, model, corrections={}, instances=True, fill=False)
+    assert _owners_of(edge, parts, model).get("Chair0", 0.0) < 0.01
+    assert _owners_of(core, parts, model)["Chair0"] > 0.9
+
+
+def test_chairs_too_close_are_slid_apart_not_shrunk_and_cut_by_what_they_hold(tmp_path):
+    """F3: two fitted chairs overlapping in plan were narrowed to 0.73 of their footprint to keep
+    apart, so a carried chair passed 27 % into the desk, the walls and the other chair, and its
+    cut lost its legs. Now they keep their size and are slid a few centimetres apart; the cut
+    takes each object where the splat has it (its extent), not where the collision box went."""
+    scene = _scene(tmp_path, [("Chair0", -0.3, 0, 0), ("Chair1", 0.3, 0, 0)])
+    a, b = _chair_points(-0.27, 0.0, 0.0), _chair_points(0.27, 0.05, 0.0)
+    bridge = _slab((-0.03, -0.1, 0.44), (0.03, 0.1, 0.46), step=0.02)
+    splats = _splats([a, b, bridge, _floor()])
+    fixed, report = instances.fit_scene(splats.positions, splats.opacities, scene,
+                                        log=lambda _m: None)
+    model, data = _model(fixed)
+    for name in ("Chair0", "Chair1"):
+        fit = report["bodies"][name]
+        assert "shrunk_to_clear" not in fit, fit
+        body = model.body(name).id
+        assert plan_overlap(model, data, body) <= -instances.SETTLE_GAP + 1e-3
+        shift = np.hypot(*fit.get("shifted_to_clear_m", (0.0, 0.0)))
+        assert shift <= instances.SETTLE_SHIFT + 1e-6
+        # the collision boxes are as big as the object the cut takes
+        site = model.site(name + instances.EXTENT).id
+        geoms = range(model.body_geomadr[body], model.body_geomadr[body] + model.body_geomnum[body])
+        width = max(model.geom_pos[g][0] + model.geom_size[g][0] for g in geoms) \
+            - min(model.geom_pos[g][0] - model.geom_size[g][0] for g in geoms)
+        assert width >= 0.98 * 2 * model.site_size[site][0]
+    assert report["bodies"]["Chair0"].get("shifted_to_clear_m")
+    parts = split(splats, model, corrections={}, instances=True, fill=False)
+    assert _owners_of(a, parts, model)["Chair0"] > 0.95
+    assert _owners_of(b, parts, model)["Chair1"] > 0.95

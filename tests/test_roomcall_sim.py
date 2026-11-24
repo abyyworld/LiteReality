@@ -501,7 +501,10 @@ def test_adopt_relaxes_a_carried_overlap_and_lets_go_of_what_became_static(model
     chair, table = _body(model, "chair_1"), _body(model, "table")
     assert old.grab("ann", chair, old.data.xpos[chair])
     target = old.data.xpos[chair] * 0.4 + old.data.xpos[table] * 0.6
-    target[2] = 0.5
+    # Lifted 15 cm and pushed against the table, held upright (a hand holds its tilt): its seat
+    # under the table top, its back against the top's edge. (Lifted 0.5 m, its legs would stand
+    # at the top's height, and held upright the 30 %-grown chair is wedged through the top.)
+    target[2] = 0.15
     old.move("ann", target)                            # push it against the table and hold it
     assert old.grab("cy", box, old.data.xpos[box])
     old.step_realtime(2.0, max_steps=10_000)
@@ -544,3 +547,56 @@ def test_adopt_skips_what_cannot_be_carried(model):
     assert "room_door" in report["carried"] or "room_door" in report["reset"]
     assert np.all(np.isfinite(new.data.qpos))
     assert _joint_q(new, "room_door_hinge") == pytest.approx(0.0, abs=1e-6)
+
+
+CHAIR_ROOM = """
+<mujoco>
+  <option timestep="0.002"/>
+  <worldbody>
+    <geom name="floor" type="plane" size="4 4 0.1"/>
+    <body name="chair" pos="0 0 0.45">
+      <freejoint/>
+      <geom name="seat" type="box" pos="0 0 0" size="0.22 0.22 0.02" density="250"/>
+      <geom name="back" type="box" pos="0 0.2 0.22" size="0.22 0.02 0.22" density="250"/>
+      <geom name="leg0" type="box" pos="-0.2 -0.2 -0.225" size="0.015 0.015 0.225" density="250"/>
+      <geom name="leg1" type="box" pos="0.2 -0.2 -0.225" size="0.015 0.015 0.225" density="250"/>
+      <geom name="leg2" type="box" pos="0.2 0.2 -0.225" size="0.015 0.015 0.225" density="250"/>
+      <geom name="leg3" type="box" pos="-0.2 0.2 -0.225" size="0.015 0.015 0.225" density="250"/>
+    </body>
+  </worldbody>
+</mujoco>"""
+
+
+def _tilt_deg(sim: RoomSim, body: int) -> float:
+    return math.degrees(math.acos(min(1.0, abs(float(sim.data.xmat[body].reshape(3, 3)[2, 2])))))
+
+
+@pytest.mark.parametrize("where", ["back_top", "seat_corner"])
+def test_a_chair_held_where_a_user_clicks_is_carried_upright(where):
+    """F4: a held chair hung off the grabbed point and pivoted 58-86 deg while carried (nothing
+    held its tilt, only its spin was damped). Grabbed at the top of its back or a corner of its
+    seat, lifted and carried briskly, it stays within a few degrees of upright."""
+    sim = RoomSim(mujoco.MjModel.from_xml_string(CHAIR_ROOM), settle_seconds=0.3)
+    chair = _body(sim.model, "chair")
+    local = {"back_top": [0.0, 0.2, 0.42], "seat_corner": [0.2, -0.2, 0.02]}[where]
+    point = _world(sim, chair, local)
+    assert sim.grab("ann", chair, point)
+    worst = 0.0
+    for i in range(1, 31):                           # up 0.9 m in 0.5 s ...
+        sim.move("ann", point + [0.0, 0.0, 0.9 * i / 30])
+        sim.step_realtime(1 / 60)
+        worst = max(worst, _tilt_deg(sim, chair))
+    for i in range(1, 31):                           # ... across 0.8 m in 0.5 s, and hold
+        sim.move("ann", point + [0.8 * i / 30, 0.0, 0.9])
+        sim.step_realtime(1 / 60)
+        worst = max(worst, _tilt_deg(sim, chair))
+    sim.step_realtime(1.0, max_steps=1000)
+    worst = max(worst, _tilt_deg(sim, chair))
+    assert worst < 12.0, worst
+    assert _tilt_deg(sim, chair) < 2.0
+    assert np.linalg.norm(_anchor(sim, "ann") - (point + [0.8, 0.0, 0.9])) < 0.03
+    # its heading stays free: pulled by one side, it may turn about the vertical
+    sim.release("ann")
+    sim.step_realtime(1.5, max_steps=1000)
+    assert _tilt_deg(sim, chair) < 2.0              # set down on its feet
+    assert sim.unstable_resets == 0

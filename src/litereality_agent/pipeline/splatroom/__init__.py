@@ -76,6 +76,7 @@ from litereality_agent.pipeline.splatroom import instances as object_instances
 from litereality_agent.pipeline.splatroom.split import Split, corrected_scene, left_behind, split
 
 DEFAULT_DIR = "splat"
+FILLS = ("floor_fill", "wall_fill", "door_fill")    # patches at the room splat's end, never the scan
 BUNDLE = "splat.json"
 REPORT = "report.json"
 SPLAT_SCENE = "scene_splat.xml"  # the physics with the bodies moved, beside the scene cut against
@@ -765,7 +766,7 @@ def bundle_move_test(out_dir: Path, scene_xml: Path | None = None) -> dict:
 
     room = spz.decode((out_dir / bundle["room"]).read_bytes())
     counts = bundle.get("counts") or {}
-    fill = int(counts.get("floor_fill", 0)) + int(counts.get("wall_fill", 0))
+    fill = sum(int(counts.get(k, 0)) for k in FILLS)
     room = room.subset(np.arange(len(room) - fill))       # the patch under objects is not the scan
     parts, owner = [room], [np.full(len(room), -1)]
     for name, file in (bundle.get("bodies") or {}).items():
