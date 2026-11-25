@@ -733,6 +733,13 @@ DOOR_BACK = 0.30       # metres the space behind an opened door reaches past the
 DOOR_STEP = 0.04       # metres between the splats that make that space
 DOOR_LOOK = 1.2        # metres either side of a leaf in which the room's splats say which is its side
 DOOR_DIM = {"back": 0.55, "side": 0.7, "ceiling": 0.6, "floor": 0.75}   # shading of the space
+DOOR_CLEAR = 0.06      # metres past a leaf's mid-plane, away from the room, before its space is cleared
+DOOR_BACKING = 0.012   # metres behind a door's face (the room's side) its backing sheet stands
+DOOR_BACKING_STEP = 0.012   # metres between the backing's splats
+BACKING_SOLID = 4.0    # a backing cell holding the face's median opacity is 1 - e^-this opaque
+DOOR_CLEAR_REACH = 1.0  # metres past a door's space, behind it, that are cleared too
+DOOR_EDGE = 0.02       # metres past the leaf's outline a door's splat may reach
+DOOR_CONE = 35.0       # degrees off face on over which a door's colour seen from the room is averaged
 
 
 def _hinged(model: mujoco.MjModel, body: int) -> bool:
@@ -741,16 +748,189 @@ def _hinged(model: mujoco.MjModel, body: int) -> bool:
                for j in range(start, start + count))
 
 
+def _doorway(pos: np.ndarray, model: mujoco.MjModel, data: mujoco.MjData, body: int,
+             floor: float) -> dict | None:
+    """Where the space behind a door is: per hinged body whose box (`_union_box`) is an upright
+    plate at least `DOOR_MIN_HEIGHT` tall, the side of the leaf the room's splats (`pos`) are not
+    on (`DOOR_LOOK`), and a box-shaped space there as wide as the opening plus the leaf's swing,
+    `DOOR_BACK` deeper than the leaf is wide, from `floor` to above the opening. None for any
+    other body, or when the room's splats do not say which side the room is."""
+    if not _body_geoms(model, body):
+        return None
+    _b, R, c, half = _union_box(model, data, body)
+    t = int(np.argmin(half))
+    if abs(R[2, t]) > 0.3 or half[t] >= PLATE_RATIO * np.sort(half)[1]:
+        return None
+    v = max((a for a in range(3) if a != t), key=lambda a: abs(R[2, a]))
+    u = 3 - t - v
+    if 2 * half[v] < DOOR_MIN_HEIGHT:
+        return None
+    nt = R[:, t].copy()
+    nt[2] = 0.0
+    nt /= np.linalg.norm(nt)
+    nu = np.cross([0.0, 0.0, 1.0], nt)
+    rel = pos - c
+    with np.errstate(all="ignore"):         # a trained splat can hold a few non-finite rows
+        along, across = rel @ nu, rel @ nt
+    near = (np.abs(along) < half[u] + 0.5) & (np.abs(across) < DOOR_LOOK) \
+        & (np.abs(across) > half[t] + 0.05) & (pos[:, 2] > floor - 0.1)
+    if near.sum() < 50:
+        return None
+    side = 1.0 if (across[near] > 0).sum() >= (across[near] < 0).sum() else -1.0
+    top = c[2] + half[v]
+    depth = 2 * half[u] + DOOR_BACK
+    return {"c": c, "half_u": half[u], "half_t": half[t], "nu": nu, "nt": nt, "side": side,
+            "back": -side * nt, "top": top, "depth": depth, "wide": half[u] + depth / 2,
+            "start": half[t] + 0.03, "high": top - floor + 0.3, "along": along,
+            "across": across, "near": near}
+
+
+def clear_doorways(room: Splats, model: mujoco.MjModel, data: mujoco.MjData, bodies,
+                   floor: float) -> tuple[Splats, int]:
+    """`room` without what it holds in the space behind every door in `bodies` (`_doorway`):
+    the cameras stayed in the room, so all a trained room has there is what was glimpsed past
+    the door's edges, smeared into floaters (a white sheet hanging in the doorway) that the door
+    hid while shut. `fill_doorways` then puts a dim space there. Nothing nearer the leaf than
+    `DOOR_CLEAR` past its far face goes: that is the wall the door stands in. Returns (room,
+    removed)."""
+    if not len(room) or not bodies:
+        return room, 0
+    pos = room.positions.astype(np.float64)
+    drop = np.zeros(len(room), dtype=bool)
+    for b in bodies:
+        g = _doorway(pos, model, data, b, floor)
+        if g is None:
+            continue
+        with np.errstate(all="ignore"):
+            behind = (pos - g["c"]) @ g["back"]
+        drop |= (np.abs(g["along"]) <= g["wide"]) & (behind >= g["half_t"] + DOOR_CLEAR) \
+            & (behind <= g["start"] + g["depth"] + DOOR_CLEAR_REACH) & (pos[:, 2] >= floor - 0.1) \
+            & (pos[:, 2] <= floor + g["high"])
+    removed = int(drop.sum())
+    return (room.subset(~drop) if removed else room), removed
+
+
+def flatten_plate(local: Splats, model: mujoco.MjModel, data: mujoco.MjData,
+                  body: int) -> Splats:
+    """A plate body's splats (a door leaf, in the body's frame) made to look like a door from
+    every side. The door was only ever photographed from the room: each splat's colour is right
+    only for the room's side (its higher SH, from anywhere else, is pink and green), and the
+    leaf's far side is whatever training left behind its face, which every camera saw past.
+    Here each splat keeps its place and the colour the room saw it in (`DOOR_CONE`), for every
+    side; what lies deeper than `DOOR_BACKING` behind the face goes, and an opaque backing
+    painted from the face (`_backing`) closes the leaf there; nothing past the leaf's outline
+    (`DOOR_EDGE`) stays. The face is put on the room's side of the leaf's box. A body that is no
+    plate is returned as it is."""
+    from litereality_agent.models.splat.spz import sh_basis
+
+    if not len(local) or not _body_geoms(model, body):
+        return local
+    _b, Rb, c, half = _union_box(model, data, body)
+    t = int(np.argmin(half))
+    if half[t] >= PLATE_RATIO * np.sort(half)[1]:
+        return local
+    centre = Rb.T @ (c - np.asarray(data.xpos[body], dtype=np.float64))
+    with np.errstate(all="ignore"):
+        rel = local.positions.astype(np.float64) - centre
+        ok = np.all(np.isfinite(rel), axis=1) & np.all(np.isfinite(local.scales), axis=1) \
+            & np.all(np.isfinite(local.rotations), axis=1) & np.isfinite(local.opacities)
+        flat = [a for a in range(3) if a != t]
+        ok &= np.all(np.abs(rel[:, flat]) <= half[flat] + DOOR_EDGE, axis=1)
+    part = local.subset(ok)
+    if not len(part):
+        return part
+    rel = rel[ok]
+    off = rel[:, t]
+    order = np.argsort(off)
+    weight = np.cumsum(part.opacities[order].astype(np.float64))
+    mid = off[order][np.searchsorted(weight, weight[-1] / 2)]       # by opacity: the face seen
+    side = 1.0 if mid >= 0 else -1.0                                # the room's side
+    face = side * half[t]
+    depth = side * (off - mid)                                      # + toward the room
+    colors = part.colors.astype(np.float64)
+    if part.sh is not None and part.sh.shape[1]:
+        # The colour each splat shows the room (its higher SH, trained in the room's frame,
+        # averaged over the views from the room's side of the leaf, `DOOR_CONE` around face on),
+        # for every side: the SH alone, from where no camera stood, is the pink and green.
+        rb = np.asarray(data.xmat[body], dtype=np.float64).reshape(3, 3)
+        axis = np.zeros(3)
+        axis[t] = -side                                             # from the room into the leaf
+        a, b = [np.eye(3)[i] for i in range(3) if i != t]
+        cone = math.radians(DOOR_CONE)
+        dirs = [axis] + [math.cos(cone * r) * axis + math.sin(cone * r)
+                         * (math.cos(phi) * a + math.sin(phi) * b)
+                         for r in (0.5, 1.0) for phi in np.linspace(0, 2 * math.pi, 8, endpoint=False)]
+        basis = sh_basis(np.asarray(dirs) @ rb.T, part.sh_degree).mean(0)
+        colors += np.einsum("k,nkc->nc", basis, part.sh.astype(np.float64))
+    colors = np.clip(colors, 0.0, 1.0)
+    # What lies deeper in the leaf than `DOOR_BACKING` was hidden from every camera by the face
+    # in front of it, and is all that shows of the leaf from behind: it goes, and a backing
+    # painted from the face (`_backing`) closes the leaf there instead.
+    keep = depth >= -DOOR_BACKING
+    rel[:, t] = face + side * depth
+    front = Splats((rel[keep] + centre).astype(np.float32), part.scales[keep].copy(),
+                   part.rotations[keep].copy(), colors[keep].astype(np.float32),
+                   part.opacities[keep].copy())
+    flat = [a for a in range(3) if a != t]
+    back = _backing(rel[keep][:, flat], colors[keep], part.opacities[keep], half[flat], t,
+                    face - side * DOOR_BACKING, centre)
+    return Splats.concat([front, back])
+
+
+def _backing(uv: np.ndarray, colors: np.ndarray, opacities: np.ndarray, half: np.ndarray,
+             t: int, depth: float, centre: np.ndarray, *, step: float = DOOR_BACKING_STEP
+             ) -> Splats:
+    """A sheet of flat splats every `step` over a plate's face (`half`, the two in-plane half
+    extents; `t` its thin axis, `depth` where along it), each in the colour the face's splats
+    (`uv` on the face, `colors`, `opacities`) show around it and as opaque as they are there
+    (`BACKING_SOLID`)."""
+    from scipy import ndimage
+    from scipy.spatial.transform import Rotation
+
+    na, nb = (np.ceil(2 * half / step).astype(int))
+    ia = np.clip(((uv[:, 0] + half[0]) / step).astype(int), 0, na - 1)
+    ib = np.clip(((uv[:, 1] + half[1]) / step).astype(int), 0, nb - 1)
+    w = opacities.astype(np.float64)
+    den = np.zeros((na, nb))
+    np.add.at(den, (ia, ib), w)
+    num = np.zeros((na, nb, 3))
+    for k in range(3):
+        np.add.at(num[..., k], (ia, ib), w * colors[:, k])
+    den = ndimage.gaussian_filter(den, 1.0)
+    num = np.stack([ndimage.gaussian_filter(num[..., k], 1.0) for k in range(3)], -1)
+    seen = den > 1e-3
+    if not seen.any():
+        return Splats(*(np.zeros((0, k), np.float32) for k in (3, 3, 4, 3)),
+                      np.zeros(0, np.float32))
+    rgb = np.where(seen[..., None], num / np.maximum(den, 1e-9)[..., None], 0.0)
+    _, (ja, jb) = ndimage.distance_transform_edt(~seen, return_indices=True)
+    rgb = rgb[ja, jb]                                       # an unseen cell: its nearest seen one
+    # As opaque as the face is there: solid wood stops the eye, a window's glass (a few faint
+    # splats) lets it through, onto the space behind the door as before.
+    solid = np.median(den[seen])
+    alpha = np.clip(1.0 - np.exp(-den / max(solid, 1e-9) * BACKING_SOLID), 0.0, 0.98)
+    ga, gb = np.meshgrid(-half[0] + step * (np.arange(na) + 0.5),
+                         -half[1] + step * (np.arange(nb) + 0.5), indexing="ij")
+    n = na * nb
+    flat = [a for a in range(3) if a != t]
+    pos = np.zeros((n, 3))
+    pos[:, flat[0]], pos[:, flat[1]], pos[:, t] = ga.ravel(), gb.ravel(), depth
+    frame = np.eye(3)[:, [flat[0], flat[1], t]]
+    if np.linalg.det(frame) < 0:
+        frame[:, 2] *= -1
+    return Splats((pos + centre).astype(np.float32),
+                  np.tile([0.7 * step, 0.7 * step, 0.0005], (n, 1)).astype(np.float32),
+                  np.tile(Rotation.from_matrix(frame).as_quat(), (n, 1)).astype(np.float32),
+                  rgb.reshape(-1, 3).astype(np.float32), alpha.ravel().astype(np.float32))
+
+
 def fill_doorways(room: Splats, model: mujoco.MjModel, data: mujoco.MjData, bodies,
                   floor: float, *, step: float = DOOR_STEP) -> tuple[Splats, int]:
     """`room` plus a dim space behind every door in `bodies`: what an opened door shows was
     never photographed (the door was shut, or the cameras stayed in the room), so a trained room
-    has nothing there and the doorway opens onto the bare scene background. Per hinged body
-    whose box (`_union_box`) is an upright plate at least `DOOR_MIN_HEIGHT` tall: on the side of
-    the leaf the room's splats are not on (`DOOR_LOOK`), a box-shaped space as wide as the
-    opening plus the leaf's swing, `DOOR_BACK` deeper than the leaf is wide, from `floor` to above
-    the opening: its floor in the colour of the room's floor at the door, its walls and ceiling in
-    the colour of the wall around the opening, each shaded darker (`DOOR_DIM`), a splat every
+    has nothing there and the doorway opens onto the bare scene background. The space is
+    `_doorway`'s: its floor in the colour of the room's floor at the door, its walls and ceiling
+    in the colour of the wall around the opening, each shaded darker (`DOOR_DIM`), a splat every
     `step` wherever nothing was seen. Returns (room, added)."""
     from scipy.spatial import cKDTree
 
@@ -761,41 +941,20 @@ def fill_doorways(room: Splats, model: mujoco.MjModel, data: mujoco.MjData, bodi
     pos = room.positions.astype(np.float64)
     patches = []
     for b in bodies:
-        if not _body_geoms(model, b):
+        g = _doorway(pos, model, data, b, floor)
+        if g is None:
             continue
-        _b, R, c, half = _union_box(model, data, b)
-        t = int(np.argmin(half))
-        if abs(R[2, t]) > 0.3 or half[t] >= PLATE_RATIO * np.sort(half)[1]:
-            continue
-        v = max((a for a in range(3) if a != t), key=lambda a: abs(R[2, a]))
-        u = 3 - t - v
-        if 2 * half[v] < DOOR_MIN_HEIGHT:
-            continue
-        nt = R[:, t].copy()
-        nt[2] = 0.0
-        nt /= np.linalg.norm(nt)
-        nu = np.cross([0.0, 0.0, 1.0], nt)
-        rel = pos - c
-        with np.errstate(all="ignore"):         # a trained splat can hold a few non-finite rows
-            along, across = rel @ nu, rel @ nt
-        near = (np.abs(along) < half[u] + 0.5) & (np.abs(across) < DOOR_LOOK) \
-            & (np.abs(across) > half[t] + 0.05) & (pos[:, 2] > floor - 0.1)
-        if near.sum() < 50:
-            continue
-        side = 1.0 if (across[near] > 0).sum() >= (across[near] < 0).sum() else -1.0
-        back = -side * nt                                    # away from the room
-        top = c[2] + half[v]
+        c, nu, along, across, near = g["c"], g["nu"], g["along"], g["across"], g["near"]
+        side, back, top = g["side"], g["back"], g["top"]
+        half_u, half_t = g["half_u"], g["half_t"]
         floor_near = near & (side * across > 0) & (np.abs(pos[:, 2] - floor) < 0.03)
-        wall_near = (np.abs(across) < half[t] + 0.10) & (np.abs(along) > half[u] + 0.03) \
-            & (np.abs(along) < half[u] + 0.6) & (pos[:, 2] > floor + 0.3) & (pos[:, 2] < top)
+        wall_near = (np.abs(across) < half_t + 0.10) & (np.abs(along) > half_u + 0.03) \
+            & (np.abs(along) < half_u + 0.6) & (pos[:, 2] > floor + 0.3) & (pos[:, 2] < top)
         if floor_near.sum() < 20 or wall_near.sum() < 20:
             continue
         floor_rgb = np.median(room.colors[floor_near], axis=0)
         wall_rgb = np.median(room.colors[wall_near], axis=0)
-        depth = 2 * half[u] + DOOR_BACK
-        wide = half[u] + depth / 2
-        start = half[t] + 0.03
-        high = top - floor + 0.3
+        depth, wide, start, high = g["depth"], g["wide"], g["start"], g["high"]
 
         def face(origin, a, b, la, lb, rgb):
             ga, gb = np.meshgrid(np.arange(step / 2, la, step), np.arange(step / 2, lb, step))
@@ -1169,9 +1328,17 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
                        part.colors.copy(), part.opacities.copy(),
                        None if part.sh is None else part.sh.copy())
         name = body_name(model, b)
+        if fill and _hinged(model, b):
+            local = flatten_plate(local, model, data, b)
         result.bodies[name] = local
-        result.counts[name] = int(mine.sum())
+        result.counts[name] = len(local)
     if fill:
+        doors = [b for b in movable if body_name(model, b) in result.bodies and _hinged(model, b)]
+        low = found.floor if found is not None else min(
+            (float(c[2] - np.abs(R[2]) @ h) for _b, R, c, h in boxes), default=0.0)
+        result.room, removed = clear_doorways(result.room, model, data, doors, low)
+        if removed:
+            result.counts["door_clear"] = removed
         prints = [_footprint(model, data, b) for b in movable
                   if body_name(model, b) in result.bodies and _free_joint(model, b) is not None
                   and int(model.body_parentid[b]) == 0]
@@ -1184,7 +1351,6 @@ def split(splats: Splats, model: mujoco.MjModel, *, margin: float = MARGIN,
         result.room, added = fill_walls(result.room, model, data, free, low)
         if added:
             result.counts["wall_fill"] = added
-        doors = [b for b in movable if body_name(model, b) in result.bodies and _hinged(model, b)]
         result.room, added = fill_doorways(result.room, model, data, doors, low)
         if added:
             result.counts["door_fill"] = added

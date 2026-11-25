@@ -272,3 +272,84 @@ def test_a_wall_patch_never_hides_what_was_seen_behind_the_wall_face():
     fill = room[len(room) - parts.counts["wall_fill"]:]
     assert (fill[:, 0] > 1.02).any()                 # the unseen half is patched
     assert not ((fill[:, 0] < 0.98) & (fill[:, 2] < 0.6)).any()   # the seen half is not
+
+
+def _door_face(extra_back: bool = True):
+    """The atrium's door as training left it: a face toward the room (y < 0) in layers, gold
+    from the room and, by its higher SH, blue from where no camera stood; behind it, deeper in
+    the leaf, a layer of junk only the far side shows."""
+    from litereality_agent.models.splat.spz import SH_C1
+
+    face = np.concatenate([_grid((0.03, y, 0.05), (0.87, y, 1.95), step=0.03)
+                           for y in (-0.03, -0.02, -0.01)])
+    back = _grid((0.03, 0.03, 0.05), (0.87, 0.03, 1.95), step=0.03) if extra_back \
+        else np.zeros((0, 3))
+    wall = np.concatenate([_grid((-1.5, 0.022, 0.05), (-0.01, 0.022, 2.0), step=0.05),
+                           _grid((0.91, 0.022, 0.05), (2.5, 0.022, 2.0), step=0.05)])
+    floor = _grid((-1.5, -1.5, 0.0), (2.5, -0.05, 0.0), step=0.05)
+    s = _splats_at(np.concatenate([face, back, wall, floor]))
+    s.sh = np.zeros((len(s), 3, 3), np.float32)
+    s.sh[:len(face), 0] = np.array([-0.2, 0.0, 0.2]) / SH_C1    # from +y (the room looking in)
+    s.colors[len(face):len(face) + len(back)] = (0.9, 0.2, 0.9)   # the junk: magenta
+    s.colors[len(face) + len(back):len(face) + len(back) + len(wall)] = 0.8
+    return s, len(face), len(back)
+
+
+def test_a_door_shows_every_side_the_colour_the_room_saw_it_in():
+    """The door was only filmed from the room. Its splats' higher SH, from anywhere else, turned
+    the leaf pink and green the moment it swung open or was seen edge on; it now keeps the
+    colour the room saw, from every side."""
+    model = mujoco.MjModel.from_xml_string(DOOR)
+    s, n_face, _ = _door_face(extra_back=False)
+    parts = split(s, model, snap_bodies=False)
+    door = parts.bodies["Door0"]
+    assert door.sh is None or not np.any(door.sh)
+    front = door.colors[:n_face]
+    assert np.allclose(np.median(front, axis=0), (0.7, 0.5, 0.3), atol=0.05)
+
+
+def test_an_opened_doors_far_side_is_a_door_not_what_lay_behind_its_face():
+    """What training left deeper in the leaf than its face was hidden from every camera and was
+    all the far side showed (the gold and magenta shards of the opened atrium door). It goes,
+    and an opaque backing in the face's colour closes the leaf; a window in the face (no
+    splats) stays see-through."""
+    from litereality_agent.pipeline.splatroom.split import DOOR_BACKING
+
+    model = mujoco.MjModel.from_xml_string(DOOR)
+    s, n_face, n_back = _door_face()
+    window = (np.abs(s.positions[:, 0] - 0.6) < 0.08) & (np.abs(s.positions[:, 2] - 1.3) < 0.3) \
+        & (s.positions[:, 1] < 0.035)
+    s.opacities[window] = 0.0                                       # the glass: nothing there
+    parts = split(s, model, snap_bodies=False)
+    door = parts.bodies["Door0"]
+    p = door.positions
+    magenta = (door.colors[:, 0] > 0.8) & (door.colors[:, 1] < 0.3)
+    assert not magenta.any()                                        # the junk is gone
+    backing = (np.abs(p[:, 1] - (0.002 + DOOR_BACKING)) < 1e-3) & (door.scales[:, 2] < 0.001)
+    assert backing.sum() > 3000                                     # a sheet over the leaf
+    solid = backing & ((np.abs(p[:, 0] - 0.2) < 0.05) & (np.abs(p[:, 2] - 0.6) < 0.05))
+    glass = backing & ((np.abs(p[:, 0] - 0.6) < 0.03) & (np.abs(p[:, 2] - 1.3) < 0.1))
+    assert solid.any() and glass.any()
+    assert door.opacities[solid].min() > 0.9 and door.opacities[glass].max() < 0.3
+    assert np.allclose(np.median(door.colors[solid], axis=0), (0.7, 0.5, 0.3), atol=0.06)
+
+
+def test_floaters_glimpsed_past_a_shut_door_are_cleared_from_its_doorway():
+    """Past the atrium's door edges the cameras glimpsed the corridor; training smeared that into
+    floaters behind the leaf (a white sheet hanging in the doorway once it opened). The space
+    behind a door is cleared, then the dim space fills it; the wall it stands in stays."""
+    model = mujoco.MjModel.from_xml_string(DOOR)
+    s, n_face, n_back = _door_face(extra_back=False)
+    sheet = _grid((0.2, 0.6, 0.5), (0.6, 0.6, 1.5), step=0.03)          # behind the door
+    s = type(s).concat([s, _splats_at(sheet)])
+    s.colors[-len(sheet):] = 1.0
+    parts = split(s, model, snap_bodies=False)
+    assert parts.counts.get("door_clear", 0) >= len(sheet)
+    room = parts.room
+    added = parts.counts["door_fill"]
+    seen = room.subset(np.arange(len(room) - added))
+    behind = (seen.positions[:, 1] > 0.1) & (np.abs(seen.positions[:, 0] - 0.45) < 0.5)
+    assert not behind.any()
+    on_wall = np.abs(seen.positions[:, 1] - 0.022) < 0.01
+    assert on_wall.sum() >= 0.98 * (len(_grid((-1.5, 0.022, 0.05), (-0.01, 0.022, 2.0), step=0.05))
+                                    + len(_grid((0.91, 0.022, 0.05), (2.5, 0.022, 2.0), step=0.05)))
