@@ -1,0 +1,20 @@
+{
+ "photos": 637,
+ "train": 557,
+ "views": {
+  "door": 2,
+  "chairs": 16,
+  "standing": 52
+ },
+ "total": 70,
+ "rounds": 4,
+ "reached_share_mean": 1.0,
+ "fully_reached": 70,
+ "start_to_goal_m": [
+  0.05,
+  0.86,
+  1.52
+ ],
+ "train_right_z_mean": -0.87,
+ "novel_right_z_mean": -0.94
+}

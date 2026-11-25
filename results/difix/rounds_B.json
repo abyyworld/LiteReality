@@ -1,0 +1,38 @@
+[
+ {
+  "round": 0,
+  "step": 6000,
+  "views": 70,
+  "seconds": 115.5,
+  "coverage_mean": 0.992,
+  "coverage_min": 0.961,
+  "gpu_gb": 26.9
+ },
+ {
+  "round": 1,
+  "step": 7000,
+  "views": 70,
+  "seconds": 110.5,
+  "coverage_mean": 0.992,
+  "coverage_min": 0.957,
+  "gpu_gb": 26.9
+ },
+ {
+  "round": 2,
+  "step": 8000,
+  "views": 70,
+  "seconds": 110.6,
+  "coverage_mean": 0.993,
+  "coverage_min": 0.941,
+  "gpu_gb": 26.9
+ },
+ {
+  "round": 3,
+  "step": 9000,
+  "views": 70,
+  "seconds": 111.0,
+  "coverage_mean": 0.994,
+  "coverage_min": 0.955,
+  "gpu_gb": 26.9
+ }
+]
